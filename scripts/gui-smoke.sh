@@ -11,7 +11,7 @@ export XDG_DATA_DIRS=/workspace/sysroot/usr/share:/usr/share
 export DISPLAY=:98
 mkdir -p "$XDG_CACHE_HOME/fontconfig"
 export LD_LIBRARY_PATH=/workspace/sysroot/usr/lib/x86_64-linux-gnu
-/workspace/sysroot/usr/bin/Xvfb :98 -screen 0 2000x1400x24 -nolisten tcp -ac > build-plugin/xvfb.log 2>&1 &
+/workspace/sysroot/usr/bin/Xvfb :98 -screen 0 2000x1400x24 -nolisten tcp -ac -noreset > build-plugin/xvfb.log 2>&1 &
 masterlab_xvfb_pid=$!
 masterlab_wm_pid=
 cleanup() {
@@ -28,6 +28,7 @@ for attempt in {1..50}; do
  if [ -S /tmp/.X11-unix/X98 ]; then break; fi
  sleep 0.1
 done
+python3 scripts/wm-ready.py --display-only
 /workspace/sysroot/usr/bin/openbox --sm-disable --config-file /workspace/sysroot/etc/xdg/openbox/rc.xml > build-plugin/openbox.log 2>&1 &
 masterlab_wm_pid=$!
 python3 scripts/wm-ready.py
