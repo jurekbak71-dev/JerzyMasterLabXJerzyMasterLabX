@@ -1,0 +1,5 @@
+# Moduły
+
+Phase A zawiera wstępny parametryczny EQ i sample-peak limiter. Powtarzane instancje, presety per moduł i dynamiczny graf są zadaniami otwartymi.
+
+Planowane: Spectral EQ Pro (16 pasm, M/S, dynamic, linear phase), Smart Dynamics, Ultimate Limiter, Bass Architect, Transient Sculptor, Stereo Architect, Analog Laboratory, Spectral Repair, Stem Processor, Clarity Engine, Reference Match. Master Brain będzie warstwą analityczną i propozycjami wymagającymi akceptacji użytkownika. Żaden z tych przyszłych modułów nie jest przedstawiany jako działający.
