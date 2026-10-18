@@ -2,7 +2,11 @@
 
 Stan audytu: 18 października 2026. Obecny build jest prototypem inżynierskim. Nie spełnia jeszcze pełnego zakresu FIRST WORKING MASTER ani aspiracji produktu klasy profesjonalnego pakietu masteringowego. Pomyślna kompilacja, pluginval i testy deterministyczności potwierdzają określone własności techniczne, nie jakość brzmienia, użyteczność ani kompletność produktu.
 
-## Granice porównania z Ozone 12
+## Aktualizacja po dostarczeniu materiałów
+
+Użytkownik przesłał trzy teksty stron produktu i obraz paneli Ozone 12. Na ich podstawie powstał OZONE12_REVIEW.md. Poprawny wskazany podręcznik to https://docs.izotope.com/ozone12/en/index-en.html — nadal 403. Zaimplementowano dedykowany edytor EQ, gesty na wykresie, odpowiedź z faktycznych współczynników DSP oraz FFT 4096–32768 energii L/R. Poniższa tabela i lista problemów zachowują zapis wcześniejszego stanu audytowanego przy cfbf759; punkty 1–3 zostały częściowo lub w całości zaadresowane w zakresie opisanym w GUI_SPEC.md. Pozostałe wymagania produktu nadal obowiązują.
+
+## Granice pierwotnego porównania z Ozone 12
 
 Próby pobrania poniższych oficjalnych źródeł zostały zablokowane przez proxy (403). Nie przeprowadzono jeszcze zweryfikowanego przeglądu aktualnego Ozone 12 Advanced ani testu jego wersji demonstracyjnej. Ten dokument nie przedstawia listy jego funkcji jako sprawdzonej i nie deklaruje równoważności algorytmów.
 

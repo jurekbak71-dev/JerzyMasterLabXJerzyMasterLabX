@@ -2,6 +2,7 @@
 #include <iostream>
 #include <memory>
 extern juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter();
+#include "GuiSmoke.h"
 int main(int argc,char**){
  std::unique_ptr<juce::ScopedJuceInitialiser_GUI> gui;if(argc>1)gui=std::make_unique<juce::ScopedJuceInitialiser_GUI>();
  std::unique_ptr<juce::AudioProcessor> a(createPluginFilter()),b(createPluginFilter());
@@ -29,9 +30,6 @@ int main(int argc,char**){
  bypassed->reset();dry.clear();dry.setSample(0,0,.1f);dry.setSample(1,0,.1f);bypassed->processBlockBypassed(dry,midi);
  if(std::abs(dry.getSample(0,240)-.1f)>1e-6f||dry.getSample(0,0)!=0){std::cerr<<"bypass reset lost latency";return 1;}
  bypassed->releaseResources();
- if(argc>1){for(int iteration=0;iteration<3;++iteration){std::unique_ptr<juce::AudioProcessorEditor> editor(a->createEditor());editor->addToDesktop(0);editor->setVisible(true);juce::Thread::sleep(40);juce::Timer::callPendingTimersSynchronously();
- for(auto size:{juce::Point<int>(750,550),juce::Point<int>(1000,700),juce::Point<int>(2000,1400)}){editor->setSize(size.x,size.y);auto image=editor->createComponentSnapshot(editor->getLocalBounds());if(!image.isValid()||image.getWidth()!=size.x||image.getHeight()!=size.y){std::cerr<<"GUI snapshot failed";return 1;}if(iteration==0&&size.x==1000){auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/gui-smoke.png");output.getParentDirectory().createDirectory();juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();juce::PNGImageFormat{}.writeImageToStream(image,stream);}
- auto background=image.getPixelAt(0,0);bool content=false;for(int y=0;y<image.getHeight();y+=10)for(int x=0;x<image.getWidth();x+=10)content|=image.getPixelAt(x,y)!=background;if(!content){std::cerr<<"blank GUI";return 1;}}
- editor->setVisible(false);editor->removeFromDesktop();}std::cout<<"Passed: editor reopen and nonblank rendering at three sizes\n";}
+ if(argc>1){GuiSmoke smoke(*a);juce::MessageManager::getInstance()->runDispatchLoop();if(!smoke.passed())return 1;std::cout<<"Passed: custom EQ controls, node drag, Q wheel, host gestures, response rendering, reopen and resize at three sizes\n";}
  a->releaseResources();b->releaseResources();std::cout<<"Passed: parameter state roundtrip, fixed PDC, automated routing, oversized buffers, host bypass, deterministic render without editor\n";
 }

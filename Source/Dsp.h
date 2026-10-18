@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <complex>
 #include <vector>
 namespace masterlab {
 inline float clean(float x) noexcept { return std::isfinite(x) ? std::clamp(x,-1000000.f,1000000.f) : 0.f; }
@@ -13,6 +14,13 @@ struct Biquad {
   b0=(1+alpha*A)/d;b1=-2*std::cos(w)/d;b2=(1-alpha*A)/d;a1=b1;a2=(1-alpha/A)/d;
  }
  float tick(float x) noexcept { double y=b0*x+z1;z1=b1*x-a1*y+z2;z2=b2*x-a2*y;return clean(static_cast<float>(y)); }
+ std::complex<double> response(double rate,double hz) const noexcept {
+  const double w=6.283185307179586*hz/rate,c=std::cos(w),s=std::sin(w),c2=std::cos(2*w),s2=std::sin(2*w);
+  const double nr=b0+b1*c+b2*c2,ni=b1*s+b2*s2,dr=1+a1*c+a2*c2,di=a1*s+a2*s2;
+  if(dr*dr+di*di<1e-30)return {1,0};
+  return std::complex<double>(nr,-ni)/std::complex<double>(dr,-di);
+ }
+ double magnitude(double rate,double hz) const noexcept {return std::abs(response(rate,hz));}
  void reset() noexcept {z1=z2=0;}
 };
 class Engine {
@@ -27,6 +35,8 @@ class Engine {
 public:
  void prepare(double rate) {sr=std::isfinite(rate)&&rate>=8000&&rate<=384000?rate:48000;rate=sr; for(auto& d:delay)d.assign(static_cast<size_t>(std::ceil(rate*.005))+1,0);maxima.resize(delay[0].size()+1);stamps.resize(maxima.size());reset();}
  void reset() noexcept {position=0;queueHead=queueTail=clock=0;gain=1;eqMix=eqOn?1.f:0.f;limMix=limOn?1.f:0.f;for(auto& channel:eq)for(auto& b:channel)b=Biquad{};for(auto& d:delay)std::fill(d.begin(),d.end(),0);}
+ float eqBlend() const noexcept {return eqMix;}
+ void copyEqCoefficients(std::array<Biquad,16>& destination) const noexcept {destination=eq[0];}
  int latency() const noexcept {return delay[0].empty()?0:static_cast<int>(delay[0].size()-1);}
  void parameters(float hz,float decibels,float quality,float ceilingDb,bool e,bool l) noexcept {
  bands[0]={hz,decibels,quality};ceiling=std::pow(10.f,std::clamp(clean(ceilingDb),-24.f,0.f)/20);eqOn=e;limOn=l;
@@ -74,6 +84,8 @@ public:
  }
  void reset() noexcept {for(auto& path:paths)path.reset();routeMix=targetOrder?1.f:0.f;}
  int latency() const noexcept {return paths[0].latency();}
+ float eqBlend() const noexcept {return paths[0].eqBlend();}
+ void copyEqCoefficients(std::array<Biquad,16>& destination) const noexcept {paths[0].copyEqCoefficients(destination);}
  void parameters(float hz,float db,float q,float ceiling,bool eq,bool limiter) noexcept {
   for(auto& path:paths)path.parameters(hz,db,q,ceiling,eq,limiter);
  }

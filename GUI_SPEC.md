@@ -1,7 +1,21 @@
 # GUI
 
-Test ponownego otwierania i renderowania przy trzech rozmiarach przeszedł na Xvfb/Openbox; nie obejmuje testów HiDPI.
+Dedykowany Spectral Workspace zastąpił GenericAudioProcessorEditor. Zawiera dwie karty obecnego toru z przeciąganiem kolejności, duży wykres, oddzielny Stereo Inspector i panel wybranego pasma zamiast przewijanej listy 52 parametrów. Układ jest własny; analiza Ozone 12 i granice źródeł są w OZONE12_REVIEW.md.
 
-Aktualnie: ciemny Master Hub, output FFT, vectorscope, peak/RMS/correlation przeciąganie dwóch kart do zmiany kolejności oraz standardowy edytor parametrów JUCE. Zmiana wymiarów 750×550–2000×1400. Brak wymagania GPU. Rzeczywiste próbki audio z FIFO; brak sztucznych animacji.
+## Zaimplementowane zachowanie
 
-Do implementacji: zoom 75–200%, osiem widoków, dynamiczne dodawanie i powielanie modułów, Undo/Redo, tooltips, edycja krzywej EQ, widma wejścia/wyjścia i rozszerzone testy GUI oraz HiDPI. Resizable window nie jest równoznaczne z ukończonym zoomem i testami DPI.
+- Wybór 16 pasm bell. Kontrolki częstotliwości, gain, Q i ceiling oraz bypass obu modułów.
+- Przeciąganie punktu zmienia częstotliwość i gain; kółko nad wybranym punktem reguluje Q. Gesty begin/end trafiają do hosta. Zmiana wyboru pasma nie zmienia pozostałych pasm.
+- Złota krzywa: odpowiedź EQ z faktycznych współczynników DSP i blendu bypassu, przekazana SPSC FIFO. Cień: odpowiedź wybranego filtra. To nie charakterystyka całego toru z limiterem.
+- Turkusowe widmo: energia L/R, FFT Hann 4096–32768, domyślnie 8192, interpolacja binów i wygładzanie czasowe opadania. Skala widma -100–0 dBFS jest niezależna od osi EQ ±18 dB.
+- FFT i grafika pracują poza callbackiem. Zmiana rozmiaru FFT nie zmienia latencji audio. Nie ma atrap przebiegów.
+- Vectorscope oraz blokowe output peak/RMS/correlation. Ostrzeżenie, gdy EQ znajduje się za limiterem, ponieważ może podnieść poziom ponad ceiling modułu.
+- Tooltips kontrolek. Resize 750×550–2000×1400. Testy używają rzeczywistej pętli komunikatów JUCE, a nie tylko jednorazowego paint.
+
+## Walidacja
+
+Testy GUI otwierają edytor trzykrotnie, zmieniają rozmiar, wybierają pasmo 16, zmieniają kontrolki, przeciągają węzeł, regulują Q kółkiem, sprawdzają gesty hosta i obecność krzywej wynikającej z audio. Przełączają wszystkie cztery rozmiary FFT bez zmiany PDC. Zrzut pochodzi z syntetycznego sygnału testowego, nie z makiety.
+
+## Otwarte wymagania
+
+Zoom 75–200% i HiDPI, osiem pełnych widoków, dodawanie/usuwanie/powielanie modułów, Undo/Redo i A/B, input/output overlay, freeze/peak hold, historia GR i loudness, edycja pozostałych typów filtrów i trybów kanałowych. Zmiana wymiarów nie jest równoznaczna z ukończonym zoomem.
