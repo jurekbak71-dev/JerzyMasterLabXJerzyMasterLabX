@@ -4,11 +4,11 @@
 #include <cmath>
 #include <vector>
 namespace masterlab {
-inline float clean(float x) noexcept { return std::isfinite(x) ? x : 0.f; }
+inline float clean(float x) noexcept { return std::isfinite(x) ? std::clamp(x,-1000000.f,1000000.f) : 0.f; }
 struct Biquad {
  double b0=1,b1=0,b2=0,a1=0,a2=0,z1=0,z2=0;
  void peak(double sr,double hz,double db,double q) noexcept {
-  hz=std::clamp(hz,20.,sr*.45); q=std::clamp(q,.1,20.);
+  hz=std::clamp(std::isfinite(hz)?hz:1000.,20.,sr*.45); q=std::clamp(std::isfinite(q)?q:1.,.1,20.);db=std::clamp(std::isfinite(db)?db:0.,-36.,36.);
   const double w=6.283185307179586*hz/sr,A=std::pow(10.,db/40.),alpha=std::sin(w)/(2*q),d=1+alpha/A;
   b0=(1+alpha*A)/d;b1=-2*std::cos(w)/d;b2=(1-alpha*A)/d;a1=b1;a2=(1-alpha/A)/d;
  }
@@ -21,25 +21,26 @@ class Engine {
  std::vector<float> maxima; std::vector<size_t> stamps;
  size_t queueHead=0,queueTail=0,clock=0;
  size_t position=0; double sr=48000; float gain=1,eqMix=1,limMix=1;
- float frequency=1000, db=0, q=1, ceiling=.89125094f;
+ struct Band {float frequency=1000,db=0,q=1;};
+ std::array<Band,16> bands{};float ceiling=.89125094f;
  bool eqOn=true,limOn=true;
 public:
  void prepare(double rate) {sr=rate; for(auto& d:delay)d.assign(static_cast<size_t>(std::ceil(rate*.005))+1,0);maxima.resize(delay[0].size()+1);stamps.resize(maxima.size());reset();}
  void reset() noexcept {position=0;queueHead=queueTail=clock=0;gain=1;for(auto& channel:eq)for(auto& b:channel)b=Biquad{};for(auto& d:delay)std::fill(d.begin(),d.end(),0);}
  int latency() const noexcept {return delay[0].empty()?0:static_cast<int>(delay[0].size()-1);}
  void parameters(float hz,float decibels,float quality,float ceilingDb,bool e,bool l) noexcept {
- frequency=hz;db=decibels;q=quality;ceiling=std::pow(10.f,std::clamp(ceilingDb,-24.f,0.f)/20);eqOn=e;limOn=l;
+ bands[0]={hz,decibels,quality};ceiling=std::pow(10.f,std::clamp(clean(ceilingDb),-24.f,0.f)/20);eqOn=e;limOn=l;
  }
+ void setBand(size_t index,float hz,float db,float q) noexcept {if(index<bands.size())bands[index]={hz,db,q};}
  void process(float* left,float* right,int count,bool limiterFirst=false) noexcept {
   if(delay[0].empty())return;
   const float smooth=static_cast<float>(1-std::exp(-1/(sr*.02)));
   const float release=static_cast<float>(std::exp(-1/(sr*.08)));
-  // One active parametric band in Phase A; the remaining filters stay identity.
-  Biquad targetFilter; targetFilter.peak(sr,frequency,db,q);
+  std::array<Biquad,16> targets;for(size_t k=0;k<bands.size();++k)targets[k].peak(sr,bands[k].frequency,bands[k].db,bands[k].q);
   for(int i=0;i<count;++i){
-   for(auto& channel:eq){auto& b=channel[0];b.b0+=smooth*(targetFilter.b0-b.b0);b.b1+=smooth*(targetFilter.b1-b.b1);b.b2+=smooth*(targetFilter.b2-b.b2);b.a1+=smooth*(targetFilter.a1-b.a1);b.a2+=smooth*(targetFilter.a2-b.a2);}
+   for(auto& channel:eq)for(size_t k=0;k<bands.size();++k){auto& b=channel[k];const auto& t=targets[k];b.b0+=smooth*(t.b0-b.b0);b.b1+=smooth*(t.b1-b.b1);b.b2+=smooth*(t.b2-b.b2);b.a1+=smooth*(t.a1-b.a1);b.a2+=smooth*(t.a2-b.a2);}
    float x[2]={clean(left[i]),clean(right[i])};eqMix+=smooth*((eqOn?1.f:0.f)-eqMix);limMix+=smooth*((limOn?1.f:0.f)-limMix);
-   auto equalize=[&]{for(int c=0;c<2;++c){const float wet=eq[c][0].tick(x[c]);x[c]+=eqMix*(wet-x[c]);}};
+   auto equalize=[&]{for(int c=0;c<2;++c){float wet=x[c];for(auto& filter:eq[c])wet=filter.tick(wet);x[c]+=eqMix*(wet-x[c]);}};
    if(!limiterFirst)equalize();
    const float peak=std::max(std::abs(x[0]),std::abs(x[1]));
    const size_t capacity=maxima.size(), window=delay[0].size()-1;

@@ -4,9 +4,9 @@ Rozwojowy fundament Phase A, wersja projektu 0.1.0. Nie jest to ukończone wydan
 
 ## Obecnie zaimplementowane
 
-Stereo C++20 DSP niezależny od JUCE: jedno aktywne pasmo parametryczne, szereg EQ/limiter lub limiter/EQ, bypass z przejściem 20 ms, stereo-linked sample-peak limiter z opóźnieniem 5 ms i zabezpieczeniem ceiling. Wrapper JUCE 8.0.6: parametry automatyzacji, XML state, stałe zgłaszanie latencji, pomiar output peak/RMS/correlation, rzeczywisty FFT 1024 i vectorscope, skalowalne wymiarami okno z edytorem parametrów. Kolejność limiter/EQ może podnieść końcowy poziom powyżej ceiling.
+Stereo C++20 DSP niezależny od JUCE: 16 aktywnych pasm parametrycznych, szereg EQ/limiter lub limiter/EQ, bypass z przejściem 20 ms, stereo-linked sample-peak limiter z opóźnieniem 5 ms i zabezpieczeniem ceiling. Wrapper JUCE 8.0.6: parametry automatyzacji, XML state, stałe zgłaszanie latencji, pomiar output peak/RMS/correlation, rzeczywisty FFT 1024 i vectorscope, skalowalne wymiarami okno z edytorem parametrów. Kolejność limiter/EQ może podnieść końcowy poziom powyżej ceiling.
 
-Limiter jest wczesnym rozwiązaniem sample-peak z końcowym twardym ograniczeniem, które może zniekształcać. Nie zapewnia True Peak ani kontroli aliasingu. Zmiany współczynników EQ nie są jeszcze wygładzane. Używaj wyłącznie do prac rozwojowych i odsłuchów kontrolnych.
+Limiter jest wczesnym rozwiązaniem sample-peak z końcowym twardym ograniczeniem, które może zniekształcać. Nie zapewnia True Peak ani kontroli aliasingu. Zmiana kolejności nie ma jeszcze crossfade. Używaj wyłącznie do prac rozwojowych i odsłuchów kontrolnych.
 
 ## Budowanie
 
@@ -26,7 +26,9 @@ cmake --build build-core --parallel 2
 ctest --test-dir build-core --output-on-failure
 ```
 
-Linux VST3 wymaga dodatkowo nagłówków ALSA, X11, Xext, Xinerama, Xrandr, Xcursor, FreeType i Fontconfig. W bieżącym środowisku ich brak blokuje pełny build.
+Linux VST3 wymaga dodatkowo nagłówków ALSA, X11, Xext, Xinerama, Xrandr, Xcursor, FreeType i Fontconfig. Środowisko chmurowe ma je zainstalowane lokalnie w `/workspace/sysroot`, bez zmiany systemowych pakietów. Pełny build Linuksa, CTest, test GUI oraz pluginval level 5 przeszły.
+
+Powtarzalne przygotowanie tej maszyny Debian: `bash scripts/cloud-setup.sh`. Do kolejnych kompilacji uruchom `source scripts/cloud-env.sh`; następnie używaj `$MASTERLAB_CMAKE` i `$MASTERLAB_CTEST`. Test GUI: `bash scripts/gui-smoke.sh`. Walidacja: `bash scripts/gui-smoke.sh --validate`. Ten skrypt sam uruchamia i zatrzymuje wirtualny ekran oraz Openbox. Nie jest potrzebny stale działający serwer aplikacji.
 
 ## Instalacja w Windows
 

@@ -1,6 +1,12 @@
 #include "Dsp.h"
 #include <iostream>
 #include <stdexcept>
+#include <cstdlib>
+#include <new>
+static bool trackAllocations=false;static int allocations=0;
+void* operator new(std::size_t n){if(trackAllocations)++allocations;if(void* p=std::malloc(n?n:1))return p;throw std::bad_alloc();}
+void operator delete(void* p)noexcept{std::free(p);}
+void operator delete(void* p,std::size_t)noexcept{std::free(p);}
 void check(bool ok,const char* message){if(!ok)throw std::runtime_error(message);}
 int main(){try{
  for(double sr:{44100.,48000.,96000.,192000.}){
@@ -17,5 +23,10 @@ int main(){try{
  masterlab::Biquad b;b.peak(48000,1000,6,1);double energy=0;
  for(int i=0;i<48000;++i){auto y=b.tick(std::sin(6.283185307179586*1000*i/48000));if(i>24000)energy+=y*y;}
  check(energy>45000&&energy<50000,"EQ center gain");
- std::cout<<"Passed: ceiling, latency, variable blocks, NaN/Inf at four sample rates; EQ center gain\n";
+ masterlab::Engine multiband;multiband.prepare(48000);multiband.parameters(1000,6,1,-1,true,false);multiband.setBand(1,1000,6,1);
+ std::vector<float> left(96000),right(96000);for(size_t i=0;i<left.size();++i)left[i]=right[i]=.01f*std::sin(6.283185307179586*1000*i/48000);
+ trackAllocations=true;multiband.process(left.data(),right.data(),static_cast<int>(left.size()));trackAllocations=false;
+ check(allocations==0,"C++ allocation in DSP callback");double sum=0;for(size_t i=48000;i<left.size();++i)sum+=left[i]*left[i];
+ check(sum>37&&sum<39,"two cascaded bands produce 12dB gain");
+ std::cout<<"Passed: ceiling, latency, variable blocks, NaN/Inf at four sample rates; EQ center gain, cascaded bands and C++ allocation guard\n";
  }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}
