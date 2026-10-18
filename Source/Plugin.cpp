@@ -1,6 +1,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_dsp/juce_dsp.h>
 #include "Dsp.h"
+#include "StateValidation.h"
 class Processor final: public juce::AudioProcessor {
 public:
  juce::AudioProcessorValueTreeState state;
@@ -52,7 +53,12 @@ public:
  for(int j=0;j<n1;++j){traceL[s1+j]=b.getSample(0,j);traceR[s1+j]=b.getSample(1,j);}for(int j=0;j<n2;++j){traceL[s2+j]=b.getSample(0,n1+j);traceR[s2+j]=b.getSample(1,n1+j);}fifo.finishedWrite(n1+n2);
  }
  void getStateInformation(juce::MemoryBlock& dest)override{auto xml=state.copyState().createXml();copyXmlToBinary(*xml,dest);}
- void setStateInformation(const void* data,int size)override{auto xml=getXmlFromBinary(data,size);if(xml&&xml->hasTagName("MasterLab"))state.replaceState(juce::ValueTree::fromXml(*xml));}
+ void setStateInformation(const void* data,int size)override{
+  if(data==nullptr||size<=0||size>1024*1024)return;
+  auto xml=getXmlFromBinary(data,size);if(!xml)return;
+  auto validated=masterlab::validateState(juce::ValueTree::fromXml(*xml),state,getParameters());
+  if(validated.isValid())state.replaceState(validated);
+ }
  bool hasEditor()const override{return true;}juce::AudioProcessorEditor* createEditor()override;
 };
 class Editor final:public juce::AudioProcessorEditor,public juce::DragAndDropContainer,public juce::DragAndDropTarget,private juce::Timer {
