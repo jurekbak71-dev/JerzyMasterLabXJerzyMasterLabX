@@ -28,5 +28,8 @@ int main(){try{
  trackAllocations=true;multiband.process(left.data(),right.data(),static_cast<int>(left.size()));trackAllocations=false;
  check(allocations==0,"C++ allocation in DSP callback");double sum=0;for(size_t i=48000;i<left.size();++i)sum+=left[i]*left[i];
  check(sum>37&&sum<39,"two cascaded bands produce 12dB gain");
+ masterlab::RoutedEngine realtime;realtime.prepare(48000);realtime.parameters(1000,6,1,-1,true,true);
+ trackAllocations=true;realtime.process(left.data(),right.data(),static_cast<int>(left.size()),true);trackAllocations=false;
+ check(allocations==0,"C++ allocation while crossfading route");
  std::cout<<"Passed: ceiling, latency, variable blocks, NaN/Inf at four sample rates; EQ center gain, cascaded bands and C++ allocation guard\n";
  }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

@@ -4,7 +4,10 @@
 class Processor final: public juce::AudioProcessor {
 public:
  juce::AudioProcessorValueTreeState state;
- masterlab::Engine engine;
+ masterlab::RoutedEngine engine;
+ std::array<std::vector<float>,2> hostDryDelay;
+ std::array<std::array<float,128>,2> hostDryScratch{};
+ size_t hostDryPosition=0;float hostBypassMix=0,hostBypassStep=1.f/960.f;bool hostBypassTarget=false;
  std::array<std::atomic<float>*,52> parameters{};
  juce::AbstractFifo fifo{8192};std::array<float,8192> traceL{},traceR{};
  std::atomic<float> peak{0},rms{0},correlation{0};
@@ -25,14 +28,23 @@ public:
  bool acceptsMidi()const override{return false;}bool producesMidi()const override{return false;}double getTailLengthSeconds()const override{return .1;}
  int getNumPrograms()override{return 1;}int getCurrentProgram()override{return 0;}void setCurrentProgram(int)override{}const juce::String getProgramName(int)override{return "Default";}void changeProgramName(int,const juce::String&)override{}
  bool isBusesLayoutSupported(const BusesLayout& l)const override{return l.getMainInputChannelSet()==juce::AudioChannelSet::stereo()&&l.getMainOutputChannelSet()==juce::AudioChannelSet::stereo();}
- void prepareToPlay(double sr,int)override{engine.prepare(sr);setLatencySamples(engine.latency());}
- void releaseResources()override{}void reset()override{engine.reset();}
- void processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{
+ void prepareToPlay(double sr,int)override{engine.parameters(parameters[0]->load(),parameters[1]->load(),parameters[2]->load(),parameters[3]->load(),parameters[4]->load()>.5f,parameters[5]->load()>.5f);engine.prepare(sr,parameters[6]->load()>.5f);setLatencySamples(engine.latency());for(auto& channel:hostDryDelay)channel.assign(static_cast<size_t>(engine.latency()+1),0);hostDryPosition=0;hostBypassMix=0;hostBypassTarget=false;hostBypassStep=static_cast<float>(1/(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr*.02:960.));}
+ void releaseResources()override{}void reset()override{engine.reset();for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;}
+ void processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,false);}
+ void processBlockBypassed(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,true);}
+ void renderAudio(juce::AudioBuffer<float>& b,bool hostBypassed){
  juce::ScopedNoDenormals noDenormals;if(b.getNumChannels()<2)return;
  auto value=[&](size_t index){return parameters[index]->load();};
  engine.parameters(value(0),value(1),value(2),value(3),value(4)>.5f,value(5)>.5f);
  for(size_t k=1;k<16;++k){size_t offset=7+(k-1)*3;engine.setBand(k,value(offset),value(offset+1),value(offset+2));}
- engine.process(b.getWritePointer(0),b.getWritePointer(1),b.getNumSamples(),value(6)>.5f);
+ hostBypassTarget=hostBypassed;
+ if(hostDryDelay[0].empty()){b.clear();return;}
+ for(int offset=0;offset<b.getNumSamples();){int length=std::min(128,b.getNumSamples()-offset);
+  for(int i=0;i<length;++i){size_t read=(hostDryPosition+1)%hostDryDelay[0].size();for(int c=0;c<2;++c){hostDryDelay[c][hostDryPosition]=masterlab::clean(b.getSample(c,offset+i));hostDryScratch[c][i]=hostDryDelay[c][read];}hostDryPosition=read;}
+  engine.process(b.getWritePointer(0,offset),b.getWritePointer(1,offset),length,value(6)>.5f);
+  for(int i=0;i<length;++i){hostBypassMix=hostBypassed?std::min(1.f,hostBypassMix+hostBypassStep):std::max(0.f,hostBypassMix-hostBypassStep);for(int c=0;c<2;++c){float wet=b.getSample(c,offset+i);b.setSample(c,offset+i,wet+hostBypassMix*(hostDryScratch[c][i]-wet));}}
+  offset+=length;
+ }
  double ll=0,rr=0,lr=0;float pk=0;
  for(int i=0;i<b.getNumSamples();++i){float l=b.getSample(0,i),r=b.getSample(1,i);ll+=l*l;rr+=r*r;lr+=l*r;pk=std::max(pk,std::max(std::abs(l),std::abs(r)));}
  peak.store(pk);rms.store(static_cast<float>(std::sqrt((ll+rr)/std::max(1,2*b.getNumSamples()))));correlation.store(static_cast<float>(lr/std::sqrt(std::max(1e-20,ll*rr))));

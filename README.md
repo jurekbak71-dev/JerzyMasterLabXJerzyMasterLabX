@@ -6,7 +6,7 @@ Rozwojowy fundament Phase A, wersja projektu 0.1.0. Nie jest to ukończone wydan
 
 Stereo C++20 DSP niezależny od JUCE: 16 aktywnych pasm parametrycznych, szereg EQ/limiter lub limiter/EQ, bypass z przejściem 20 ms, stereo-linked sample-peak limiter z opóźnieniem 5 ms i zabezpieczeniem ceiling. Wrapper JUCE 8.0.6: parametry automatyzacji, XML state, stałe zgłaszanie latencji, pomiar output peak/RMS/correlation, rzeczywisty FFT 1024 i vectorscope, skalowalne wymiarami okno z edytorem parametrów. Kolejność limiter/EQ może podnieść końcowy poziom powyżej ceiling.
 
-Limiter jest wczesnym rozwiązaniem sample-peak z końcowym twardym ograniczeniem, które może zniekształcać. Nie zapewnia True Peak ani kontroli aliasingu. Zmiana kolejności nie ma jeszcze crossfade. Używaj wyłącznie do prac rozwojowych i odsłuchów kontrolnych.
+Limiter jest wczesnym rozwiązaniem sample-peak z końcowym twardym ograniczeniem, które może zniekształcać. Nie zapewnia True Peak ani kontroli aliasingu. Zmiana kolejności korzysta z 20 ms crossfade dwóch stale aktywnych torów z wyrównaną latencją. Bypass hosta ma osobny, opóźniony tor dry i takie samo płynne przejście. Utrzymywanie obu torów zwiększa CPU. Używaj wyłącznie do prac rozwojowych i odsłuchów kontrolnych.
 
 ## Budowanie
 

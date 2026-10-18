@@ -25,8 +25,8 @@ class Engine {
  std::array<Band,16> bands{};float ceiling=.89125094f;
  bool eqOn=true,limOn=true;
 public:
- void prepare(double rate) {sr=rate; for(auto& d:delay)d.assign(static_cast<size_t>(std::ceil(rate*.005))+1,0);maxima.resize(delay[0].size()+1);stamps.resize(maxima.size());reset();}
- void reset() noexcept {position=0;queueHead=queueTail=clock=0;gain=1;for(auto& channel:eq)for(auto& b:channel)b=Biquad{};for(auto& d:delay)std::fill(d.begin(),d.end(),0);}
+ void prepare(double rate) {sr=std::isfinite(rate)&&rate>=8000&&rate<=384000?rate:48000;rate=sr; for(auto& d:delay)d.assign(static_cast<size_t>(std::ceil(rate*.005))+1,0);maxima.resize(delay[0].size()+1);stamps.resize(maxima.size());reset();}
+ void reset() noexcept {position=0;queueHead=queueTail=clock=0;gain=1;eqMix=eqOn?1.f:0.f;limMix=limOn?1.f:0.f;for(auto& channel:eq)for(auto& b:channel)b=Biquad{};for(auto& d:delay)std::fill(d.begin(),d.end(),0);}
  int latency() const noexcept {return delay[0].empty()?0:static_cast<int>(delay[0].size()-1);}
  void parameters(float hz,float decibels,float quality,float ceilingDb,bool e,bool l) noexcept {
  bands[0]={hz,decibels,quality};ceiling=std::pow(10.f,std::clamp(clean(ceilingDb),-24.f,0.f)/20);eqOn=e;limOn=l;
@@ -55,6 +55,42 @@ public:
    position=read;
    if(limiterFirst)equalize();
    left[i]=clean(x[0]);right[i]=clean(x[1]);
+  }
+ }
+};
+
+// Both serial orders run continuously, so switching never resets an active path.
+// Scratch capacity is fixed; larger and changing host buffers are processed in chunks.
+class RoutedEngine {
+ std::array<Engine,2> paths;
+ std::array<std::array<float,128>,2> scratch{};
+ float routeMix=0,routeStep=1.f/960.f;
+ bool targetOrder=false;
+public:
+ void prepare(double rate,bool limiterFirst=false){
+  for(auto& path:paths)path.prepare(rate);
+  const double validRate=std::isfinite(rate)&&rate>=8000&&rate<=384000?rate:48000;
+  routeStep=static_cast<float>(1/(validRate*.02));targetOrder=limiterFirst;routeMix=limiterFirst?1.f:0.f;
+ }
+ void reset() noexcept {for(auto& path:paths)path.reset();routeMix=targetOrder?1.f:0.f;}
+ int latency() const noexcept {return paths[0].latency();}
+ void parameters(float hz,float db,float q,float ceiling,bool eq,bool limiter) noexcept {
+  for(auto& path:paths)path.parameters(hz,db,q,ceiling,eq,limiter);
+ }
+ void setBand(size_t index,float hz,float db,float q) noexcept {for(auto& path:paths)path.setBand(index,hz,db,q);}
+ void process(float* left,float* right,int count,bool limiterFirst=false) noexcept {
+  targetOrder=limiterFirst;
+  for(int offset=0;offset<count;){
+   const int length=std::min(128,count-offset);
+   std::copy_n(left+offset,length,scratch[0].data());std::copy_n(right+offset,length,scratch[1].data());
+   paths[0].process(left+offset,right+offset,length,false);
+   paths[1].process(scratch[0].data(),scratch[1].data(),length,true);
+   for(int i=0;i<length;++i){
+    routeMix=limiterFirst?std::min(1.f,routeMix+routeStep):std::max(0.f,routeMix-routeStep);
+    left[offset+i]+=routeMix*(scratch[0][i]-left[offset+i]);
+    right[offset+i]+=routeMix*(scratch[1][i]-right[offset+i]);
+   }
+   offset+=length;
   }
  }
 };
