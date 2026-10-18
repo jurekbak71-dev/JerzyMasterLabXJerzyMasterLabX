@@ -2,6 +2,8 @@
 
 Rozwojowy fundament Phase A, wersja projektu 0.1.0. Nie jest to ukończone wydanie masteringowe ani potwierdzony build Windows.
 
+Szczegółowe braki produktu i kryteria odbioru: [PRODUCT_AUDIT.md](PRODUCT_AUDIT.md).
+
 ## Obecnie zaimplementowane
 
 Stereo C++20 DSP niezależny od JUCE: 16 aktywnych pasm parametrycznych, szereg EQ/limiter lub limiter/EQ, bypass z przejściem 20 ms, stereo-linked sample-peak limiter z opóźnieniem 5 ms i zabezpieczeniem ceiling. Wrapper JUCE 8.0.6: parametry automatyzacji, XML state z walidacją kompletności i zakresów, stałe zgłaszanie latencji, pomiar output peak/RMS/correlation, rzeczywisty FFT 1024 i vectorscope, skalowalne wymiarami okno z edytorem parametrów. Kolejność limiter/EQ może podnieść końcowy poziom powyżej ceiling.
