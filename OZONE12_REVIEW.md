@@ -124,3 +124,32 @@ Przejrzano plansze z klatkami co 4 sekundy przez cały materiał (7:01). Znaczni
 | 5:20–6:04 | Wyniki: Tonal Balance, historia Loudness, Vocal Balance, Dynamics Match, Width Match, Clarity i Stabilizer, bypass/relearn | Raport tekstowy i pięć korekt nie stanowią pełnego odpowiednika; potrzebny graficzny widok celu i pomiarów oraz rzeczywiste procesory |
 
 Wspólna kompozycja widoczna w demonstracjach: poziomy łańcuch modułów nad dużą przestrzenią wykresu, stale dostępne mierniki I/O z prawej, główne kontrolki wokół wykresu, narzędzia odsłuchu Delta/Bypass/Gain Match. To kryteria ergonomii dla własnego interfejsu; nie kopiujemy grafiki ani oznaczeń algorytmów.
+
+## Film recenzencki „Przerażająco funkcjonalny iZotope Ozone 12”
+
+Przesłany plik ma 24:28, obraz 1280×720 i ścieżkę audio. Przejrzano obraz w odstępach 15 sekund przez cały film. Poniższe obserwacje pochodzą z ekranu, nie z transkrypcji ani odsłuchu. Próba uruchomienia lokalnej transkrypcji Whisper nie powiodła się: pobieranie publicznego modelu zostało zablokowane przez proxy HTTP 403. Nie przypisujemy autorowi wypowiedzi niewidocznych w obrazie.
+
+| Przybliżony czas | Obserwacja ekranu | Wymaganie / konsekwencja |
+|---|---|---|
+| 0:30–1:00, 6:30 | Widok asystenta: obszar docelowego balansu tonalnego i krzywa materiału, osobny wykres loudness, lista gatunków, dodatkowe suwaki | Własny asystent potrzebuje graficznego porównania z celem; obecny wykres pięciu korekt nie jest takim porównaniem |
+| 1:30–2:30 | Przejście między Master Rebalance, Stem EQ i EQ; osobne kategorie źródeł | Zachować wyraźne rozróżnienie EQ całego miksu od separacji źródeł |
+| 8:00 | Plansza autora wyjaśnia, że używa Delta i nie prezentuje wtedy pełnego brzmienia Ozone | Własny Delta musi być jednoznacznie oznaczony i wyrównany w czasie; nie mylić sygnału różnicowego z wyjściem |
+| 9:30–10:30 | Match EQ: osobne Capture/Clear dla Reference i Apply To, krzywa korekcji, Smoothing i Amount | Potrzebne prawdziwe przechwytywanie obu widm, regulacja dopasowania i możliwość odrzucenia wyniku |
+| 11:00–11:15 | MP3 Preview, wybór bitrate i Solo Artifacts | Osobny zakres przyszłych narzędzi kontrolnych, nie element aktualnej implementacji |
+| 11:30 | Dither: bit depth, amount, noise shaping, bit meter i DC offset | Nie deklarować ditheringu przez samo dodanie etykiety; wymaga DSP i testów widmowych |
+| 11:45 | Reference: przebieg, oznaczone fragmenty A…H, gain i wybór pliku | Reference Match powinien mieć nawigację po fragmentach i jawne wyrównanie poziomu |
+| 12:30–12:45 | Stem EQ: osobna korekcja Drums i Vocals | Zmiany źródeł wymagają licencjonowanego i zweryfikowanego modelu separacji |
+| 13:30–17:15 | Bass Control: cutoff/zoom, Balance/Punch, niezależne Sustain Power i Peak Control | Priorytet rzeczywistego wykresu oraz niezależnych parametrów ataku/sustain |
+| 15:15–15:30 | Plansza autora ostrzega przed ustawianiem basu przy aktywnym Gain Match | To stanowisko autora widoczne w filmie, nie dowód na wewnętrzny algorytm Gain Match; przy projektowaniu sprawdzić wpływ kompensacji na decyzje odsłuchowe |
+| 16:30 | Plansza autora wiąże słyszane zakłócenia Delta z przemieszczaniem kontrolki i pracą bufora | Zaplanować testy ruchu parametrów, płynności i wyrównania torów Delta, bez zakładania przyczyny na podstawie samego filmu |
+| 18:30–20:30 | Maximizer: True Peak, Character, Upward Compress, Soft Clip, Transient Emphasis, stereo independence | Braki obecnego limitera są funkcjonalne, nie kosmetyczne |
+| 21:15–23:00 | Pomiar loudness i Unlimiter na mocno ograniczonym materiale, Amount/Threshold/Learn Threshold | Osobny procesor transjentów i testy na przesterowanym/ograniczonym materiale; nie obiecywać odzyskania utraconej informacji |
+| 22:45 | Plansza informuje o wyrównaniu głośności odczuwalnej przed/po | Porównania jakości prowadzić przy wyrównanym LUFS i kontrolowanej latencji |
+
+### Kryteria następnych zmian GUI i DSP
+
+1. Stały prawy panel I/O i globalne narzędzia odsłuchu, niezależne od wybranego modułu.
+2. Dominujący wykres roboczy z kontrolkami bezpośrednio powiązanymi z pomiarem.
+3. Graficzne wyniki asystenta: pomiar i cel z jednostkami, propozycja oddzielona od zastosowanego DSP.
+4. Bypass, Delta, mono i porównanie poziomu muszą mieć rzeczywiste tory sygnałowe z kompensacją latencji oraz jednoznaczny status.
+5. Najpierw zweryfikować True Peak i jakość limitera; dodawanie pokręteł nazwanych jak w filmie nie dostarcza odpowiadających im algorytmów.
