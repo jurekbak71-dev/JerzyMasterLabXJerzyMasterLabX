@@ -8,11 +8,15 @@ class Editor final : public juce::AudioProcessorEditor,
                      public juce::DragAndDropTarget,
                      private juce::Timer {
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
+    using ComboAttachment = juce::AudioProcessorValueTreeState::ComboBoxAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     Processor& processor;
     StudioTheme theme;
     juce::TooltipWindow tooltips{this, 600};
-    juce::ComboBox bandChoice, fftChoice;
+    juce::ComboBox bandChoice, fftChoice, typeChoice;
+    juce::ToggleButton bandEnabled{"Band"};
+    std::unique_ptr<ComboAttachment> typeAttachment;
+    std::unique_ptr<ButtonAttachment> bandEnabledAttachment;
     juce::TextButton eqView{"SPECTRAL EQ"}, limiterView{"LIMITER"};
     bool showingLimiter=false;
     std::array<masterlab::LimiterFrame,1000> limiterHistory{};
@@ -21,6 +25,7 @@ class Editor final : public juce::AudioProcessorEditor,
     void showLimiter(bool enabled){
         endDrag();showingLimiter=enabled;
         for(auto* component:std::array<juce::Component*,11>{&bandChoice,&fftChoice,&frequency,&gain,&quality,&frequencyLabel,&gainLabel,&qualityLabel,&eqEnabled,&ceiling,&ceilingLabel})component->setVisible(!enabled);
+        typeChoice.setVisible(!enabled);bandEnabled.setVisible(!enabled);
         ceiling.setVisible(true);ceilingLabel.setVisible(true);
         drive.setVisible(enabled);driveLabel.setVisible(enabled);release.setVisible(enabled);releaseLabel.setVisible(enabled);
         eqView.setToggleState(!enabled,juce::dontSendNotification);limiterView.setToggleState(enabled,juce::dontSendNotification);repaint();
@@ -85,7 +90,7 @@ class Editor final : public juce::AudioProcessorEditor,
     }
     juce::Slider frequency, gain, quality, ceiling, drive, release;
     juce::Label frequencyLabel, gainLabel, qualityLabel, ceilingLabel, driveLabel, releaseLabel;
-    juce::ToggleButton eqEnabled{"EQ active"}, limiterEnabled{"Limiter active"};
+    juce::ToggleButton eqEnabled{"EQ"}, limiterEnabled{"Limiter"};
     std::unique_ptr<SliderAttachment> frequencyAttachment, gainAttachment, qualityAttachment, ceilingAttachment, driveAttachment, releaseAttachment;
     std::unique_ptr<ButtonAttachment> eqAttachment, limiterAttachment;
     Processor::ResponseFrame response;
@@ -116,16 +121,20 @@ class Editor final : public juce::AudioProcessorEditor,
         auto area = plot();
         return area.getX() + area.getWidth() * static_cast<float>(std::log(std::max(20.,hz)/20.) / std::log(sampleRate()*.5/20.));
     }
+    int bandType(int band) const {return static_cast<int>(processor.state.getRawParameterValue("bandType"+juce::String(band+1))->load());}
+    bool gainApplies(int band) const {return bandType(band)<=2;}
     float yForGain(float db) const { auto area=plot(); return area.getCentreY()-db*area.getHeight()/36.f; }
     juce::Point<float> node(int band) const {
-        return {xForFrequency(std::min<double>(value("frequency",band),sampleRate()*.45)), yForGain(value("gain",band))};
+        return {xForFrequency(std::min<double>(value("frequency",band),sampleRate()*.45)), yForGain(gainApplies(band)?value("gain",band):0.f)};
     }
     void selectBand(int band) {
         selectedBand=juce::jlimit(0,15,band);
-        frequencyAttachment.reset();gainAttachment.reset();qualityAttachment.reset();
+        frequencyAttachment.reset();gainAttachment.reset();qualityAttachment.reset();typeAttachment.reset();bandEnabledAttachment.reset();
         frequencyAttachment=std::make_unique<SliderAttachment>(processor.state,parameterId("frequency",selectedBand),frequency);
         gainAttachment=std::make_unique<SliderAttachment>(processor.state,parameterId("gain",selectedBand),gain);
         qualityAttachment=std::make_unique<SliderAttachment>(processor.state,parameterId("q",selectedBand),quality);
+        typeAttachment=std::make_unique<ComboAttachment>(processor.state,"bandType"+juce::String(selectedBand+1),typeChoice);
+        bandEnabledAttachment=std::make_unique<ButtonAttachment>(processor.state,"bandEnabled"+juce::String(selectedBand+1),bandEnabled);
         bandChoice.setSelectedId(selectedBand+1,juce::dontSendNotification);
         repaint();
     }
@@ -142,6 +151,7 @@ class Editor final : public juce::AudioProcessorEditor,
         draggingNode=false;
     }
     void timerCallback() override {
+        gain.setEnabled(gainApplies(selectedBand));gainLabel.setText(gainApplies(selectedBand)?"GAIN":"GAIN / NOT USED",juce::dontSendNotification);
         int start,count,start2,count2;
         processor.limiterFifo.prepareToRead(processor.limiterFifo.getNumReady(),start,count,start2,count2);
         auto takeFrames=[&](int first,int size){for(int i=0;i<size;++i){auto frame=processor.limiterFrames[first+i];
@@ -194,6 +204,10 @@ public:
         gain.setTooltip("Selected band gain. Drag its graph node vertically to change it.");
         quality.setTooltip("Band width. Higher Q is narrower. Use the mouse wheel over the graph node.");
         ceiling.setTooltip("Sample-peak ceiling at the limiter output. This is not a True Peak limiter. EQ after the limiter can exceed this ceiling.");
+        addAndMakeVisible(typeChoice);typeChoice.setComponentID("eq-type");
+        typeChoice.addItemList(juce::StringArray{"Bell","Low Shelf","High Shelf","High Pass (12)","Low Pass (12)","Notch"},1);
+        typeChoice.setTooltip("Minimum-phase filters. High/low pass: fixed 12 dB/oct. Shelf Q controls resonance. Gain is unused for high/low pass and notch.");
+        addAndMakeVisible(bandEnabled);bandEnabled.setComponentID("eq-band-active");bandEnabled.setTooltip("Enable this band with a smoothed transition; the filter remains warm.");
         addAndMakeVisible(bandChoice);bandChoice.setComponentID("eq-band");
         addAndMakeVisible(fftChoice);fftChoice.setComponentID("fft-size");
         for(int order=12;order<=15;++order)fftChoice.addItem("FFT "+juce::String(1<<order),order);
@@ -221,8 +235,8 @@ public:
         for(int i=0;i<4;++i){auto* label=std::array<juce::Label*,4>{&frequencyLabel,&gainLabel,&qualityLabel,&ceilingLabel}[i];auto* slider=std::array<juce::Slider*,4>{&frequency,&gain,&quality,&ceiling}[i];label->setBounds(32+i*width,top,width-12,22);slider->setBounds(32+i*width,top+22,width-16,113);}
         driveLabel.setBounds(32,top,width-12,22);drive.setBounds(32,top+22,width-16,113);
         releaseLabel.setBounds(32+width,top,width-12,22);release.setBounds(32+width,top+22,width-16,113);
-        bandChoice.setBounds(28,140,126,26);fftChoice.setBounds(164,140,144,26);
-        eqEnabled.setBounds(320,140,125,26);limiterEnabled.setBounds(getWidth()-210,136,186,26);
+        bandChoice.setBounds(28,140,110,26);typeChoice.setBounds(148,140,155,26);fftChoice.setBounds(313,140,130,26);bandEnabled.setBounds(453,140,74,26);
+        eqEnabled.setBounds(537,140,72,26);limiterEnabled.setBounds(getWidth()-114,136,90,26);
     }
     bool isInterestedInDragSource(const SourceDetails& details) override {return details.description=="eq"||details.description=="limiter";}
     void itemDropped(const SourceDetails& details) override {
@@ -234,7 +248,7 @@ public:
     void mouseDown(const juce::MouseEvent& event) override {
         if(showingLimiter||!plot().expanded(12).contains(event.position))return;
         int nearest=selectedBand;float distance=event.position.getDistanceFrom(node(nearest));
-        for(int i=0;i<16;++i){if(i!=selectedBand&&std::abs(value("gain",i))<.01f)continue;float d=event.position.getDistanceFrom(node(i));if(d<distance){distance=d;nearest=i;}}
+        for(int i=0;i<16;++i){if(i!=selectedBand&&bandType(i)==0&&std::abs(value("gain",i))<.01f)continue;float d=event.position.getDistanceFrom(node(i));if(d<distance){distance=d;nearest=i;}}
         if(distance>14)return;
         selectBand(nearest);draggingNode=true;
         processor.state.getParameter(parameterId("frequency",selectedBand))->beginChangeGesture();
@@ -243,7 +257,7 @@ public:
     void mouseDrag(const juce::MouseEvent& event) override {
         if(draggingNode){auto area=plot();float normal=juce::jlimit(0.f,1.f,(event.position.x-area.getX())/area.getWidth());
             setParameter("frequency",static_cast<float>(20*std::pow(sampleRate()*.5/20,normal)));
-            setParameter("gain",juce::jlimit(-18.f,18.f,(area.getCentreY()-event.position.y)*36/area.getHeight()));repaint();return;}
+            if(gainApplies(selectedBand))setParameter("gain",juce::jlimit(-18.f,18.f,(area.getCentreY()-event.position.y)*36/area.getHeight()));repaint();return;}
         if(event.getMouseDownY()<82||event.getMouseDownY()>132||isDragAndDropActive())return;
         bool right=event.getMouseDownX()>getWidth()/2,first=processor.state.getRawParameterValue("order")->load()>.5f;
         startDragging((right?!first:first)?"limiter":"eq",this);
@@ -272,7 +286,7 @@ public:
             g.setColour(active?colour:juce::Colour(0xff354553));g.drawRoundedRectangle(static_cast<float>(x)+.5f,84.5f,getWidth()*.5f-49,47,6,1);
             g.setColour(colour);g.setFont(12);g.drawText("0"+juce::String(i+1),x+12,92,30,24,juce::Justification::left);
             g.setColour(juce::Colours::whitesmoke);g.setFont(juce::Font(juce::FontOptions(15.f,juce::Font::bold)));g.drawText(isEq?"SPECTRAL EQ":"LIMITER",x+50,90,getWidth()/2-116,22,juce::Justification::left);
-            g.setColour(muted);g.setFont(11);g.drawText(isEq?"16-band parametric  /  drag to reorder":"Lookahead dynamics  /  drag to reorder",x+50,111,getWidth()/2-116,16,juce::Justification::left);
+            g.setColour(muted);g.setFont(11);g.drawText(isEq?"16-band EQ  /  drag to reorder":"Lookahead dynamics  /  drag to reorder",x+50,111,getWidth()/2-116,16,juce::Justification::left);
         }
         if(showingLimiter){paintLimiter(g);g.setColour(first?curve:muted);g.setFont(11);g.drawText(first?"EQ follows limiter: final output may exceed limiter ceiling":"SAMPLE PEAK  /  True Peak unavailable",24,getHeight()-25,getWidth()-48,18,juce::Justification::left);return;}
         auto area=plot();g.setColour(juce::Colour(0xff141c26));g.fillRoundedRectangle(area.expanded(24,12),8);
@@ -282,10 +296,10 @@ public:
         {juce::Graphics::ScopedSaveState save(g);g.reduceClipRegion(area.toNearestInt());juce::Path spectral,total;
             for(int i=0;i<512;++i){double hz=20*std::pow(sampleRate()*.5/20,i/511.);float x=area.getX()+area.getWidth()*i/511.f;float binPosition=juce::jlimit(0.f,static_cast<float>((1<<fftOrder)/2-1),static_cast<float>(hz*(1<<fftOrder)/sampleRate()));int bin=static_cast<int>(binPosition);float level=spectrum[bin]+(binPosition-bin)*(spectrum[bin+1]-spectrum[bin]);float db=juce::Decibels::gainToDecibels(level,-100.f);float sy=area.getBottom()-area.getHeight()*juce::jlimit(0.f,1.f,(db+100)/100.f);
                 if(i==0)spectral.startNewSubPath(x,sy);else spectral.lineTo(x,sy);
-                if(haveResponse){std::complex<double> transfer{1,0};for(const auto& band:response.bands)transfer*=band.response(response.rate,hz);transfer=(1.-response.eqMix)+static_cast<double>(response.eqMix)*transfer;float y=yForGain(static_cast<float>(20*std::log10(std::max(1e-12,std::abs(transfer)))));if(i==0)total.startNewSubPath(x,y);else total.lineTo(x,y);}}
+                if(haveResponse){std::complex<double> transfer{1,0};for(size_t k=0;k<16;++k)transfer*=(1.-response.blends[k])+static_cast<double>(response.blends[k])*response.bands[k].response(response.rate,hz);transfer=(1.-response.eqMix)+static_cast<double>(response.eqMix)*transfer;float y=yForGain(static_cast<float>(20*std::log10(std::max(1e-12,std::abs(transfer)))));if(i==0)total.startNewSubPath(x,y);else total.lineTo(x,y);}}
             auto spectralFill=spectral;spectralFill.lineTo(area.getRight(),area.getBottom());spectralFill.lineTo(area.getX(),area.getBottom());spectralFill.closeSubPath();g.setGradientFill(juce::ColourGradient(accent.withAlpha(.22f),0,area.getY(),accent.withAlpha(.01f),0,area.getBottom(),false));g.fillPath(spectralFill);g.setColour(accent.withAlpha(.8f));g.strokePath(spectral,juce::PathStrokeType(1.5f));
-            if(haveResponse){juce::Path individual;for(int i=0;i<512;++i){double hz=20*std::pow(sampleRate()*.5/20,i/511.);float x=area.getX()+area.getWidth()*i/511.f;float y=yForGain(static_cast<float>(20*std::log10(std::max(1e-12,response.bands[selectedBand].magnitude(response.rate,hz)))));if(i==0)individual.startNewSubPath(x,y);else individual.lineTo(x,y);}g.setColour(curve.withAlpha(.3f));g.strokePath(individual,juce::PathStrokeType(1));g.setColour(curve);g.strokePath(total,juce::PathStrokeType(2));}
-            for(int i=0;i<16;++i){if(i!=selectedBand&&std::abs(value("gain",i))<.01f)continue;auto position=node(i);g.setColour(i==selectedBand?curve:muted);g.fillEllipse(position.x-5,position.y-5,10,10);if(i==selectedBand){g.drawEllipse(position.x-9,position.y-9,18,18,1.5f);g.setFont(11);g.drawText(juce::String(i+1),static_cast<int>(position.x)+13,static_cast<int>(position.y)-12,26,22,juce::Justification::left);}}
+            if(haveResponse){juce::Path individual;for(int i=0;i<512;++i){double hz=20*std::pow(sampleRate()*.5/20,i/511.);float x=area.getX()+area.getWidth()*i/511.f;float y=yForGain(static_cast<float>(20*std::log10(std::max(1e-12,std::abs((1.-response.blends[selectedBand])+static_cast<double>(response.blends[selectedBand])*response.bands[selectedBand].response(response.rate,hz))))));if(i==0)individual.startNewSubPath(x,y);else individual.lineTo(x,y);}g.setColour(curve.withAlpha(.3f));g.strokePath(individual,juce::PathStrokeType(1));g.setColour(curve);g.strokePath(total,juce::PathStrokeType(2));}
+            for(int i=0;i<16;++i){if(i!=selectedBand&&bandType(i)==0&&std::abs(value("gain",i))<.01f)continue;auto position=node(i);g.setColour(processor.state.getRawParameterValue("bandEnabled"+juce::String(i+1))->load()>.5f?(i==selectedBand?curve:muted):juce::Colour(0xff596575));g.fillEllipse(position.x-5,position.y-5,10,10);if(i==selectedBand){g.drawEllipse(position.x-9,position.y-9,18,18,1.5f);g.setFont(11);g.drawText(juce::String(i+1),static_cast<int>(position.x)+13,static_cast<int>(position.y)-12,26,22,juce::Justification::left);}}
         }
         int inspectorX=getWidth()-218;g.setColour(panel);g.fillRoundedRectangle(static_cast<float>(inspectorX),162.f,194.f,static_cast<float>(getHeight()-370),8);g.setColour(muted);g.setFont(12);g.drawText("STEREO INSPECTOR",inspectorX+12,174,170,20,juce::Justification::left);
         const float radius=std::min(56.f,(getHeight()-488.f)*.5f),cx=inspectorX+97.f,cy=204.f+radius;g.setColour(juce::Colour(0xff3c4c5c));g.drawEllipse(cx-radius,cy-radius,2*radius,2*radius,1);g.drawLine(cx-radius,cy,cx+radius,cy);g.drawLine(cx,cy-radius,cx,cy+radius);

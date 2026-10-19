@@ -25,6 +25,13 @@ class GuiSmoke final : private juce::Timer {
         auto* initialRelease=dynamic_cast<juce::Slider*>(editor->findChildWithID("limiter-release"));
         if(!initialDrive||!initialRelease)return false;initialDrive->setValue(12,juce::sendNotificationSync);initialRelease->setValue(150,juce::sendNotificationSync);
         float firstGain=actual("gain");choice->setSelectedId(16,juce::sendNotificationSync);
+        auto* type=dynamic_cast<juce::ComboBox*>(editor->findChildWithID("eq-type"));
+        auto* bandPower=dynamic_cast<juce::Button*>(editor->findChildWithID("eq-band-active"));if(!type||!bandPower)return false;
+        for(int kind=0;kind<6;++kind){type->setSelectedId(kind+1,juce::sendNotificationSync);if(actual("bandType16")!=kind||actual("bandType1")!=0)return false;}
+        type->setSelectedId(1,juce::sendNotificationSync);
+        bandPower->setToggleState(false,juce::sendNotificationSync);if(actual("bandEnabled16")!=0||actual("bandEnabled1")!=1)return false;
+        bandPower->setToggleState(true,juce::sendNotificationSync);if(actual("bandEnabled16")!=1)return false;
+
         frequency->setValue(3333,juce::sendNotificationSync);gain->setValue(-4.5,juce::sendNotificationSync);q->setValue(1.7,juce::sendNotificationSync);
         if(std::abs(actual("frequency16")-3333)>1||std::abs(actual("gain16")+4.5)>.02f||std::abs(actual("q16")-1.7f)>.02f||actual("gain")!=firstGain)return false;
         auto position=[](float hz,float db){return juce::Point<float>(48+700*std::log(hz/20)/std::log(24000.f/20),174+306*.5f-db*306/36);};

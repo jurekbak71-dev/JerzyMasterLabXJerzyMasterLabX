@@ -6,12 +6,30 @@
 #include <vector>
 namespace masterlab {
 inline float clean(float x) noexcept { return std::isfinite(x) ? std::clamp(x,-1000000.f,1000000.f) : 0.f; }
+enum class FilterType { Bell, LowShelf, HighShelf, HighPass, LowPass, Notch };
 struct Biquad {
  double b0=1,b1=0,b2=0,a1=0,a2=0,z1=0,z2=0;
  void peak(double sr,double hz,double db,double q) noexcept {
   hz=std::clamp(std::isfinite(hz)?hz:1000.,20.,sr*.45); q=std::clamp(std::isfinite(q)?q:1.,.1,20.);db=std::clamp(std::isfinite(db)?db:0.,-36.,36.);
   const double w=6.283185307179586*hz/sr,A=std::pow(10.,db/40.),alpha=std::sin(w)/(2*q),d=1+alpha/A;
   b0=(1+alpha*A)/d;b1=-2*std::cos(w)/d;b2=(1-alpha*A)/d;a1=b1;a2=(1-alpha/A)/d;
+ }
+ // Public RBJ cookbook forms. Shelves use Q (resonance), not a dB/oct slope control.
+ void configure(double sr,double hz,double db,double q,FilterType type) noexcept {
+  if(type==FilterType::Bell){peak(sr,hz,db,q);return;}
+  hz=std::clamp(std::isfinite(hz)?hz:1000.,20.,sr*.45);q=std::clamp(std::isfinite(q)?q:1.,.1,20.);db=std::clamp(std::isfinite(db)?db:0.,-36.,36.);
+  const double w=6.283185307179586*hz/sr,c=std::cos(w),alpha=std::sin(w)/(2*q),A=std::pow(10.,db/40.);
+  double a0=1+alpha;
+  a1=-2*c;a2=1-alpha;
+  switch(type){
+   case FilterType::LowPass:b0=(1-c)*.5;b1=1-c;b2=b0;break;
+   case FilterType::HighPass:b0=(1+c)*.5;b1=-(1+c);b2=b0;break;
+   case FilterType::Notch:b0=1;b1=-2*c;b2=1;break;
+   case FilterType::LowShelf:{const double t=2*std::sqrt(A)*alpha;a0=(A+1)+(A-1)*c+t;b0=A*((A+1)-(A-1)*c+t);b1=2*A*((A-1)-(A+1)*c);b2=A*((A+1)-(A-1)*c-t);a1=-2*((A-1)+(A+1)*c);a2=(A+1)+(A-1)*c-t;break;}
+   case FilterType::HighShelf:{const double t=2*std::sqrt(A)*alpha;a0=(A+1)-(A-1)*c+t;b0=A*((A+1)+(A-1)*c+t);b1=-2*A*((A-1)+(A+1)*c);b2=A*((A+1)+(A-1)*c-t);a1=2*((A-1)-(A+1)*c);a2=(A+1)-(A-1)*c-t;break;}
+   default:peak(sr,hz,db,q);return;
+  }
+  b0/=a0;b1/=a0;b2/=a0;a1/=a0;a2/=a0;
  }
  float tick(float x) noexcept { double y=b0*x+z1;z1=b1*x-a1*y+z2;z2=b2*x-a2*y;return clean(static_cast<float>(y)); }
  std::complex<double> response(double rate,double hz) const noexcept {
@@ -29,29 +47,33 @@ class Engine {
  std::vector<float> maxima; std::vector<size_t> stamps;
  size_t queueHead=0,queueTail=0,clock=0;
  size_t position=0; double sr=48000; float gain=1,eqMix=1,limMix=1,drive=1,driveTarget=1,releaseSeconds=.08f,releaseCoefficient=0;
- struct Band {float frequency=1000,db=0,q=1;};
+ struct Band {float frequency=1000,db=0,q=1;FilterType type=FilterType::Bell;bool enabled=true;};
+ std::array<float,16> bandMix{};
  std::array<Band,16> bands{};float ceiling=.89125094f;
  bool eqOn=true,limOn=true;
 public:
  void prepare(double rate) {sr=std::isfinite(rate)&&rate>=8000&&rate<=384000?rate:48000;rate=sr; for(auto& d:delay)d.assign(static_cast<size_t>(std::ceil(rate*.005))+1,0);maxima.resize(delay[0].size()+1);stamps.resize(maxima.size());reset();}
- void reset() noexcept {position=0;queueHead=queueTail=clock=0;gain=1;drive=driveTarget;releaseCoefficient=static_cast<float>(std::exp(-1/(sr*releaseSeconds)));eqMix=eqOn?1.f:0.f;limMix=limOn?1.f:0.f;for(auto& channel:eq)for(auto& b:channel)b=Biquad{};for(auto& d:delay)std::fill(d.begin(),d.end(),0);}
+ void reset() noexcept {position=0;queueHead=queueTail=clock=0;gain=1;drive=driveTarget;releaseCoefficient=static_cast<float>(std::exp(-1/(sr*releaseSeconds)));eqMix=eqOn?1.f:0.f;limMix=limOn?1.f:0.f;for(size_t k=0;k<bandMix.size();++k)bandMix[k]=bands[k].enabled?1.f:0.f;for(auto& channel:eq)for(auto& b:channel)b=Biquad{};for(auto& d:delay)std::fill(d.begin(),d.end(),0);}
  float eqBlend() const noexcept {return eqMix;}
  void copyEqCoefficients(std::array<Biquad,16>& destination) const noexcept {destination=eq[0];}
+ void copyBandBlends(std::array<float,16>& destination) const noexcept {destination=bandMix;}
  int latency() const noexcept {return delay[0].empty()?0:static_cast<int>(delay[0].size()-1);}
  void parameters(float hz,float decibels,float quality,float ceilingDb,bool e,bool l) noexcept {
- bands[0]={hz,decibels,quality};ceiling=std::pow(10.f,std::clamp(clean(ceilingDb),-24.f,0.f)/20);eqOn=e;limOn=l;
+ bands[0].frequency=hz;bands[0].db=decibels;bands[0].q=quality;ceiling=std::pow(10.f,std::clamp(clean(ceilingDb),-24.f,0.f)/20);eqOn=e;limOn=l;
  }
  void limiterParameters(float driveDb,float releaseMs) noexcept {driveTarget=std::pow(10.f,std::clamp(clean(driveDb),0.f,24.f)/20);releaseSeconds=std::clamp(clean(releaseMs),10.f,1000.f)*.001f;}
- void setBand(size_t index,float hz,float db,float q) noexcept {if(index<bands.size())bands[index]={hz,db,q};}
+ void setBand(size_t index,float hz,float db,float q) noexcept {if(index<bands.size()){bands[index].frequency=hz;bands[index].db=db;bands[index].q=q;}}
+ void setBandMode(size_t index,FilterType type,bool enabled) noexcept {if(index<bands.size()){bands[index].type=type;bands[index].enabled=enabled;}}
  void process(float* left,float* right,int count,bool limiterFirst=false,float* gainTrace=nullptr) noexcept {
   if(delay[0].empty())return;
   const float smooth=static_cast<float>(1-std::exp(-1/(sr*.02)));
   const float release=static_cast<float>(std::exp(-1/(sr*releaseSeconds)));
-  std::array<Biquad,16> targets;for(size_t k=0;k<bands.size();++k)targets[k].peak(sr,bands[k].frequency,bands[k].db,bands[k].q);
+  std::array<Biquad,16> targets;for(size_t k=0;k<bands.size();++k)targets[k].configure(sr,bands[k].frequency,bands[k].db,bands[k].q,bands[k].type);
   for(int i=0;i<count;++i){
    for(auto& channel:eq)for(size_t k=0;k<bands.size();++k){auto& b=channel[k];const auto& t=targets[k];b.b0+=smooth*(t.b0-b.b0);b.b1+=smooth*(t.b1-b.b1);b.b2+=smooth*(t.b2-b.b2);b.a1+=smooth*(t.a1-b.a1);b.a2+=smooth*(t.a2-b.a2);}
+   for(size_t k=0;k<bandMix.size();++k)bandMix[k]+=smooth*((bands[k].enabled?1.f:0.f)-bandMix[k]);
    float x[2]={clean(left[i]),clean(right[i])};eqMix+=smooth*((eqOn?1.f:0.f)-eqMix);limMix+=smooth*((limOn?1.f:0.f)-limMix);
-   auto equalize=[&]{for(int c=0;c<2;++c){float wet=x[c];for(auto& filter:eq[c])wet=filter.tick(wet);x[c]+=eqMix*(wet-x[c]);}};
+   auto equalize=[&]{for(int c=0;c<2;++c){float wet=x[c];for(size_t k=0;k<16;++k){float filtered=eq[c][k].tick(wet);wet+=bandMix[k]*(filtered-wet);}x[c]+=eqMix*(wet-x[c]);}};
    if(!limiterFirst)equalize();
    drive+=smooth*(driveTarget-drive);releaseCoefficient+=smooth*(release-releaseCoefficient);
    const float peak=std::max(std::abs(x[0]),std::abs(x[1]))*drive;
@@ -90,11 +112,13 @@ public:
  int latency() const noexcept {return paths[0].latency();}
  float eqBlend() const noexcept {return paths[0].eqBlend();}
  void copyEqCoefficients(std::array<Biquad,16>& destination) const noexcept {paths[0].copyEqCoefficients(destination);}
+ void copyBandBlends(std::array<float,16>& destination) const noexcept {paths[0].copyBandBlends(destination);}
  void parameters(float hz,float db,float q,float ceiling,bool eq,bool limiter) noexcept {
   for(auto& path:paths)path.parameters(hz,db,q,ceiling,eq,limiter);
  }
  void limiterParameters(float driveDb,float releaseMs) noexcept {for(auto& path:paths)path.limiterParameters(driveDb,releaseMs);}
  void setBand(size_t index,float hz,float db,float q) noexcept {for(auto& path:paths)path.setBand(index,hz,db,q);}
+ void setBandMode(size_t index,FilterType type,bool enabled) noexcept {for(auto& path:paths)path.setBandMode(index,type,enabled);}
  void process(float* left,float* right,int count,bool limiterFirst=false,float* gainTrace=nullptr) noexcept {
   targetOrder=limiterFirst;
   for(int offset=0;offset<count;){

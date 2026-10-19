@@ -8,7 +8,7 @@ Szczegółowe braki produktu i kryteria odbioru: [PRODUCT_AUDIT.md](PRODUCT_AUDI
 
 ## Obecnie zaimplementowane
 
-Stereo C++20 DSP niezależny od JUCE: 16 aktywnych pasm parametrycznych, szereg EQ/limiter lub limiter/EQ, bypass z przejściem 20 ms, stereo-linked sample-peak limiter z opóźnieniem 5 ms i zabezpieczeniem ceiling. Wrapper JUCE 8.0.6: parametry automatyzacji, XML state z walidacją kompletności i zakresów, stałe zgłaszanie latencji, pomiar output peak/RMS/correlation, rzeczywisty FFT 4096–32768 energii L/R i vectorscope, dedykowany edytor EQ z węzłami drag, regulacją Q kółkiem i krzywą z aktualnych współczynników DSP. Kolejność limiter/EQ może podnieść końcowy poziom powyżej ceiling.
+Stereo C++20 DSP niezależny od JUCE: 16 pasm z typami Bell/Low Shelf/High Shelf/High Pass/Low Pass/Notch i niezależnym płynnym bypassem, szereg EQ/limiter lub limiter/EQ, bypass z przejściem 20 ms, stereo-linked sample-peak limiter z opóźnieniem 5 ms i zabezpieczeniem ceiling. Wrapper JUCE 8.0.6: parametry automatyzacji, XML state z walidacją kompletności i zakresów, stałe zgłaszanie latencji, pomiar output peak/RMS/correlation, rzeczywisty FFT 4096–32768 energii L/R i vectorscope, dedykowany edytor EQ z węzłami drag, regulacją Q kółkiem i krzywą z aktualnych współczynników DSP. Kolejność limiter/EQ może podnieść końcowy poziom powyżej ceiling.
 
 Limiter jest wczesnym rozwiązaniem sample-peak z końcowym twardym ograniczeniem, które może zniekształcać. Nie zapewnia True Peak ani kontroli aliasingu. Zmiana kolejności korzysta z 20 ms crossfade dwóch stale aktywnych torów z wyrównaną latencją. Bypass hosta ma osobny, opóźniony tor dry i takie samo płynne przejście. Utrzymywanie obu torów zwiększa CPU. Używaj wyłącznie do prac rozwojowych i odsłuchów kontrolnych.
 
@@ -18,7 +18,7 @@ Przycisk **LIMITER** otwiera osobny widok. **Drive** (0–24 dB) podnosi sygnał
 
 Złoty wykres pokazuje maksymalną redukcję obwiedni w każdym oknie 10 ms, do 10 sekund czasu audio. Turkusowy pokazuje peak końcowego wyjścia. Wykresy mają osobne obszary: redukcja 0–24 dB u góry i output -60–0 dBFS poniżej. Podczas przełączania kolejności pokazana obwiednia jest interpolacją obu torów, a nie pomiarem całkowitego tłumienia łańcucha. Przerwy po przepełnieniu kolejki nie są łączone linią. Bez nowego audio historia pozostaje zatrzymana. Historia nie jest zapisywana jako preset.
 
-Stan schema 2 zawiera 54 parametry. Starszy schema 1 jest migrowany z Drive 0 dB i Release 80 ms; dotychczasowe ID parametrów pozostają bez zmian.
+Stan schema 3 zawiera 86 parametrów. Schema 1 i 2 są migrowane: brakujące ustawienia otrzymują wartości fabryczne (typ Bell, pasmo aktywne; w schema 1 dodatkowo Drive 0 dB i Release 80 ms). Dotychczasowe ID i indeksy parametrów pozostają bez zmian.
 
 ![Panel limitera — rzeczywisty test na sygnale syntetycznym](docs/images/limiter-workspace.png)
 
@@ -53,3 +53,5 @@ Po rzeczywistym udanym CI rozpakuj paczkę i skopiuj cały katalog `JerzyMasterL
 Przed dystrybucją wybierz i spełnij odpowiednie warunki JUCE 8 (AGPLv3 lub licencja komercyjna; patrz LICENSE.md w JUCE). Nie nadano licencji własnemu kodowi projektu. Zweryfikuj również warunki SDK VST3 zawartego w przypiętej wersji JUCE, pluginval i notices. Ten projekt nie deklaruje zakończonego audytu licencji ani gotowości do komercyjnej publikacji.
 
 Interfejs Studio: wspólna stylistyka EQ i limitera, podświetlenie aktywnego modułu, wybór widoku kliknięciem karty, większe odczyty i wydzielone karty parametrów. Domyślne okno 1200×800, minimum 750×550. Bary Peak i RMS mierzą dwa różne wskaźniki wyjścia; nie są miernikami kanałów L/R.
+
+Typ filtra wybierasz obok numeru pasma. High Pass i Low Pass mają stałe nachylenie 12 dB/oktawę; Q reguluje rezonans. W HP/LP/Notch gain jest nieużywany. Przycisk Band wyłącza wybrane pasmo płynnym przejściem 20 ms. Charakterystyka uwzględnia aktualne współczynniki i blend każdego pasma.

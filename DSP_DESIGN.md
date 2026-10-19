@@ -1,6 +1,6 @@
 # Projekt DSP
 
-EQ: biquad peaking według publicznych wzorów RBJ Audio EQ Cookbook, double stanu i współczynników. 16 niezależnych pasm bell. Współczynniki filtrów są wygładzane wykładniczo przez 20 ms. Brak dynamic EQ i linear phase.
+EQ: biquad Bell, Low Shelf, High Shelf, High Pass, Low Pass i Notch według publicznych wzorów RBJ Audio EQ Cookbook; double stanu i współczynników. 16 niezależnych pasm. HP/LP mają stałe 12 dB/oktawę, Q oznacza rezonans (nie nachylenie S). Współczynniki filtrów są wygładzane wykładniczo przez 20 ms. Brak dynamic EQ i linear phase.
 
 Limiter: stereo-linked detektor sample peak, natychmiastowy atak obwiedni, release 10–1000 ms (domyślnie 80 ms), drive 0–24 dB przed ograniczaniem, opóźnienie ceil(fs*0.005), końcowe ograniczenie próbki. Maksimum okna przyszłych próbek względem opóźnionego wyjścia oblicza prealokowana kolejka monotoniczna. Ograniczenie zapobiega przekroczeniom sample ceiling po tym module, ale może zniekształcać transjenty. Wymagana kontrola interpolowanych szczytów, testy aliasingu i pomiary odsłuchowe przed zastosowaniem produkcyjnym.
 
@@ -14,3 +14,5 @@ Krzywe edytora wykorzystują faktyczne współczynniki filtrów z audiothread pr
 Drive i współczynnik release są wygładzane przez 20 ms. Detektor analizuje poziom po drive, natomiast opóźniony dry zachowuje poziom wejściowy; dzięki temu bypass modułu nie pozostawia wzmocnienia drive. Przy zmianach drive końcowy clamp pozostaje zabezpieczeniem sample ceiling. Lookahead i PDC są stałe.
 
 `LimiterMeter` zbiera minimum efektywnej obwiedni gain i maksimum output peak w oknach 10 ms według zegara próbek (granice ceil(n*fs*0.01)). Bufor hosta nie wyznacza granic pomiaru. GR pochodzi z gain detektora po blendzie bypassu i kolejności, nie z ilorazu input/output ani z końcowego clampu. Drive sam w sobie nie jest GR. Podczas przejścia kolejności jest to interpolacja obwiedni dwóch aktywnych torów; nie reprezentuje całkowitej zmiany poziomu EQ/limiter. Wrapper uwzględnia blend bypassu hosta. Prealokowana SPSC kolejka 2048 ramek nie czeka na GUI; pełna kolejka pomija nowe ramki, zachowując ich zegar, więc edytor może narysować przerwę. Reset/prepare rozpoczyna nową generację historii. Edytor przechowuje do 1000 ramek i pokazuje ostatnie 10 sekund audio; brak callbacków zatrzymuje historię.
+
+Każde pasmo ma blend bypassu 20 ms i stale przetwarzany filtr. Krzywa pojedynczego pasma to (1-mix)+mix*H(z), a sumaryczna jest iloczynem tych odpowiedzi przed blendem globalnego EQ. Wybór typu wygładza współczynniki; nie deklarujemy idealnie bezartefaktowej modulacji wszystkich ekstremalnych ustawień. Testy obejmują 96 pomiarów sinusoidalnych sześciu typów przy czterech sample rates oraz przełączanie skrajnych ustawień Q/gain.

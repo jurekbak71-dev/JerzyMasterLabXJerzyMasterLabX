@@ -11,16 +11,15 @@ inline juce::ValueTree validateState(const juce::ValueTree& candidate,
                                     juce::AudioProcessorValueTreeState& parameters,
                                     const juce::Array<juce::AudioProcessorParameter*>& expected) {
     const auto schema=candidate["schemaVersion"].toString();
-    const bool legacy=schema=="1";
-    if (!candidate.hasType("MasterLab") || (schema!="1"&&schema!="2")
+    const int sourceCount=schema=="1"?52:(schema=="2"?54:(schema=="3"?86:0));
+    if (!candidate.hasType("MasterLab") || sourceCount==0 || expected.size()!=86
         || candidate["eqInstanceId"].toString() != "eq-0001"
         || candidate["limiterInstanceId"].toString() != "limiter-0001"
-        || candidate.getNumChildren() != expected.size()-(legacy?2:0))
-        return {};
-
-    std::set<juce::String> seen;
+        || candidate.getNumChildren() != sourceCount) return {};
+    std::set<juce::String> permitted,seen;
+    for(int i=0;i<sourceCount;++i){auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(expected[i]);if(!parameter)return {};permitted.insert(parameter->paramID);}
     auto canonical = juce::ValueTree("MasterLab");
-    canonical.setProperty("schemaVersion", 2, nullptr);
+    canonical.setProperty("schemaVersion", 3, nullptr);
     canonical.setProperty("eqInstanceId", "eq-0001", nullptr);
     canonical.setProperty("limiterInstanceId", "limiter-0001", nullptr);
     for (const auto& child : candidate) {
@@ -30,7 +29,7 @@ inline juce::ValueTree validateState(const juce::ValueTree& candidate,
             return {};
         const auto id = child["id"].toString();
         auto* parameter = parameters.getParameter(id);
-        if (parameter == nullptr || (legacy&&(id=="limiterDrive"||id=="limiterRelease")) || !seen.insert(id).second)
+        if (parameter == nullptr || !permitted.contains(id) || !seen.insert(id).second)
             return {};
         const auto text = child["value"].toString().toStdString();
         float value = 0;
@@ -38,18 +37,19 @@ inline juce::ValueTree validateState(const juce::ValueTree& candidate,
         const auto range = parameter->getNormalisableRange();
         if (result.ec != std::errc{} || result.ptr != text.data() + text.size()
             || !std::isfinite(value) || value < range.start || value > range.end
-            || (parameter->isBoolean() && value != 0.f && value != 1.f))
+            || (parameter->isBoolean() && value != 0.f && value != 1.f)
+            || (dynamic_cast<juce::AudioParameterChoice*>(parameter)!=nullptr && std::floor(value)!=value))
             return {};
         auto node = juce::ValueTree("PARAM");
         node.setProperty("id", id, nullptr);
         node.setProperty("value", value, nullptr);
         canonical.appendChild(node, nullptr);
     }
-    if(legacy){
-        for(const auto& id:{juce::String("limiterDrive"),juce::String("limiterRelease")}){
-            auto node=juce::ValueTree("PARAM");node.setProperty("id",id,nullptr);
-            node.setProperty("value",id=="limiterDrive"?0.f:80.f,nullptr);canonical.appendChild(node,nullptr);
-        }
+    // Append only newly introduced fields, using version-independent factory defaults.
+    for(int i=sourceCount;i<expected.size();++i){
+        auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(expected[i]);if(!parameter)return {};
+        auto node=juce::ValueTree("PARAM");node.setProperty("id",parameter->paramID,nullptr);
+        node.setProperty("value",parameter->convertFrom0to1(parameter->getDefaultValue()),nullptr);canonical.appendChild(node,nullptr);
     }
     return canonical;
 }

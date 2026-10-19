@@ -4,7 +4,7 @@ Dedykowany Spectral Workspace zastąpił GenericAudioProcessorEditor. Zawiera dw
 
 ## Zaimplementowane zachowanie
 
-- Wybór 16 pasm bell. Kontrolki częstotliwości, gain, Q i ceiling oraz bypass obu modułów.
+- Wybór 16 pasm, sześć rzeczywistych typów filtrów i niezależny bypass pasma. Kontrolki częstotliwości, gain, Q i ceiling oraz bypass obu modułów.
 - Przeciąganie punktu zmienia częstotliwość i gain; kółko nad wybranym punktem reguluje Q. Gesty begin/end trafiają do hosta. Zmiana wyboru pasma nie zmienia pozostałych pasm.
 - Złota krzywa: odpowiedź EQ z faktycznych współczynników DSP i blendu bypassu, przekazana SPSC FIFO. Cień: odpowiedź wybranego filtra. To nie charakterystyka całego toru z limiterem.
 - Turkusowe widmo: energia L/R, FFT Hann 4096–32768, domyślnie 8192, interpolacja binów i wygładzanie czasowe opadania. Skala widma -100–0 dBFS jest niezależna od osi EQ ±18 dB.
@@ -35,3 +35,5 @@ Wspólny `StudioTheme.h` rysuje własne pokrętła ze wskazówką, podziałką i
 Limiter oddziela obszar redukcji (0–24 dB) od historii wyjściowego peak (-60–0 dBFS). Wypełnienie i linie pochodzą z tej samej telemetrycznej historii. Oś czasu pokazuje ostatnie 10 sekund audio. Boczne bary podpisane Peak/RMS reprezentują blokowe metryki całego stereo, nie kanały L/R i nie normowany loudness. Przy małym oknie znikają bary, pozostają wartości liczbowe. EQ ma wypełnione widmo, wykres odpowiedzi i odczyt korelacji z paskiem -1..+1. Grafika i gradienty pozostają w rendererze programowym.
 
 Testy GUI używają ponad 10 sekund syntetycznego sygnału o zmiennej amplitudzie. Sprawdzają także kliknięcie karty oraz brak przecięć widocznych kontrolek w obu widokach przy trzech rozmiarach. Zrzuty w README są aktualnymi wynikami tych testów, nie renderami koncepcyjnymi.
+
+Lista typu filtra i przycisk Band wiążą się z aktualnie wybranym pasmem. HP/LP/Notch nie używają gain; kontrolka gain jest wtedy wyłączona, a węzeł pozostaje na osi 0 dB. Krzywe uwzględniają bypass pasma, nie tylko globalny EQ. Test GUI sprawdza wszystkie typy na paśmie 16 i izolację od pasma 1.
