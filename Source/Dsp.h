@@ -28,41 +28,44 @@ class Engine {
  std::array<std::vector<float>,2> delay;
  std::vector<float> maxima; std::vector<size_t> stamps;
  size_t queueHead=0,queueTail=0,clock=0;
- size_t position=0; double sr=48000; float gain=1,eqMix=1,limMix=1;
+ size_t position=0; double sr=48000; float gain=1,eqMix=1,limMix=1,drive=1,driveTarget=1,releaseSeconds=.08f,releaseCoefficient=0;
  struct Band {float frequency=1000,db=0,q=1;};
  std::array<Band,16> bands{};float ceiling=.89125094f;
  bool eqOn=true,limOn=true;
 public:
  void prepare(double rate) {sr=std::isfinite(rate)&&rate>=8000&&rate<=384000?rate:48000;rate=sr; for(auto& d:delay)d.assign(static_cast<size_t>(std::ceil(rate*.005))+1,0);maxima.resize(delay[0].size()+1);stamps.resize(maxima.size());reset();}
- void reset() noexcept {position=0;queueHead=queueTail=clock=0;gain=1;eqMix=eqOn?1.f:0.f;limMix=limOn?1.f:0.f;for(auto& channel:eq)for(auto& b:channel)b=Biquad{};for(auto& d:delay)std::fill(d.begin(),d.end(),0);}
+ void reset() noexcept {position=0;queueHead=queueTail=clock=0;gain=1;drive=driveTarget;releaseCoefficient=static_cast<float>(std::exp(-1/(sr*releaseSeconds)));eqMix=eqOn?1.f:0.f;limMix=limOn?1.f:0.f;for(auto& channel:eq)for(auto& b:channel)b=Biquad{};for(auto& d:delay)std::fill(d.begin(),d.end(),0);}
  float eqBlend() const noexcept {return eqMix;}
  void copyEqCoefficients(std::array<Biquad,16>& destination) const noexcept {destination=eq[0];}
  int latency() const noexcept {return delay[0].empty()?0:static_cast<int>(delay[0].size()-1);}
  void parameters(float hz,float decibels,float quality,float ceilingDb,bool e,bool l) noexcept {
  bands[0]={hz,decibels,quality};ceiling=std::pow(10.f,std::clamp(clean(ceilingDb),-24.f,0.f)/20);eqOn=e;limOn=l;
  }
+ void limiterParameters(float driveDb,float releaseMs) noexcept {driveTarget=std::pow(10.f,std::clamp(clean(driveDb),0.f,24.f)/20);releaseSeconds=std::clamp(clean(releaseMs),10.f,1000.f)*.001f;}
  void setBand(size_t index,float hz,float db,float q) noexcept {if(index<bands.size())bands[index]={hz,db,q};}
- void process(float* left,float* right,int count,bool limiterFirst=false) noexcept {
+ void process(float* left,float* right,int count,bool limiterFirst=false,float* gainTrace=nullptr) noexcept {
   if(delay[0].empty())return;
   const float smooth=static_cast<float>(1-std::exp(-1/(sr*.02)));
-  const float release=static_cast<float>(std::exp(-1/(sr*.08)));
+  const float release=static_cast<float>(std::exp(-1/(sr*releaseSeconds)));
   std::array<Biquad,16> targets;for(size_t k=0;k<bands.size();++k)targets[k].peak(sr,bands[k].frequency,bands[k].db,bands[k].q);
   for(int i=0;i<count;++i){
    for(auto& channel:eq)for(size_t k=0;k<bands.size();++k){auto& b=channel[k];const auto& t=targets[k];b.b0+=smooth*(t.b0-b.b0);b.b1+=smooth*(t.b1-b.b1);b.b2+=smooth*(t.b2-b.b2);b.a1+=smooth*(t.a1-b.a1);b.a2+=smooth*(t.a2-b.a2);}
    float x[2]={clean(left[i]),clean(right[i])};eqMix+=smooth*((eqOn?1.f:0.f)-eqMix);limMix+=smooth*((limOn?1.f:0.f)-limMix);
    auto equalize=[&]{for(int c=0;c<2;++c){float wet=x[c];for(auto& filter:eq[c])wet=filter.tick(wet);x[c]+=eqMix*(wet-x[c]);}};
    if(!limiterFirst)equalize();
-   const float peak=std::max(std::abs(x[0]),std::abs(x[1]));
+   drive+=smooth*(driveTarget-drive);releaseCoefficient+=smooth*(release-releaseCoefficient);
+   const float peak=std::max(std::abs(x[0]),std::abs(x[1]))*drive;
    const size_t capacity=maxima.size(), window=delay[0].size()-1;
    while(queueHead!=queueTail && clock-stamps[queueHead]>window)queueHead=(queueHead+1)%capacity;
    while(queueHead!=queueTail){size_t back=(queueTail+capacity-1)%capacity;if(maxima[back]>peak)break;queueTail=back;}
    maxima[queueTail]=peak;stamps[queueTail]=clock++;queueTail=(queueTail+1)%capacity;
    const float futurePeak=maxima[queueHead];
    const float target=futurePeak>ceiling?ceiling/futurePeak:1.f;
-   gain=target<gain?target:release*gain+(1-release)*target;
+   gain=target<gain?target:releaseCoefficient*gain+(1-releaseCoefficient)*target;
    const size_t read=(position+1)%delay[0].size();
-   for(int c=0;c<2;++c){delay[c][position]=x[c];const float dry=delay[c][read];const float wet=std::clamp(dry*gain,-ceiling,ceiling);x[c]=dry+limMix*(wet-dry);}
+   for(int c=0;c<2;++c){delay[c][position]=x[c];const float dry=delay[c][read];const float wet=std::clamp(dry*drive*gain,-ceiling,ceiling);x[c]=dry+limMix*(wet-dry);}
    position=read;
+   if(gainTrace)gainTrace[i]=1+limMix*(gain-1);
    if(limiterFirst)equalize();
    left[i]=clean(x[0]);right[i]=clean(x[1]);
   }
@@ -74,6 +77,7 @@ public:
 class RoutedEngine {
  std::array<Engine,2> paths;
  std::array<std::array<float,128>,2> scratch{};
+ std::array<std::array<float,128>,2> gainScratch{};
  float routeMix=0,routeStep=1.f/960.f;
  bool targetOrder=false;
 public:
@@ -89,16 +93,18 @@ public:
  void parameters(float hz,float db,float q,float ceiling,bool eq,bool limiter) noexcept {
   for(auto& path:paths)path.parameters(hz,db,q,ceiling,eq,limiter);
  }
+ void limiterParameters(float driveDb,float releaseMs) noexcept {for(auto& path:paths)path.limiterParameters(driveDb,releaseMs);}
  void setBand(size_t index,float hz,float db,float q) noexcept {for(auto& path:paths)path.setBand(index,hz,db,q);}
- void process(float* left,float* right,int count,bool limiterFirst=false) noexcept {
+ void process(float* left,float* right,int count,bool limiterFirst=false,float* gainTrace=nullptr) noexcept {
   targetOrder=limiterFirst;
   for(int offset=0;offset<count;){
    const int length=std::min(128,count-offset);
    std::copy_n(left+offset,length,scratch[0].data());std::copy_n(right+offset,length,scratch[1].data());
-   paths[0].process(left+offset,right+offset,length,false);
-   paths[1].process(scratch[0].data(),scratch[1].data(),length,true);
+   paths[0].process(left+offset,right+offset,length,false,gainScratch[0].data());
+   paths[1].process(scratch[0].data(),scratch[1].data(),length,true,gainScratch[1].data());
    for(int i=0;i<length;++i){
     routeMix=limiterFirst?std::min(1.f,routeMix+routeStep):std::max(0.f,routeMix-routeStep);
+    if(gainTrace)gainTrace[offset+i]=gainScratch[0][i]+routeMix*(gainScratch[1][i]-gainScratch[0][i]);
     left[offset+i]+=routeMix*(scratch[0][i]-left[offset+i]);
     right[offset+i]+=routeMix*(scratch[1][i]-right[offset+i]);
    }

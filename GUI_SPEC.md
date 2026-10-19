@@ -18,4 +18,11 @@ Testy GUI otwierają edytor trzykrotnie, zmieniają rozmiar, wybierają pasmo 16
 
 ## Otwarte wymagania
 
-Zoom 75–200% i HiDPI, osiem pełnych widoków, dodawanie/usuwanie/powielanie modułów, Undo/Redo i A/B, input/output overlay, freeze/peak hold, historia GR i loudness, edycja pozostałych typów filtrów i trybów kanałowych. Zmiana wymiarów nie jest równoznaczna z ukończonym zoomem.
+Zoom 75–200% i HiDPI, osiem pełnych widoków, dodawanie/usuwanie/powielanie modułów, Undo/Redo i A/B, input/output overlay, freeze/peak hold, historia loudness, edycja pozostałych typów filtrów i trybów kanałowych. Zmiana wymiarów nie jest równoznaczna z ukończonym zoomem.
+
+
+## Limiter Workspace
+
+Oddzielny przycisk widoku, trzy kontrolki Drive/Release/Sample Ceiling, bypass modułu, historia GR i output peak, maksimum widocznego zakresu oraz odczyt PDC. Dane 10 ms są generowane w DSP; repaint nie tworzy wartości pomiarów. Okno pokazuje do 10 s audio, obwiednia jest ograniczana wizualnie do 24 dB (wartość maksimum nadal pokazuje głębszą redukcję). Wskaźnik braku nowego audio jest statusem dostarczania danych, nie rozpoznaniem transportu hosta. Linie nie łączą luk utraconych ramek. Generacja i zegar wykrywają reset historii. Po ponownym otwarciu edytor odbiera pozostałe ramki kolejki; pełna historia sesji nie jest gwarantowana.
+
+Test GUI przełącza widoki, sprawdza widoczność i powiązanie nowych kontrolek z parametrami, obecność niezerowej redukcji na wykresie i trzy rozmiary okna. Zapisuje również `build-plugin/limiter-smoke.png`; workflow Windows archiwizuje oba zrzuty.

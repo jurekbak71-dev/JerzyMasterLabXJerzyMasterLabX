@@ -47,7 +47,7 @@ FFT pracuje na energii L/R, więc sygnały przeciwfazowe nie znikają jak przy w
 
 ## Nadal istotnie poniżej zamówionego produktu
 
-Nadal brakuje pełnego grafu i wielu instancji, rzeczywistego panelu dynamiki/limitera z historią GR, True Peak, oversamplingu, LUFS/LRA, referencji, wyrównanego A/B, Undo/Redo, pełnych trybów EQ i imagera oraz asystenta. Nowy edytor EQ jest postępem w konkretnym module, nie odpowiednikiem kompletnego Ozone 12 Advanced. Udana kompilacja Windows nie rozstrzyga jakości odsłuchowej ani testów FL Studio.
+Nadal brakuje pełnego grafu i wielu instancji, pełnego panelu dynamiki, True Peak, oversamplingu, LUFS/LRA, referencji, wyrównanego A/B, Undo/Redo, pełnych trybów EQ i imagera oraz asystenta. Nowy edytor EQ jest postępem w konkretnym module, nie odpowiednikiem kompletnego Ozone 12 Advanced. Udana kompilacja Windows nie rozstrzyga jakości odsłuchowej ani testów FL Studio.
 
 
 ## Ustalenia z podręcznika E
@@ -70,7 +70,7 @@ Nadal brakuje pełnego grafu i wielu instancji, rzeczywistego panelu dynamiki/li
 - **Str. 66 / PDF 75:** Learn Input Gain analizuje pięć sekund i ustawia gain do celu LUFS. Instrukcja wyraźnie odradza używanie go jako gwarancji zgodności loudness całego programu.
 - **Str. 67–68 / PDF 76–77:** różne tryby IRC mają różne kompromisy CPU, latencji i reakcji na transjenty. IRC 5 opisano jako wewnętrzny podział na cztery pasma z odrębną reakcją czasową. Rozdział jednocześnie opisuje Maximizer jako moduł pełnopasmowy: nie oznacza to edytowalnego przez użytkownika multiband limitera. Opis produktu nie ujawnia kompletnego algorytmu.
 - **Str. 68–70 / PDF 77–79:** osobne Gain i Output Level, True Peak, Character, Upward Compress, Soft Clip, Transient Emphasis oraz niezależność stereo dla transjentów i sustain. Wzmianka o oversamplingu 4× dotyczy Soft Clip; nie dowodzi stałego oversamplingu 4× całego Maximizera.
-- **Str. 71 / PDF 80:** historia sygnału i redukcji/wzmocnienia pozwala oceniać reakcję procesora w czasie. Nasz limiter ogranicza sample peak, ma stałe 5 ms lookahead i 80 ms release; nie realizuje opisanych trybów, true peak ani podobnej kontroli odsłuchowej.
+- **Str. 71 / PDF 80:** historia sygnału i redukcji/wzmocnienia pozwala oceniać reakcję procesora w czasie. Nasz limiter ogranicza sample peak, ma stałe 5 ms lookahead, regulowany release i drive oraz historię obwiedni GR; nie realizuje opisanych trybów, true peak ani wyrównanego porównania odsłuchowego.
 
 ### Stereo i źródło pomiarów
 
@@ -100,3 +100,5 @@ Poniższa lista jest planem brakujących funkcji, nie deklaracją ich implementa
 | 6 | Model instancji i rozwój stereo | Dodawanie/usuwanie/wiele instancji bez blokowania callback; stan i automatyzacja identyfikują instancję; szerokość i korelacja per-band oraz odsłuch mono |
 
 Profesjonalna ocena brzmienia wymaga własnych pomiarów i legalnie dostępnego Ozone uruchomionego na tych samych plikach. Analiza instrukcji ustala funkcje i ergonomię; nie mierzy transparentności, artefaktów ani przewagi dźwiękowej.
+
+Aktualizacja 19 października 2026: podstawowa implementacja priorytetu 1 jest dostępna (panel, Drive, Release, ceiling, historia GR i PDC). Nie oznacza to jakości ani kompletu funkcji Maximizera. Dokładne znaczenie obwiedni i ograniczenia pomiaru opisano w DSP_DESIGN.md.

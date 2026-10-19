@@ -16,7 +16,7 @@ int main(){
  auto reject=[&](const std::function<void(juce::ValueTree&)>& corrupt){auto tree=original.createCopy();tree.getChildWithProperty("id","q16").setProperty("value",3.f,nullptr);corrupt(tree);auto altered=tree.createXml();juce::MemoryBlock block;juce::AudioProcessor::copyXmlToBinary(*altered,block);target->setStateInformation(block.getData(),static_cast<int>(block.getSize()));return unchanged();};
  int rejected=0;
  for(auto corrupt:std::vector<std::function<void(juce::ValueTree&)>>{
-  [](auto& t){t.setProperty("schemaVersion",2,nullptr);},
+  [](auto& t){t.setProperty("schemaVersion",99,nullptr);},
   [](auto& t){t.removeProperty("schemaVersion",nullptr);},
   [](auto& t){t.setProperty("eqInstanceId","unknown",nullptr);},
   [](auto& t){t.removeChild(0,nullptr);},
@@ -29,14 +29,26 @@ int main(){
   [](auto& t){t.getChild(0).setProperty("value","1000junk",nullptr);},
   [](auto& t){t.getChild(0).setProperty("value",30000,nullptr);},
   [](auto& t){t.getChildWithProperty("id","eq").setProperty("value",.5,nullptr);},
-  [](auto& t){t.getChild(1).setProperty("value",-1000,nullptr);}
+  [](auto& t){t.getChild(1).setProperty("value",-1000,nullptr);},
+  [](auto& t){t.getChildWithProperty("id","limiterDrive").setProperty("value",25,nullptr);},
+  [](auto& t){t.getChildWithProperty("id","limiterRelease").setProperty("value",9,nullptr);}
  }){if(!reject(corrupt)){std::cerr<<"partial application of invalid state";return 1;}++rejected;}
  target->setStateInformation(nullptr,0);const char garbage[]="not a preset";target->setStateInformation(garbage,sizeof garbage);
  target->setStateInformation(saved.getData(),static_cast<int>(saved.getSize()/2));
  juce::MemoryBlock oversized(1024*1024+1,true);target->setStateInformation(oversized.getData(),static_cast<int>(oversized.getSize()));
  if(!unchanged()){std::cerr<<"invalid binary changed settings";return 1;}
  juce::MemoryBlock after;target->getStateInformation(after);auto afterXml=juce::AudioProcessor::getXmlFromBinary(after.getData(),static_cast<int>(after.getSize()));
- if(!afterXml||afterXml->getStringAttribute("schemaVersion")!="1"){std::cerr<<"schema lost";return 1;}
+ if(!afterXml||afterXml->getStringAttribute("schemaVersion")!="2"){std::cerr<<"schema lost";return 1;}
+ // Upgrade schema 1 using deterministic defaults, not values from the current instance.
+ auto legacy=original.createCopy();legacy.setProperty("schemaVersion",1,nullptr);
+ legacy.removeChild(legacy.getChildWithProperty("id","limiterDrive"),nullptr);
+ legacy.removeChild(legacy.getChildWithProperty("id","limiterRelease"),nullptr);
+ std::unique_ptr<juce::AudioProcessor> migrated(createPluginFilter());
+ migrated->getParameters()[52]->setValueNotifyingHost(1);migrated->getParameters()[53]->setValueNotifyingHost(1);
+ juce::MemoryBlock oldState;juce::AudioProcessor::copyXmlToBinary(*legacy.createXml(),oldState);
+ migrated->setStateInformation(oldState.getData(),static_cast<int>(oldState.getSize()));
+ for(int i=0;i<52;++i)if(migrated->getParameters()[i]->getValue()!=source->getParameters()[i]->getValue()){std::cerr<<"legacy parameter changed";return 1;}
+ for(int i:{52,53})if(migrated->getParameters()[i]->getValue()!=migrated->getParameters()[i]->getDefaultValue()){std::cerr<<"legacy limiter defaults incorrect";return 1;}
  juce::MidiBuffer midi;
  for(double rate:{44100.,48000.,96000.,192000.}){
   source->setNonRealtime(false);target->setNonRealtime(true);
@@ -52,5 +64,5 @@ int main(){
  }
  if(!unchanged()){std::cerr<<"offline rendering changed settings";return 1;}
  std::cout<<"Passed: restored realtime/offline renders match at four sample rates and variable block sizes; settings preserved\n";
- std::cout<<"Passed: all 52 parameters roundtrip, "<<rejected<<" invalid trees rejected, invalid/truncated binary leaves settings unchanged\n";
+ std::cout<<"Passed: all 54 parameters roundtrip, "<<rejected<<" invalid trees rejected, invalid/truncated binary leaves settings unchanged\n";
 }
