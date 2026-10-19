@@ -47,3 +47,11 @@ Trzecia zakładka pokazuje rzeczywiste wejście/wyjście, peak i RMS, LUFS M/S/I
 
 
 Master Brain: zaimplementowano analizę wejścia poza callback, regułowe propozycje EQ/limitera, panel konfiguracji i raportu, zatwierdzanie oraz jedną transakcję Undo. Zakres, algorytm i ograniczenia opisano w [MASTER_BRAIN.md](MASTER_BRAIN.md). Nie jest to kompletna docelowa implementacja v0.4.0.
+
+## Soft Studio — rewizja ergonomii
+
+Osadzony Manrope (SIL OFL 1.1) zapewnia wspólną typografię w Windows/Linux. Hierarchia: nazwa produktu, tytuły modułów, nazwy parametrów i powiększone wartości liczbowe. Wartości suwaków liniowych mają mniejszy rozmiar niż pokrętła, aby zachować pełne jednostki w krótszym polu. Jawnie przypisany typeface obejmuje również tekst rysowany na wykresach.
+
+Nawigacja i łańcuch mają zaokrąglone powierzchnie bez ciężkich ramek; dolne parametry tworzą jeden panel. Pokrętła pokazują łuk i wskaźnik bez ozdobnych kresek. Listy wyboru mają okrągły przycisk z diodowym punktem zamiast strzałek. Punkt rozjaśnia się przy najechaniu, fokusie klawiatury lub otwarciu menu. To sygnalizacja stanu kontrolki, nie atrapa miernika audio. Cała lista pozostaje klikalna i zachowuje natywną obsługę klawiatury JUCE. Przełączniki mają formę krótkich suwaków.
+
+Dane wykresów i obsługa gestów EQ pozostają powiązane z procesorem. Sprawdzanie układu obejmuje rzeczywiste otwieranie edytora, zmianę widoków, ponowne otwarcia oraz rozmiary 750×550, 1000×700 i 2000×1400. Nie jest to deklaracja zakończenia testów HiDPI ani FL Studio.

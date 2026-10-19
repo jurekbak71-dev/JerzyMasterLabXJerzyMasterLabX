@@ -34,7 +34,8 @@ jobs:
           $bundle = 'build/JerzyMasterLabX_artefacts/Release/VST3/JerzyMasterLabX.vst3'
           if (-not (Test-Path "$bundle/Contents/x86_64-win/JerzyMasterLabX.vst3")) { throw 'VST3 binary missing' }
           Copy-Item README.md build/INSTALACJA.md
-          Compress-Archive -Path $bundle,build/INSTALACJA.md -DestinationPath JerzyMasterLabX-v0.1.0-Windows-x64.zip
+          Copy-Item Assets/Fonts/OFL-Manrope.txt build/OFL-Manrope.txt
+          Compress-Archive -Path $bundle,build/INSTALACJA.md,build/OFL-Manrope.txt -DestinationPath JerzyMasterLabX-v0.1.0-Windows-x64.zip
       - uses: actions/upload-artifact@v4
         with:
           name: JerzyMasterLabX-v0.1.0-Windows-x64
