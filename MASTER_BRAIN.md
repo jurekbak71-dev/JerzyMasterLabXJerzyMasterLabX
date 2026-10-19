@@ -1,5 +1,8 @@
 # Master Brain — asystent regułowy
 
+> Aktualizacja bieżącej implementacji: [MODULAR_WORKFLOW.md](MODULAR_WORKFLOW.md). Dodano Stabilizer, dowolną kolejność sześciu rodzin, nowe sterowanie Imagera i automatyczny wybór modułów przez Brain. Poniższe starsze opisy ustalonej kolejności, pięciu rodzin i schema 4 opisują poprzedni etap. Nadal jedna instancja na rodzinę i brak True Peak.
+
+
 Otwórz **MASTER BRAIN**, wybierz gatunek, styl, długość analizy (8/16/30/60 sekund), docelowy LUFS i ceiling próbek. Zaznacz EQ i/lub limiter. Naciśnij **ANALYSE AUDIO** i odtwórz reprezentatywny fragment w czasie rzeczywistym. Zatrzymanie transportu zatrzymuje zbieranie próbek. Anulowanie nie zmienia DSP.
 
 Asystent mierzy wejście przed procesorami: LUFS Integrated, peak próbek, RMS, korelację, przekroczenia i energię pięciu regionów widma. FFT i obliczanie propozycji działają na osobnym wątku; audio callback wyłącznie kopiuje próbki do przygotowanej kolejki. Przepełnienie unieważnia analizę zamiast akceptować niepełne dane. Analiza nie zależy od otwartego edytora.

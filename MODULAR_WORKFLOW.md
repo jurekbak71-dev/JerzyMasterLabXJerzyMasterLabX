@@ -1,47 +1,54 @@
-# Łańcuch modułów i nowe procesory
+# Łańcuch modułów i sposób pracy
 
-## Dodawanie, usuwanie i bypass
+## Dostępne procesory
 
-Przycisk **+ Modules** otwiera listę pięciu procesorów. Każdy ma oddzielne **Add/Remove from chain** oraz **Enabled**. Usunięcie zachowuje ustawienia i usuwa kartę z widocznego łańcucha; bypass pozostawia kartę. Kliknięcie diody na karcie przełącza bypass, kliknięcie nazwy otwiera panel. Nowe panele mają także osobne przełączniki **In chain** i **Active**. Wszystkie te stany podlegają automatyce i zapisowi hosta/preseta.
+Działa sześć rodzin: **Stabilizer, Dynamic EQ, Smart Dynamics, Stereo Architect, Spectral EQ i Limiter**. Przycisk **+ Modules** dodaje lub usuwa procesor; osobny przełącznik Enabled/Active steruje bypassem. Kliknięcie diody karty przełącza bypass, nazwy — otwiera panel. Usunięcie zachowuje ustawienia.
 
-Obecnie dostępna jest jedna instancja każdej z pięciu rodzin, nie dowolna liczba kopii. Kolejność nowych etapów jest ustalona:
+**Przeciąganie dowolnej karty zmienia rzeczywistą kolejność DSP.** Dostępne są wszystkie 720 kolejności sześciu modułów. Kolejność zapisuje się w FLP przez stan wtyczki i w presetach `.jmlx`; ma automatykę i Undo/Redo. Sam test zachowania FL Studio wymaga jeszcze wykonania w tym DAW.
 
-**Dynamic EQ → Smart Dynamics → Stereo Architect → Spectral EQ → Limiter**.
+Obecnie istnieje **jedna instancja każdej rodziny**. Drugi EQ i dowolna liczba instancji nadal wymagają implementacji. Domyślny porządek to Stabilizer → Dynamic EQ → Dynamics → Stereo → EQ → Limiter, z pominięciem nieobecnych procesorów. Procesory za limiterem mogą przekroczyć jego ceiling.
 
-Dotychczasowe przeciąganie zamienia dwa ostatnie procesory (EQ i limiter). Nie jest to jeszcze dowolny graf ani swobodne przestawianie nowych trzech modułów. Gdy EQ jest za limiterem, może podnieść finalny poziom ponad jego ceiling.
-
-Obecność i bypass sterują przejściem 20 ms, bez tworzenia/usuwania obiektów DSP w callback. Przetwarzanie wygaszonego modułu zatrzymuje się po zejściu blendu do progu numerycznego. Cały plugin zachowuje PDC lookahead limitera 5 ms także przy pustym łańcuchu; nowe procesory nie dodają latencji. To pozwala przełączać je bez przestawiania PDC podczas odtwarzania.
+Przy zmianie kolejności dwa przygotowane banki DSP wykonują 20 ms crossfade. Stan filtrów i detektorów jest kopiowany do przygotowanej pamięci. Szybkie kolejne żądania czekają na koniec aktualnego crossfade; ostatnia kolejność wygrywa. Nie ma mutexów, tworzenia obiektów ani alokacji w callback, co sprawdza test. PDC pozostaje równy lookahead 5 ms także przy pustym łańcuchu. Crossfade ogranicza skoki; nie gwarantuje niesłyszalności zmiany topologii dla każdego materiału.
 
 ## Stereo Architect
 
-Cztery pasma: Low/Mid/High/Air. Trzy regulowane podziały, szerokość 0–2× dla każdego pasma, Balance, Mono Bass i Mono Preview. Width zmienia Side przy zachowaniu Mid, bez dodawania sztucznego sygnału stereo. Przy neutralnym balansie zmiana szerokości zachowuje sumę mono. Mono Preview centruje oba kanały również przy zmienionym balansie.
+Cztery kolorowe pasma Low/Mid/High/Air, trzy przeciągane podziały na logarytmicznym widmie, cztery pionowe suwaki Width 0–2×, osobne **On** i **S** każdego pasma, **Amount**, **Delta**, Balance, Mono Bass i Mono Preview. Kilka solo można łączyć. On wyłącza przetwarzanie szerokości danego pasma, przywracając unity; nie wycisza audio.
 
-Podział korzysta z komplementarnych filtrów pierwszego rzędu: neutralne szerokości sumują się do wejścia. **Mono Bass ma łagodną charakterystykę**, nie jest ostrym odcięciem całego Side poniżej crossovera. To nie filtry 24 dB/oktawę. Poszerzanie może pogorszyć korelację, dlatego dostępne są pomiary per-band i odsłuch mono.
+Width zmienia Side przy zachowaniu Mid. Amount=0 i wszystkie pasma z wyłączonym przetwarzaniem są neutralne, bez aktywnych solo/mono/balance/Delta. Delta to wejście minus przetworzone wyjście modułu. Przełączenia są wygładzane.
 
-Wizualizacje: cztery korelacje i stosunki energii S/M z wygładzaniem 400 ms; przy większej szerokości panelu również vectorscope pełnego wyjścia łańcucha. Nie należy utożsamiać tego vectorscope z izolowanym wyjściem modułu. W kompaktowym widoku pozostają pomiary pasmowe.
+Podział jest komplementarny, pierwszego rzędu: neutralne pasma sumują się do wejścia. Mono Bass ma łagodny spadek, a nie odcięcie Side 24 dB/okt. Poszerzanie może pogorszyć zgodność mono. Korelacja każdego pasma pochodzi z pomiaru po Width, przed odsłuchem solo. **Widmo, półkolisty vectorscope i dolna korelacja pokazują wyjście całej wtyczki**, zgodnie z opisami panelu. Vectorscope składa dodatnie i ujemne Mid w górną półpłaszczyznę. Nie ma jeszcze Stereoize, Recover Sides ani Learn.
 
-## Smart Dynamics
+## Stabilizer
 
-Stereo-linked kompresor z threshold, ratio, attack, release, knee, makeup i dry/wet. **Upward maximum** ogranicza dodatkowe wzmocnienie poniżej **Upward threshold**; efekt wygasa poniżej −70 do −90 dBFS, aby nie podnosić ciszy. Używaj makeup i upward świadomie: podnoszą także szum materiału powyżej tego progu.
+Własny adaptacyjny korektor z 12 detektorami pasmowymi i 12 filtrami Bell. Co 64 próbki mierzone energie pasm są porównywane ze średnią, z uwzględnieniem jawnego profilu Neutral/Electronic/Acoustic. To nie jest model wytrenowany na nagraniach ani algorytm konkurencji.
 
-Digital stosuje regulację wzmocnienia. Analog wydłuża odpowiedź detektora, poszerza knee i dodaje łagodną, znormalizowaną charakterystykę arctangent. To własny charakter DSP, nie emulacja konkretnego urządzenia. **Nie ma oversamplingu** i nie deklarujemy kontroli aliasingu ani jakości komercyjnego modelowania analogowego.
+**Shape** dopuszcza ograniczone podbicia i tłumienia; **Cut** tylko tłumienia. Limit jednego filtra to ±6 dB przed Amount i regulacją regionów; filtry nakładają się, więc sumaryczna krzywa może mieć większą zmianę. **Amount** skaluje korekcję, **Speed** ustala czas detektora i adaptacji (większa wartość = wolniej), **Smoothing** uśrednia sąsiednie pasma, **Low/Mid/High** sterują trzema regionami. **Tame Transients** osłabia docelową adaptację przy dużym crest chwilowym; nie rekonstruuje transjentów i nie jest osobnym transient shaperem. **Delta** odtwarza prawdziwą różnicę wejście–wyjście.
 
-Wykres przedstawia docelową charakterystykę statyczną (przed nieliniową kolorystyką), pozycję detektora i rzeczywistą redukcję/wzmocnienie upward. Historia jest serią snapshotów GUI, nie gwarantowaną historią próbek ani osią dokładnego czasu audio.
+GUI rysuje charakterystykę rzeczywistych współczynników filtrów i bypassu. Przy przełączaniu kolejności pokazuje aktywny bank; nie jest analizą sumy dwóch banków podczas crossfade. Adaptacja jest taktowana próbkami i daje identyczny wynik przy różnych podziałach bufora. Brak dodatkowej latencji, brak alokacji w process.
 
-## Dynamic EQ
+## Dynamics i Dynamic EQ
 
-Trzy niezależne pasma Bell: frequency, static gain, Q, threshold, dynamic range, attack, release i band active. Własny detektor band-pass (wejście minus notch) mierzy każde pasmo. Powyżej threshold siła działania rośnie przez zakres 12 dB detektora, do zadanej wartości dynamic range. Wartość ujemna tłumi, dodatnia podbija. Nie ma automatycznego wykrywania rezonansów, trybu linear phase ani zewnętrznego sidechainu.
+Dynamics: stereo-linked threshold/ratio/attack/release/knee/makeup/mix, ograniczona upward compression z ochroną ciszy, Digital lub Analog. Analog wydłuża detektor, poszerza knee i dodaje łagodną kolorystykę arctangent. Nie ma oversamplingu ani deklaracji emulacji sprzętu. Historia jest serią snapshotów GUI.
 
-Krzywe powstają ze współczynników działających filtrów i blendów, a odczyty pokazują aktualną część dynamiczną w dB. To oddzielny moduł; statyczny Spectral EQ zachowuje 16 pasm, z których każde ma własny kolor krzywej, punktu i oznaczeń wybranego pasma. Biała linia oznacza sumaryczną charakterystykę samego Spectral EQ.
+Dynamic EQ: trzy niezależne Bell z detekcją input-minus-notch, dodatnim lub ujemnym dynamic range, własnym progiem, attack i release. Nie ma linear phase, automatycznej identyfikacji rezonansów ani zewnętrznego sidechainu. Spectral EQ ma 16 pasm z różnymi kolorami rzeczywistych krzywych i punktów.
 
-## Master Brain
+## Brain — dobór modułów
 
-W menu **processors** wybiera się dowolny zestaw z pięciu modułów (domyślnie wszystkie). Analiza wejścia nie zmienia DSP. Propozycja obejmuje ustawienia oraz dodanie/włączenie wybranych procesorów; wymaga **Apply changes** i jest jedną transakcją Undo. Niewybrane moduły zachowują ustawienia. Ręczna zmiana dowolnego parametru od rozpoczęcia analizy unieważnia możliwość zastosowania starej propozycji.
+Domyślnie **Automatically select needed modules** wybiera spośród sześciu dozwolonych rodzin:
 
-Nowe reguły: Stereo korzysta z korelacji i energii M/S czterech pasm z całego fragmentu (podziały analizy 140/2500/8000 Hz); zachowuje szerokość przy dobrej korelacji, zwęża problematyczne pasma przy małej/ujemnej; kompresor dobiera łagodne ratio z crest factor, bez makeup, a upward jest ograniczony do 2 dB w Aggressive. Styl Analog proponuje tryb Analog; pozostałe zachowują ręczny wybór trybu. Dynamic EQ proponuje do 2 dB tłumienia regionów o nadmiernej energii. Są to heurystyki, nie trenowana AI. Estymata loudness limitera **nie obejmuje interakcji nowych procesorów**; po Apply trzeba zmierzyć i odsłuchać pełne wyjście.
+- EQ: przynajmniej jedna sugerowana korekcja ponad 0,25 dB.
+- Dynamic EQ: energia problematycznego regionu ponad 1,4× celu.
+- Imager: korelacja przynajmniej jednego pasma poniżej 0,2.
+- Dynamics: crest ponad 14 dB, albo ponad 10 dB w Aggressive.
+- Limiter: potrzebny Drive ponad 0,25 dB lub wejście ponad ceiling.
+- Stabilizer: przynajmniej trzy sugerowane szerokie korekcje przekraczają 1,5 dB.
 
-## Zgodność stanu i granice wydania
+Brain może zatem zaproponować różną liczbę modułów, a nie zawsze sześć. To jawne heurystyki z ograniczonego fragmentu, nie certyfikat jakości. Gdy wyłączysz automatyczny wybór, dodaje wszystkie ręcznie dozwolone rodziny. Wykluczone rodziny zachowują swoje ustawienia. Gdy kontroluje cały łańcuch, proponuje domyślną kolejność z limiterem na końcu; nie optymalizuje jeszcze dowolnych topologii i nie tworzy wielu instancji.
 
-Schema 4: 138 parametrów. Pierwsze 86 ID/indeksów pozostają niezmienione. Schema 1/2/3 migrują z nowymi procesorami poza łańcuchem, zachowując dotychczasowy tor. Cały kandydat stanu jest walidowany przed zastosowaniem. Parametry wykraczające poza zakres i ułamkowe bool/choice są odrzucane.
+Analiza nie zmienia audio. **Apply changes** stosuje propozycję po akceptacji, jako jedną transakcję Undo. Zmiana parametrów od początku analizy unieważnia starą propozycję. Estymata głośności nie obejmuje interakcji Dynamics, Dynamic EQ, Imagera i Stabilizera — konieczny jest pomiar i odsłuch pełnego wyniku.
 
-Limiter pozostaje sample-peak, bez True Peak. Nie wykonano testu FL Studio ani porównań odsłuchowych z Ozone. Pełny zakres 20 procesorów pozostaje roadmapą; ten etap dodaje trzy żądane moduły i sterowanie pięcioma procesorami.
+## Stan i granice wydania
+
+**Schema 5, 161 parametrów**; pierwsze 138 ID i indeksów zachowane. Schema 1/2/3/4 migrują z nowymi opcjami Imagera w ustawieniu neutralnym, domyślną kolejnością i Stabilizerem poza łańcuchem. Cały kandydat jest walidowany przed zastosowaniem; niepełne stany, złe identyfikatory, NaN/Inf, wartości poza zakresem oraz ułamkowe bool/choice/int są odrzucane.
+
+Limiter nadal jest sample-peak, bez True Peak. Pełny Maximizer ze zrzutu, druga instancja EQ, Exciter, Master Rebalance, Match EQ i cztery moduły Vintage pozostają do wykonania. Nie przeprowadzono testu FL Studio ani odsłuchowego porównania z Ozone.

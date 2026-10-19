@@ -1,5 +1,14 @@
 # 0.1.0 — prace rozwojowe, nie wydanie produkcyjne
 
+## W przygotowaniu — routing, Imager, Stabilizer
+
+- Dowolna kolejność sześciu działających rodzin, 20 ms crossfade dwóch przygotowanych banków, stałe PDC, zapis/presety/Undo/automatyka.
+- Imager: duże widmo z przeciąganiem podziałów, kolorowe pionowe Width, per-band On/Solo, Amount, prawdziwe Delta, półkolisty vectorscope wyjścia.
+- Stabilizer: własna adaptacja 12 pasm, Shape/Cut, trzy jawne profile, Amount/Speed/Smoothing/Low/Mid/High/Tame/Delta, wykres działających filtrów.
+- Brain automatycznie dobiera potrzebne rodziny i liczbę procesorów spośród dostępnych sześciu; Apply nadal wymaga akceptacji.
+- Schema 5 (161 parametrów), migracja 1–4. Szczegóły i jawne ograniczenia: MODULAR_WORKFLOW.md.
+
+
 Pierwszy rdzeń DSP i wrapper JUCE, testy CTest, projekt workflow Windows/MSVC/pluginval/pakowanie. Użytkownik potwierdził zrzutem udany workflow Windows dla b4405d0; kolejne rewizje wymagają własnego wyniku CI. Brak testu FL Studio. Nie publikowano release.
 
 Otwarte wymagania Phase A: pełny graf modułów z ID/serializacją/instancjami, True Peak, pełne testy GUI/HiDPI i FL Studio, kalibracja analizy, spójne snapshoty parametrów między wątkami i weryfikacja CI Windows.

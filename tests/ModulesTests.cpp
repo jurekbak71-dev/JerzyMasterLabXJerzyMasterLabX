@@ -21,6 +21,12 @@ int main(){
   for(int block=0;block<200;++block){l.fill(.2f);r.fill(-.1f);s.process(l.data(),r.data(),257);}check(std::abs(l.back()-r.back())<1e-5,"mono preview not mono");
   c={};c.enabled=true;c.monoBass=true;s.settings(c);s.reset();
   for(float hz:{40.f,2000.f}){double source=0,filtered=0;for(int block=0;block<250;++block){for(int i=0;i<257;++i)l[i]=.1f*std::sin(6.283185307179586*hz*(block*257+i)/sr);r=l;for(auto& x:r)x=-x;auto before=l;s.process(l.data(),r.data(),257);if(block>150)for(int i=0;i<257;++i){source+=before[i]*before[i];filtered+=l[i]*l[i];}}check(hz<100?filtered/source<.2:filtered/source>.8,"mono bass is not frequency selective");}
+  // Per-band bypass, Amount=0 and Delta use the actual complementary split.
+  for(int mode=0;mode<3;++mode){c={};c.enabled=true;c.low=0;c.mid=.2f;c.high=1.7f;c.air=.3f;if(mode==0)c.amount=0;if(mode==1)c.bandEnabled.fill(false);if(mode==2){c.low=c.mid=c.high=c.air=1;c.delta=true;}s.settings(c);s.reset();
+   for(int block=0;block<30;++block){for(int i=0;i<257;++i){l[i]=.2f*std::sin((block*257+i)*.031f);r[i]=-.08f*std::cos((block*257+i)*.07f);}auto beforeL=l,beforeR=r;s.process(l.data(),r.data(),257);for(int i=0;i<257;++i)check(mode==2?(std::abs(l[i])<1e-6&&std::abs(r[i])<1e-6):(std::abs(l[i]-beforeL[i])<1e-6&&std::abs(r[i]-beforeR[i])<1e-6),"Imager Amount, band bypass or Delta mismatch");}
+  }
+  c={};c.enabled=true;c.solo[0]=true;s.settings(c);s.reset();
+  for(float hz:{40.f,8000.f}){double in=0,out=0;for(int block=0;block<200;++block){for(int i=0;i<257;++i)l[i]=r[i]=.1f*std::sin(6.283185307179586*hz*(block*257+i)/sr);auto before=l;s.process(l.data(),r.data(),257);if(block>100)for(int i=0;i<257;++i){in+=before[i]*before[i];out+=l[i]*l[i];}}check(hz<100?out/in>.8:out/in<.005,"Imager band solo is not frequency selective");}
   masterlab::SmartCompressor comp;masterlab::DynamicsSettings d;d.enabled=true;d.threshold=-18;d.ratio=4;d.attack=1;d.release=100;d.knee=0;comp.settings(d);comp.prepare(sr);
   double in=0,out=0;for(int block=0;block<400;++block){for(int i=0;i<257;++i)l[i]=r[i]=.5f*std::sin((block*257+i)*.13f);auto before=l;audit=true;comp.process(l.data(),r.data(),257);audit=false;if(block>200)for(int i=0;i<257;++i){in+=before[i]*before[i];out+=l[i]*l[i];check(l[i]==r[i],"compressor stereo image shifted");}}
   check(10*std::log10(out/in)<-6,"downward compressor does not reduce loud input");d.ratio=1;d.upward=9;d.upwardThreshold=-30;comp.settings(d);comp.reset();in=out=0;

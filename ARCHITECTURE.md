@@ -1,5 +1,8 @@
 # Architektura
 
+> Aktualizacja bieżącej implementacji: [MODULAR_WORKFLOW.md](MODULAR_WORKFLOW.md). Dodano Stabilizer, dowolną kolejność sześciu rodzin, nowe sterowanie Imagera i automatyczny wybór modułów przez Brain. Poniższe starsze opisy ustalonej kolejności, pięciu rodzin i schema 4 opisują poprzedni etap. Nadal jedna instancja na rodzinę i brak True Peak.
+
+
 `Source/Dsp.h` nie zależy od JUCE. `Engine::prepare` alokuje dwa bufory opóźnienia; `process` pracuje bez alokacji i mutexów. Opóźnienie pozostaje aktywne przy bypassie. `RoutedEngine` utrzymuje dwie stale przetwarzane kolejności (EQ/limiter oraz limiter/EQ). Oba tory mają identyczną latencję; parametr kolejności wybiera docelowy tor przez liniowy crossfade 20 ms. Stan żadnego toru nie jest kasowany przy przełączeniu. Bufory scratch mają stałe 128 próbek; większe bufory hosta są dzielone na fragmenty bez alokacji. Cena: oba tory zużywają CPU również po zakończeniu przejścia. Nie jest to jeszcze dynamiczny graf.
 
 Wrapper utrzymuje osobny bufor dry o tej samej latencji i przetwarza oba tory także podczas bypassu hosta. `processBlockBypassed` nie omija PDC; dry/wet przechodzi liniowo przez 20 ms. Reset czyści historie, zachowując wybraną kolejność i ostatni cel bypassu hosta. Zmiany sample rate ponownie przygotowują bufory poza callbackiem.
@@ -25,3 +28,11 @@ Każdy procesor ma niezależne `WindowMeter` i `LoudnessMeter` wejścia/wyjścia
 Master Brain: zaimplementowano analizę wejścia poza callback, regułowe propozycje EQ/limitera, panel konfiguracji i raportu, zatwierdzanie oraz jedną transakcję Undo. Zakres, algorytm i ograniczenia opisano w [MASTER_BRAIN.md](MASTER_BRAIN.md). Nie jest to kompletna docelowa implementacja v0.4.0.
 
 Nowy etap: `ModularDsp.h` zawiera alokacyjnie niezależne StereoImager, SmartCompressor i DynamicEqualizer. `ModuleParameters.h` definiuje 138 parametrów schema 4 (dopisane do 86 stabilnych indeksów). Kolejność trzech nowych etapów jest stała przed istniejącym dwutorowym EQ/limiterem. Modułowość oznacza tu obecność i bypass; dowolny graf i wiele kopii pozostają przyszłe. Szczegóły: MODULAR_WORKFLOW.md.
+
+## SerialGraph i schema 5
+
+`SerialGraph` ma dwa przygotowane banki: Engine (oddzielne etapy EQ i limiter), DynamicEqualizer, SmartCompressor, StereoImager, Stabilizer. `chainOrder` koduje pełną permutację sześciu stabilnych rodzin w jednym parametrze int 0–719. Stary parametr `order` nadal zamienia logiczne identyfikatory EQ/limiter, zachowując automatykę dawnych projektów. Nie ma niepoprawnych lub zduplikowanych węzłów do naprawiania w callback.
+
+Zmiana kolejności kopiuje stany do istniejących pojemności drugiego banku i uruchamia 20 ms crossfade przy wspólnej latencji. Kolejne żądania są koaleskowane do ostatniego. Audyt `operator new` obejmuje wszystkie 720 kolejności. Obiekty są tworzone przed audio; brak mutexów i alokacji w przełączeniu. Koherentne snapshoty odpowiedzi opisują aktywny bank, nie mieszankę banków podczas zmiany.
+
+Schema 5: 161 parametrów, dodatkowy stabilny identyfikator `stabilizer-0001`; walidacja całości i migracja schema 1–4. Automatyczne wybranie rodzin w Brain jest propozycją stosowaną dopiero przez Apply i pojedyncze Undo.

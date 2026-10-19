@@ -1,5 +1,8 @@
 # Projekt DSP
 
+> Aktualizacja bieżącej implementacji: [MODULAR_WORKFLOW.md](MODULAR_WORKFLOW.md). Dodano Stabilizer, dowolną kolejność sześciu rodzin, nowe sterowanie Imagera i automatyczny wybór modułów przez Brain. Poniższe starsze opisy ustalonej kolejności, pięciu rodzin i schema 4 opisują poprzedni etap. Nadal jedna instancja na rodzinę i brak True Peak.
+
+
 EQ: biquad Bell, Low Shelf, High Shelf, High Pass, Low Pass i Notch według publicznych wzorów RBJ Audio EQ Cookbook; double stanu i współczynników. 16 niezależnych pasm. HP/LP mają stałe 12 dB/oktawę, Q oznacza rezonans (nie nachylenie S). Współczynniki filtrów są wygładzane wykładniczo przez 20 ms. Brak dynamic EQ i linear phase.
 
 Limiter: stereo-linked detektor sample peak, natychmiastowy atak obwiedni, release 10–1000 ms (domyślnie 80 ms), drive 0–24 dB przed ograniczaniem, opóźnienie ceil(fs*0.005), końcowe ograniczenie próbki. Maksimum okna przyszłych próbek względem opóźnionego wyjścia oblicza prealokowana kolejka monotoniczna. Ograniczenie zapobiega przekroczeniom sample ceiling po tym module, ale może zniekształcać transjenty. Wymagana kontrola interpolowanych szczytów, testy aliasingu i pomiary odsłuchowe przed zastosowaniem produkcyjnym.

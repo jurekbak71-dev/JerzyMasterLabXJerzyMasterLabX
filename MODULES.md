@@ -1,5 +1,8 @@
 # Moduły
 
+> Aktualizacja bieżącej implementacji: [MODULAR_WORKFLOW.md](MODULAR_WORKFLOW.md). Dodano Stabilizer, dowolną kolejność sześciu rodzin, nowe sterowanie Imagera i automatyczny wybór modułów przez Brain. Poniższe starsze opisy ustalonej kolejności, pięciu rodzin i schema 4 opisują poprzedni etap. Nadal jedna instancja na rodzinę i brak True Peak.
+
+
 Phase A zawiera 16-pasmowy EQ z sześcioma typami filtrów i bypassem pasma z dedykowanym edytorem (drag, Q kółkiem, krzywa z DSP), FFT energii L/R i sample-peak limiter. Powtarzane instancje, presety per moduł i dynamiczny graf są zadaniami otwartymi.
 
 Planowane: Spectral EQ Pro (16 pasm, M/S, dynamic, linear phase), Smart Dynamics, Ultimate Limiter, Bass Architect, Transient Sculptor, Stereo Architect, Analog Laboratory, Spectral Repair, Stem Processor, Clarity Engine, Reference Match. Master Brain będzie warstwą analityczną i propozycjami wymagającymi akceptacji użytkownika. Żaden z tych przyszłych modułów nie jest przedstawiany jako działający.

@@ -14,7 +14,7 @@ int main(){
   render(static_cast<int>(rate/257)+10,false);set(p,"stereoLowWidth",.2f);set(p,"stereoMidWidth",.5f);set(p,"stereoHighWidth",1.7f);set(p,"stereoPresent",1);render(80,true);
   set(p,"stereoPresent",0); // Let the 20 ms fade settle before asserting bit-level transparency.
   for(int i=0;i<static_cast<int>(rate*.4/257)+1;++i){audio.clear();p.processBlock(audio,midi);}sample=0;render(static_cast<int>(rate/257)+10,false);
-  set(p,"stereoPresent",1);set(p,"dynamicsPresent",1);set(p,"dynamicEqPresent",1);set(p,"dynamicsMode",1);set(p,"upwardAmount",6);set(p,"deqRange2",-7);
+  set(p,"stereoPresent",1);set(p,"dynamicsPresent",1);set(p,"dynamicEqPresent",1);set(p,"dynamicsMode",1);set(p,"upwardAmount",6);set(p,"deqRange2",-7);set(p,"chainOrder",693);set(p,"stabilizerPresent",1);set(p,"stabilizerAmount",67);
   juce::MemoryBlock saved;p.getStateInformation(saved);Processor restored;restored.setStateInformation(saved.getData(),static_cast<int>(saved.getSize()));p.prepareToPlay(rate,257);restored.prepareToPlay(rate,257);
   juce::AudioBuffer<float> other(2,257);for(int block=0;block<100;++block){for(int i=0;i<257;++i){audio.setSample(0,i,.15f*std::sin((block*257+i)*.11));audio.setSample(1,i,-audio.getSample(0,i)*.7f);}other.makeCopyOf(audio);audit=true;p.processBlock(audio,midi);restored.processBlock(other,midi);audit=false;for(int c=0;c<2;++c)for(int i=0;i<257;++i)check(std::isfinite(audio.getSample(c,i))&&audio.getSample(c,i)==other.getSample(c,i),"restored modular render differs");}
  }

@@ -82,6 +82,8 @@ def plugin(path,kind,expanded=False):
     raw('eq_enabled',1);raw('limiter_enabled',1);raw('limiter_before_eq_ceiling_applies_before_eq',0)
     raw('sample_peak_ceiling_dbfs',23/24);raw('limiter_drive_db',(7 if kind==0 else 4)/24);raw('limiter_release_ms',(((140 if kind==0 else 220)-10)/990)**.4)
     if expanded:
+        if "stabilizer_in_chain" in p.parameters:
+            raw("stabilizer_in_chain",1);raw("stabilizer_enabled",1);raw("stabilizer_amount",.3);raw("stabilizer_response_time",.65);raw("stabilizer_spectral_smoothing",.7)
         for key in ['stereo_in_chain','stereo_enabled','compressor_in_chain','compressor_enabled','dynamic_eq_in_chain','dynamic_eq_enabled']:raw(key,1)
         raw('stereo_low_width',.25);raw('stereo_mid_width',.5);raw('stereo_high_width',1.15/2);raw('stereo_air_width',1.05/2);raw('stereo_mono_bass',1)
         raw('compressor_character',1);raw('compressor_threshold',36/60);raw('compressor_ratio',.5/11);raw('compressor_attack',(25-.1)/99.9);raw('compressor_release',170/990);raw('compressor_knee',6/18);raw('compressor_makeup',.5);raw('compressor_dry_wet',.7);raw('upward_maximum_gain',2/18);raw('upward_threshold',20/54)
@@ -125,6 +127,7 @@ def main():
         report+=''
         for item in example['files']:
             m=item['measurements'];report+=f"| {item['file']} | {m['input_i']:.2f} | {m['sample_peak_dbfs']:.2f} | {m['input_tp']:.2f} |\n"
+    if args.expanded_chain and 'stabilizer_in_chain' in p.parameters:report+='\nAktywny Stabilizer przed Dynamic EQ: Amount 30%, Speed 65%, Smoothing 70%, Neutral/Shape, Tame Transients.\n'
     report+=('\nDodatkowo aktywne: 3-pasmowy Dynamic EQ, kompresor Analog z upward 2 dB i dry/wet 0,7, 4-pasmowy Stereo Imager z Mono Bass. Pełne wartości normalizowane i reguły ustawienia: measurements.json oraz skrypt.\n' if args.expanded_chain else '')
     report+='\nUstawienia: EQ → limiter. Rytmiczny Drive 7 dB, Release 140 ms; przestrzenny Drive 4 dB, Release 220 ms. Szczegóły EQ, testy powtarzalności/buforów, wersje narzędzi i SHA-256 są w measurements.json. Pusty render inicjalizuje PDC hosta; test impulsowy potwierdza następnie wyrównanie 0 próbek.\n'
     (args.output/'CZYTAJ_PRZED_ODSLUCHEM.md').write_text(report,encoding='utf-8')

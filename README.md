@@ -1,5 +1,10 @@
 # Jerzy MasterLab X
 
+## Aktualizacja: routing, Imager i Stabilizer
+
+Sześć działających rodzin DSP, przeciąganie całego łańcucha (720 kolejności), rozbudowany czteropasmowy Imager z solo/Delta, nowy adaptacyjny Stabilizer i Brain dobierający potrzebne moduły. Szczegółowe zasady i ograniczenia: [MODULAR_WORKFLOW.md](MODULAR_WORKFLOW.md). Jedna instancja na rodzinę; pełna lista Ozone pozostaje planem, limiter nie ma jeszcze True Peak.
+
+
 Rozwojowy fundament Phase A, wersja projektu 0.1.0. Nie jest to ukończone wydanie masteringowe. Wyniki kompilacji Windows/MSVC, testów i paczki VST3 są publikowane w Actions. FL Studio nadal nie zostało przetestowane.
 
 Szczegółowe braki produktu i kryteria odbioru: [PRODUCT_AUDIT.md](PRODUCT_AUDIT.md). Analiza materiałów Ozone 12: [OZONE12_REVIEW.md](OZONE12_REVIEW.md).

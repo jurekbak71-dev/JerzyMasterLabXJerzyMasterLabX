@@ -15,3 +15,9 @@ Następne bramki Phase A: dynamiczny model instancji i routingu, walidacja całe
 
 
 Master Brain: zaimplementowano analizę wejścia poza callback, regułowe propozycje EQ/limitera, panel konfiguracji i raportu, zatwierdzanie oraz jedną transakcję Undo. Zakres, algorytm i ograniczenia opisano w [MASTER_BRAIN.md](MASTER_BRAIN.md). Nie jest to kompletna docelowa implementacja v0.4.0.
+
+## Kolejka z uwag użytkownika po aktualizacji Imagera
+
+Wykonane w bieżącym etapie: swobodna kolejność sześciu rodzin, Imager z widmem/crossoverami/Width/On/Solo/Amount/Delta i vectorscope, Stabilizer, wybór potrzebnych dostępnych rodzin przez Brain.
+
+Pozostają: pełny Maximizer (zweryfikowany True Peak, oversampling, Learn Input Gain, soft clip, transient emphasis, stereo independence), Stereoize/Recover Sides/Learn Imagera, Equalizer 2 i wiele niezależnych instancji, Exciter, Master Rebalance po weryfikacji modelu/licencji/separacji, Match EQ, Vintage Comp/EQ/Limiter/Tape. Brain wymaga następnie rozbudowy planowania liczby instancji i kolejności na podstawie analizy, zamiast jednej instancji na rodzinę i jednej domyślnej topologii. Każdy moduł musi mieć rzeczywisty DSP, stan, automatykę, GUI i testy przed oznaczeniem jako gotowy.

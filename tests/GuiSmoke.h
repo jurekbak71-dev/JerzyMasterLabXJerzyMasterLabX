@@ -53,8 +53,11 @@ class GuiSmoke final : private juce::Timer {
         auto* genre=dynamic_cast<juce::ComboBox*>(editor->findChildWithID("brain-genre"));if(!genre)return false;genre->setSelectedId(5,juce::sendNotificationSync);
         parameter("order")->setValueNotifyingHost(0);
         for(const char* id:{"dynamicEqPresent","dynamicsPresent","stereoPresent"})parameter(id)->setValueNotifyingHost(1);
+        // Drop the Imager before Dynamic EQ, then verify Undo restores the route.
+        auto* target=dynamic_cast<juce::DragAndDropTarget*>(editor.get());if(!target)return false;
+        const float routeBefore=actual("chainOrder");juce::DragAndDropTarget::SourceDetails drop("module:2",editor.get(),{50,104});if(!target->isInterestedInDragSource(drop))return false;target->itemDropped(drop);if(actual("chainOrder")==routeBefore)return false;undo->onClick();if(actual("chainOrder")!=routeBefore)return false;
         parameter("upwardAmount")->setValueNotifyingHost(4.f/18);
-        auto set=[&](const char* id,float value){auto* p=parameter(id);p->setValueNotifyingHost(p->convertTo0to1(value));};set("dynThreshold",-36);set("deqFreq1",1000);set("deqThreshold1",-42);set("deqRange1",-4);set("deqFreq2",3333);set("deqThreshold2",-42);set("deqRange2",-6);
+        auto set=[&](const char* id,float value){auto* p=parameter(id);p->setValueNotifyingHost(p->convertTo0to1(value));};set("stabilizerPresent",1);set("stabilizerAmount",55);set("stabilizerSpeed",25);set("dynThreshold",-36);set("deqFreq1",1000);set("deqThreshold1",-42);set("deqRange1",-4);set("deqFreq2",3333);set("deqThreshold2",-42);set("deqRange2",-6);
 
         brainBefore.clear();for(auto* parameter:processor.getParameters())brainBefore.push_back(parameter->getValue());analyse->onClick();
         for(int i=0;i<processor.getParameters().size();++i)if(processor.getParameters()[i]->getValue()!=brainBefore[static_cast<size_t>(i)])return false;
@@ -81,7 +84,8 @@ class GuiSmoke final : private juce::Timer {
         if(!limiter||!eq)return false;
         // A click on a chain card selects its workspace without changing order.
         const bool limiterFirst=actual("order")>.5f;
-        auto point=juce::Point<float>(24.f+(editor->getWidth()-48.f)/5.f*(limiterFirst?3.5f:4.5f),104.f);
+        const float chainCount=actual("stabilizerPresent")>.5f?6.f:5.f;
+        auto point=juce::Point<float>(24.f+(editor->getWidth()-48.f)/chainCount*(limiterFirst?chainCount-1.5f:chainCount-.5f),104.f);
         auto now=juce::Time::getCurrentTime();auto source=juce::Desktop::getInstance().getMainMouseSource();
         juce::MouseEvent click(source,point,juce::ModifierKeys(),1,0,0,0,0,editor.get(),editor.get(),now,point,now,1,false);
         editor->mouseUp(click);
@@ -101,11 +105,15 @@ class GuiSmoke final : private juce::Timer {
             if(historyPixels<10||reductionPixels<5){std::cerr<<"Limiter history missing from real GUI frame: "<<historyPixels<<'\n';return false;}
             if(iteration==0&&size.x==1000){auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/limiter-smoke.png");juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return false;}
         }
-        for(const auto& entry:std::array<std::pair<const char*,const char*>,3>{{{"view-dynamic-eq","dynamic-eq"},{"view-dynamics","dynamics"},{"view-stereo","stereo"}}}){
+        for(const auto& entry:std::array<std::pair<const char*,const char*>,4>{{{"view-dynamic-eq","dynamic-eq"},{"view-dynamics","dynamics"},{"view-stereo","stereo"},{"view-stabilizer","stabilizer"}}}){
             auto* tab=dynamic_cast<juce::Button*>(editor->findChildWithID(entry.first));if(!tab)return false;tab->onClick();
             for(auto size:{juce::Point<int>(750,550),juce::Point<int>(1000,700),juce::Point<int>(2000,1400)}){editor->setSize(size.x,size.y);if(!controlsFit())return false;auto image=editor->createComponentSnapshot(editor->getLocalBounds());if(!image.isValid())return false;
                 if(iteration==0&&size.x==1000){auto output=juce::File::getCurrentWorkingDirectory().getChildFile(juce::String("build-plugin/")+entry.second+"-smoke.png");juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return false;}}
         }
+        dynamic_cast<juce::Button*>(editor->findChildWithID("view-stereo"))->onClick();editor->setSize(1000,700);
+        auto* stereo=editor->findChildWithID("module-panel-2");if(!stereo)return false;
+        const float originalSplit=actual("stereoLowSplit");auto coordinate=[](float hz){return 24+952*std::log(hz/20)/std::log(24000.f/20);};auto begin=juce::Point<float>(coordinate(originalSplit),100),finish=juce::Point<float>(coordinate(200),100);auto when=juce::Time::getCurrentTime();
+        auto crossoverEvent=[&](juce::Point<float> point,bool dragged){return juce::MouseEvent(source,point,juce::ModifierKeys(juce::ModifierKeys::leftButtonModifier),1,0,0,0,0,stereo,stereo,when,begin,when,1,dragged);};stereo->mouseDown(crossoverEvent(begin,false));stereo->mouseDrag(crossoverEvent(finish,true));stereo->mouseUp(crossoverEvent(finish,true));if(std::abs(actual("stereoLowSplit")-200)>1)return false;dynamic_cast<juce::Button*>(editor->findChildWithID("undo"))->onClick();if(actual("stereoLowSplit")!=originalSplit)return false;
         auto* inspector=dynamic_cast<juce::Button*>(editor->findChildWithID("view-inspector"));if(!inspector)return false;
         float driveBefore=actual("limiterDrive"),gainBefore=actual("gain16");inspector->onClick();
         if(editor->findChildWithID("limiter-ceiling")->isVisible()||frequency->isVisible())return false;

@@ -7,6 +7,8 @@ namespace masterlab {
 struct BrainBand {float frequency=1000,gain=0,q=1;int type=0;bool enabled=true;};
 struct BrainConfig {
  int genre=0,style=0,seconds=8;float targetLufs=-14,ceiling=-1,intensity=1;
+ bool automaticModules=true;
+ bool useStabilizer=true;
  bool useEq=true,useLimiter=true,existingEqEnabled=true,useStereo=true,useDynamics=true,useDynamicEq=true;int dynamicsMode=0;
  std::array<BrainBand,16> existingEq{};
 };
@@ -79,10 +81,10 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
  if(f.correlation<0)p.warnings.push_back("Negative input correlation: check mono compatibility. Narrowing can help mono compatibility but cannot reconstruct missing phase information.");
  if(f.clips)p.warnings.push_back("Input samples exceeded 0 dBFS. Reduce upstream level; lost transients cannot be recovered by these rules.");
  p.warnings.push_back("Genre/style profiles are explicit DSP heuristics, not a trained AI model. Analog selects gentle settings and Analog compressor when selected; no standalone Analog Laboratory is added.");
- p.warnings.push_back("Limiter loudness estimate excludes compressor, Dynamic EQ and stereo changes. Their interaction requires a full output measurement after Apply.");
+ p.warnings.push_back("Limiter loudness estimate excludes compressor, Dynamic EQ, Stabilizer and stereo changes. Their interaction requires a full output measurement after Apply.");
  p.warnings.push_back("LUFS and EQ predictions describe this fragment only. Re-measure the full processed song. Ceiling is sample peak, not True Peak.");
  if(c.useStereo){
-  add("stereoPresent",1);add("stereoOn",1);const auto correlation=f.stereoAnalysed?f.bandCorrelation:std::array<float,4>{f.correlation,f.correlation,f.correlation,f.correlation};add("stereoLowWidth",correlation[0]<.2f?.65f:1.f);add("stereoMidWidth",correlation[1]<.2f?.85f:1.f);add("stereoHighWidth",correlation[2]<.2f?.9f:1.f);add("stereoLowSplit",140);add("stereoHighSplit",2500);add("stereoMonoBass",correlation[0]<0?1.f:0.f);add("stereoMono",0);add("stereoBalance",0);add("stereoAirWidth",correlation[3]<.2f?.9f:1.f);add("stereoTopSplit",8000);
+  add("stereoPresent",1);add("stereoOn",1);const auto correlation=f.stereoAnalysed?f.bandCorrelation:std::array<float,4>{f.correlation,f.correlation,f.correlation,f.correlation};add("stereoLowWidth",correlation[0]<.2f?.65f:1.f);add("stereoMidWidth",correlation[1]<.2f?.85f:1.f);add("stereoHighWidth",correlation[2]<.2f?.9f:1.f);add("stereoLowSplit",140);add("stereoHighSplit",2500);add("stereoMonoBass",correlation[0]<0?1.f:0.f);add("stereoMono",0);add("stereoBalance",0);add("stereoAirWidth",correlation[3]<.2f?.9f:1.f);add("stereoTopSplit",8000);for(int band=1;band<=4;++band){add("stereoBandOn"+std::to_string(band),1);add("stereoSolo"+std::to_string(band),0);}add("stereoAmount",1);add("stereoDelta",0);
   p.reasons.push_back("Stereo: preserve width when correlated; narrow conservatively for low/negative measured band correlation (broadband fallback if band data is unavailable). No artificial widening. Inspect per-band correlation and mono after Apply.");
  }
  if(c.useDynamics){
@@ -95,6 +97,24 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
   for(size_t band=0;band<3;++band){auto id=std::to_string(band+1);const size_t region=std::array<size_t,3>{1,3,4}[band];add("deqFreq"+id,std::array<float,3>{180,3500,7500}[band]);add("deqGain"+id,0);add("deqQ"+id,1);add("deqThreshold"+id,std::clamp(20*std::log10(std::max(1e-9f,f.rms))-6,-48.f,-12.f));add("deqRange"+id,p.shares[region]>p.targetShares[region]*1.4f?-2.f:0.f);add("deqAttack"+id,15);add("deqRelease"+id,160);add("deqBandOn"+id,1);}
   p.reasons.push_back("Dynamic EQ: up to 2 dB attenuation in broad regions with excess measured energy. This is not resonance detection; static EQ and Dynamic EQ may overlap. Listen and adjust.");
  }
- p.valid=(c.useEq||c.useLimiter||c.useStereo||c.useDynamics||c.useDynamicEq);return p;
+ if(c.useStabilizer){add("stabilizerPresent",1);add("stabilizerOn",1);add("stabilizerMode",0);add("stabilizerProfile",c.genre==4||c.genre==5?1.f:(c.genre==8?2.f:0.f));add("stabilizerAmount",std::min(35.f,20*c.intensity));add("stabilizerSpeed",65);add("stabilizerSmoothing",70);add("stabilizerLow",70);add("stabilizerMid",100);add("stabilizerHigh",70);add("stabilizerTame",1);add("stabilizerDelta",0);p.reasons.push_back("Stabilizer: original adaptive octave-band EQ, conservative intensity and slow response. Three explicit profiles, no learned reference. Re-measure the complete output.");}
+ // Select only processors justified by the measured fragment. Excluded families
+ // remain untouched. Every decision is reviewable before Apply.
+ if(c.automaticModules){
+  auto replace=[&](const char* id,bool enabled){for(auto& change:p.changes)if(change.first==id)change.second=enabled?1.f:0.f;};
+  bool tonal=false,spectral=false,stereo=false;for(float gain:p.gains)tonal|=std::abs(gain)>.25f;
+  for(size_t band:std::array<size_t,3>{1,3,4})spectral|=p.shares[band]>p.targetShares[band]*1.4f;
+  const auto correlations=f.stereoAnalysed?f.bandCorrelation:std::array<float,4>{f.correlation,f.correlation,f.correlation,f.correlation};for(float correlation:correlations)stereo|=correlation<.2f;
+  const float crest=20*std::log10(f.peak/std::max(1e-9f,f.rms));
+  const bool dynamics=crest>14||(c.style==2&&crest>10),limiting=p.drive>.25f||20*std::log10(f.peak)>c.ceiling;
+  int largeRegions=0;for(float gain:p.gains)largeRegions+=std::abs(gain)>1.5f;const bool stabilizing=largeRegions>=3;
+  if(c.useStabilizer)replace("stabilizerPresent",stabilizing);
+  if(c.useEq)replace("eqPresent",tonal);if(c.useDynamicEq)replace("dynamicEqPresent",spectral);if(c.useStereo)replace("stereoPresent",stereo);if(c.useDynamics)replace("dynamicsPresent",dynamics);if(c.useLimiter)replace("limPresent",limiting);
+  const int count=(c.useStabilizer&&stabilizing)+(c.useEq&&tonal)+(c.useDynamicEq&&spectral)+(c.useStereo&&stereo)+(c.useDynamics&&dynamics)+(c.useLimiter&&limiting);
+  p.reasons.push_back("Automatic module selection: "+std::to_string(count)+" processors from the allowed families. EQ: correction above 0.25 dB; Dynamic EQ: regional energy above 1.4 times target; Imager: correlation below 0.2; Dynamics: crest above 14 dB (10 dB Aggressive); Limiter: required drive above 0.25 dB or input above ceiling. Stabilizer: at least three broad corrections above 1.5 dB. Unneeded allowed modules are removed, with settings retained.");
+ }
+ // Only change the full topology when all families are under Brain control.
+ if(c.useEq&&c.useLimiter&&c.useStereo&&c.useDynamics&&c.useDynamicEq&&c.useStabilizer){add("chainOrder",0);p.reasons.push_back("Proposed order: Stabilizer, Dynamic EQ, Dynamics, Imager, EQ, Limiter; absent modules are skipped. Limiter is last. One instance per family is currently supported.");}
+ p.valid=(c.useEq||c.useLimiter||c.useStereo||c.useDynamics||c.useDynamicEq||c.useStabilizer);return p;
 }
 }

@@ -1,5 +1,8 @@
 # Zakres wszystkich narzędzi — punkt odniesienia Ozone 12 Advanced
 
+> Aktualizacja bieżącej implementacji: [MODULAR_WORKFLOW.md](MODULAR_WORKFLOW.md). Dodano Stabilizer, dowolną kolejność sześciu rodzin, nowe sterowanie Imagera i automatyczny wybór modułów przez Brain. Poniższe starsze opisy ustalonej kolejności, pięciu rodzin i schema 4 opisują poprzedni etap. Nadal jedna instancja na rodzinę i brak True Peak.
+
+
 Instrukcja Ozone wymienia 20 rodzin procesorów (rozdziały 5–24). Asystent, mierniki i narzędzia odsłuchu są dodatkowymi panelami, a nie kolejnymi szeregowymi procesorami. Poniższa lista jest zakresem rozwoju, nie deklaracją gotowej funkcjonalności. Obecnie działają Spectral EQ, Dynamic EQ, Smart Dynamics, Stereo Architect, wczesny sample-peak limiter, Inspector i regułowy Master Brain. Szczegóły i ograniczenia: MODULAR_WORKFLOW.md.
 
 | Rodzina odniesienia | Docelowy panel MasterLab X | Stan |

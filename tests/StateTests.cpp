@@ -20,6 +20,7 @@ int main(){
   [](auto& t){t.removeProperty("schemaVersion",nullptr);},
   [](auto& t){t.setProperty("eqInstanceId","unknown",nullptr);},
   [](auto& t){t.setProperty("stereoInstanceId","unknown",nullptr);},
+  [](auto& t){t.setProperty("stabilizerInstanceId","unknown",nullptr);},
   [](auto& t){t.removeProperty("dynamicsInstanceId",nullptr);},
   [](auto& t){t.removeChild(0,nullptr);},
   [](auto& t){auto n=t.getChild(0).createCopy();t.removeChild(1,nullptr);t.appendChild(n,nullptr);},
@@ -38,17 +39,19 @@ int main(){
   [](auto& t){t.getChildWithProperty("id","bandType1").setProperty("value",6,nullptr);},
   [](auto& t){t.getChildWithProperty("id","deqRange3").setProperty("value",13,nullptr);},
   [](auto& t){t.getChildWithProperty("id","dynamicsMode").setProperty("value",.5,nullptr);},
-  [](auto& t){t.getChildWithProperty("id","stereoPresent").setProperty("value",.5,nullptr);}
+  [](auto& t){t.getChildWithProperty("id","stereoPresent").setProperty("value",.5,nullptr);},
+  [](auto& t){t.getChildWithProperty("id","chainOrder").setProperty("value",.5,nullptr);},
+  [](auto& t){t.getChildWithProperty("id","chainOrder").setProperty("value",720,nullptr);}
  }){if(!reject(corrupt)){std::cerr<<"partial application of invalid state";return 1;}++rejected;}
  target->setStateInformation(nullptr,0);const char garbage[]="not a preset";target->setStateInformation(garbage,sizeof garbage);
  target->setStateInformation(saved.getData(),static_cast<int>(saved.getSize()/2));
  juce::MemoryBlock oversized(1024*1024+1,true);target->setStateInformation(oversized.getData(),static_cast<int>(oversized.getSize()));
  if(!unchanged()){std::cerr<<"invalid binary changed settings";return 1;}
  juce::MemoryBlock after;target->getStateInformation(after);auto afterXml=juce::AudioProcessor::getXmlFromBinary(after.getData(),static_cast<int>(after.getSize()));
- if(!afterXml||afterXml->getStringAttribute("schemaVersion")!="4"){std::cerr<<"schema lost";return 1;}
+ if(!afterXml||afterXml->getStringAttribute("schemaVersion")!="5"){std::cerr<<"schema lost";return 1;}
  // Upgrade both previous versions; newly introduced parameters use factory defaults.
- for(int version:{1,2,3}){
-  const int count=version==1?52:(version==2?54:86);
+ for(int version:{1,2,3,4}){
+  const int count=version==1?52:(version==2?54:(version==3?86:138));
   auto legacy=original.createCopy();legacy.setProperty("schemaVersion",version,nullptr);
   for(int i=count;i<source->getParameters().size();++i){auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(source->getParameters()[i]);legacy.removeChild(legacy.getChildWithProperty("id",parameter->paramID),nullptr);}
   std::unique_ptr<juce::AudioProcessor> migrated(createPluginFilter());

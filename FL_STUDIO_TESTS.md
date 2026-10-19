@@ -21,3 +21,12 @@ Nowe przypadki do ręcznego wykonania w FL Studio (nadal niewykonane):
 - [ ] Otwierać/zamykać siedem paneli i zmieniać rozmiar.
 - [ ] Zatwierdzić propozycję pięciu modułów Brain, użyć Undo, zapisać projekt.
 - [ ] Sprawdzić stałe PDC 5 ms także po usunięciu wszystkich modułów.
+
+## Do wykonania po aktualizacji routingu i Stabilizera
+
+- [ ] Zmienić kolejność wszystkich sześciu rodzin, zapisać FLP, zamknąć i ponownie otworzyć; porównać ustawienia, kolejność i render.
+- [ ] Automatyzować chainOrder i bypassy, sprawdzić PDC oraz odsłuch podczas zmian.
+- [ ] Sprawdzić solo/Delta/Amount Imagera i Delta Stabilizera; upewnić się, że odsłuch pomocniczy nie pozostał przypadkowo w eksporcie.
+- [ ] Brain: porównać liczbę i kolejność proponowanych modułów, Apply, Undo i ręczne wykluczenie rodziny.
+
+Powyższa lista **nie została wykonana w FL Studio** w środowisku chmurowym.

@@ -64,17 +64,18 @@ public:
  void limiterParameters(float driveDb,float releaseMs) noexcept {driveTarget=std::pow(10.f,std::clamp(clean(driveDb),0.f,24.f)/20);releaseSeconds=std::clamp(clean(releaseMs),10.f,1000.f)*.001f;}
  void setBand(size_t index,float hz,float db,float q) noexcept {if(index<bands.size()){bands[index].frequency=hz;bands[index].db=db;bands[index].q=q;}}
  void setBandMode(size_t index,FilterType type,bool enabled) noexcept {if(index<bands.size()){bands[index].type=type;bands[index].enabled=enabled;}}
- void process(float* left,float* right,int count,bool limiterFirst=false,float* gainTrace=nullptr) noexcept {
+ void process(float* left,float* right,int count,bool limiterFirst=false,float* gainTrace=nullptr,int stages=3) noexcept {
   if(delay[0].empty())return;
   const float smooth=static_cast<float>(1-std::exp(-1/(sr*.02)));
   const float release=static_cast<float>(std::exp(-1/(sr*releaseSeconds)));
   std::array<Biquad,16> targets;for(size_t k=0;k<bands.size();++k)targets[k].configure(sr,bands[k].frequency,bands[k].db,bands[k].q,bands[k].type);
   for(int i=0;i<count;++i){
-   for(auto& channel:eq)for(size_t k=0;k<bands.size();++k){auto& b=channel[k];const auto& t=targets[k];b.b0+=smooth*(t.b0-b.b0);b.b1+=smooth*(t.b1-b.b1);b.b2+=smooth*(t.b2-b.b2);b.a1+=smooth*(t.a1-b.a1);b.a2+=smooth*(t.a2-b.a2);}
-   for(size_t k=0;k<bandMix.size();++k)bandMix[k]+=smooth*((bands[k].enabled?1.f:0.f)-bandMix[k]);
-   float x[2]={clean(left[i]),clean(right[i])};eqMix+=smooth*((eqOn?1.f:0.f)-eqMix);limMix+=smooth*((limOn?1.f:0.f)-limMix);
+   if(stages&1)for(auto& channel:eq)for(size_t k=0;k<bands.size();++k){auto& b=channel[k];const auto& t=targets[k];b.b0+=smooth*(t.b0-b.b0);b.b1+=smooth*(t.b1-b.b1);b.b2+=smooth*(t.b2-b.b2);b.a1+=smooth*(t.a1-b.a1);b.a2+=smooth*(t.a2-b.a2);}
+   if(stages&1)for(size_t k=0;k<bandMix.size();++k)bandMix[k]+=smooth*((bands[k].enabled?1.f:0.f)-bandMix[k]);
+   float x[2]={clean(left[i]),clean(right[i])};if(stages&1)eqMix+=smooth*((eqOn?1.f:0.f)-eqMix);if(stages&2)limMix+=smooth*((limOn?1.f:0.f)-limMix);
    auto equalize=[&]{for(int c=0;c<2;++c){float wet=x[c];for(size_t k=0;k<16;++k){float filtered=eq[c][k].tick(wet);wet+=bandMix[k]*(filtered-wet);}x[c]+=eqMix*(wet-x[c]);}};
-   if(!limiterFirst)equalize();
+   if((stages&1)&&!limiterFirst)equalize();
+   if(stages&2){
    drive+=smooth*(driveTarget-drive);releaseCoefficient+=smooth*(release-releaseCoefficient);
    const float peak=std::max(std::abs(x[0]),std::abs(x[1]))*drive;
    const size_t capacity=maxima.size(), window=delay[0].size()-1;
@@ -88,7 +89,8 @@ public:
    for(int c=0;c<2;++c){delay[c][position]=x[c];const float dry=delay[c][read];const float wet=std::clamp(dry*drive*gain,-ceiling,ceiling);x[c]=dry+limMix*(wet-dry);}
    position=read;
    if(gainTrace)gainTrace[i]=1+limMix*(gain-1);
-   if(limiterFirst)equalize();
+   }
+   if((stages&1)&&limiterFirst)equalize();
    left[i]=clean(x[0]);right[i]=clean(x[1]);
   }
  }

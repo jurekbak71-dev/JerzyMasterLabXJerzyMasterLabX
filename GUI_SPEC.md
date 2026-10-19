@@ -1,5 +1,8 @@
 # GUI
 
+> Aktualizacja bieżącej implementacji: [MODULAR_WORKFLOW.md](MODULAR_WORKFLOW.md). Dodano Stabilizer, dowolną kolejność sześciu rodzin, nowe sterowanie Imagera i automatyczny wybór modułów przez Brain. Poniższe starsze opisy ustalonej kolejności, pięciu rodzin i schema 4 opisują poprzedni etap. Nadal jedna instancja na rodzinę i brak True Peak.
+
+
 Dedykowany Spectral Workspace zastąpił GenericAudioProcessorEditor. Zawiera dwie karty obecnego toru z przeciąganiem kolejności, duży wykres, oddzielny Stereo Inspector i panel wybranego pasma zamiast przewijanej listy 52 parametrów. Układ jest własny; analiza Ozone 12 i granice źródeł są w OZONE12_REVIEW.md.
 
 ## Zaimplementowane zachowanie
