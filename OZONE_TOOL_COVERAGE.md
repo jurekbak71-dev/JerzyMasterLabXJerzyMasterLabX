@@ -1,16 +1,16 @@
 # Zakres wszystkich narzędzi — punkt odniesienia Ozone 12 Advanced
 
-Instrukcja Ozone wymienia 20 rodzin procesorów (rozdziały 5–24). Asystent, mierniki i narzędzia odsłuchu są dodatkowymi panelami, a nie kolejnymi szeregowymi procesorami. Poniższa lista jest zakresem rozwoju, nie deklaracją gotowej funkcjonalności. Obecnie działają EQ, wczesny sample-peak limiter, Inspector i regułowy Master Brain.
+Instrukcja Ozone wymienia 20 rodzin procesorów (rozdziały 5–24). Asystent, mierniki i narzędzia odsłuchu są dodatkowymi panelami, a nie kolejnymi szeregowymi procesorami. Poniższa lista jest zakresem rozwoju, nie deklaracją gotowej funkcjonalności. Obecnie działają Spectral EQ, Dynamic EQ, Smart Dynamics, Stereo Architect, wczesny sample-peak limiter, Inspector i regułowy Master Brain. Szczegóły i ograniczenia: MODULAR_WORKFLOW.md.
 
 | Rodzina odniesienia | Docelowy panel MasterLab X | Stan |
 |---|---|---|
 | Bass Control | Bass Architect | Do implementacji |
 | Clarity | Clarity Engine | Do implementacji |
-| Dynamics | Smart Dynamics | Do implementacji |
-| Dynamic EQ | Dynamic EQ | Do implementacji |
+| Dynamics | Smart Dynamics | Digital/Analog, downward/upward, soft knee, mix; bez multiband/oversamplingu |
+| Dynamic EQ | Dynamic EQ | 3 niezależne pasma z detektorami, statyczny gain i dynamic range |
 | Equalizer | Spectral EQ | Minimum phase, 16 pasm; pozostałe tryby przyszłe |
 | Exciter | Harmonic Exciter | Do implementacji |
-| Imager | Stereo Architect | Wizualizacja stereo jest, procesor szerokości przyszły |
+| Imager | Stereo Architect | 4 pasma M/S, 3 podziały, Mono Bass/Preview, korelacja per-band |
 | Impact | Transient Sculptor | Do implementacji |
 | Low End Focus | Low End Dynamics | Do implementacji |
 | Master Rebalance | Stem Balance | Do implementacji, zależność od separacji |

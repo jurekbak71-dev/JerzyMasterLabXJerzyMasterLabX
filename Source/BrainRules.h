@@ -7,12 +7,12 @@ namespace masterlab {
 struct BrainBand {float frequency=1000,gain=0,q=1;int type=0;bool enabled=true;};
 struct BrainConfig {
  int genre=0,style=0,seconds=8;float targetLufs=-14,ceiling=-1,intensity=1;
- bool useEq=true,useLimiter=true,existingEqEnabled=true;
+ bool useEq=true,useLimiter=true,existingEqEnabled=true,useStereo=true,useDynamics=true,useDynamicEq=true;int dynamicsMode=0;
  std::array<BrainBand,16> existingEq{};
 };
 struct BrainFeatures {
  double rate=48000,seconds=0;float integrated=-120,peak=0,rms=0,correlation=0;
- std::array<double,5> energy{};std::uint64_t clips=0;
+ std::array<double,5> energy{};std::array<float,4> bandCorrelation{},bandWidth{};bool stereoAnalysed=false;std::uint64_t clips=0;
 };
 struct BrainProposal {
  bool valid=false;std::vector<std::pair<std::string,float>> changes;
@@ -30,6 +30,7 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
  if(!std::isfinite(f.seconds)||!std::isfinite(f.rms)||!std::isfinite(f.correlation)||!std::isfinite(f.integrated)||f.integrated<=-70||!std::isfinite(f.peak)||f.peak<1e-5f||f.seconds<c.seconds-.01||!std::isfinite(f.rate)||f.rate<8000){p.warnings.push_back("Insufficient audible material. Play a full analysis interval.");return p;}
  double sum=0;for(double e:f.energy){if(!std::isfinite(e)||e<0){p.warnings.push_back("Invalid spectral analysis.");return p;}sum+=e;}
  if(sum<1e-20){p.warnings.push_back("No reliable spectrum. No proposal generated.");return p;}
+ if(f.stereoAnalysed)for(float correlation:f.bandCorrelation)if(!std::isfinite(correlation)||std::abs(correlation)>1){p.warnings.push_back("Invalid stereo analysis.");return p;}
  const std::array<std::array<double,5>,9> weights{{{.65,1.05,1.10,1.,.85},{.55,1.,1.20,1.10,.85},{.75,1.10,1.15,.95,.75},{1.05,1.15,1.,.85,.65},{1.30,1.20,.85,.95,1.10},{1.40,1.20,.85,.90,1.},{.95,1.,1.,.80,.85},{.85,1.05,1.,1.05,1.},{.60,.90,1.15,1.,.90}}};
  const std::array<double,6> edges{20,80,250,2000,6000,20000};
  std::array<double,5> target{};double totalTarget=0;
@@ -48,7 +49,7 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
    add("bandType"+suffix,i<5?static_cast<float>(types[i]):0);add("bandEnabled"+suffix,i<5&&std::abs(p.gains[i])>.01f?1.f:0.f);
    add("frequency"+bandSuffix,i<5?frequencies[i]:1000);add("gain"+bandSuffix,i<5?p.gains[i]:0);add("q"+bandSuffix,i<5?qualities[i]:1);
   }
-  add("eq",1);p.reasons.push_back("EQ: compare five octave-normalized energy regions with a hand-authored genre profile; corrections are capped at +/-3 dB.");
+  add("eq",1);add("eqPresent",1);p.reasons.push_back("EQ: compare five octave-normalized energy regions with a hand-authored genre profile; corrections are capped at +/-3 dB.");
   p.warnings.push_back("Applying replaces all 16 EQ band settings. Undo restores the previous settings.");
  }else p.reasons.push_back("EQ excluded: existing EQ settings are preserved and included in the level estimate.");
  const std::array<double,5> centres{40,140,700,3500,11000};double predicted=0;float positiveBoost=0;
@@ -70,15 +71,30 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
   const float peakDb=20*std::log10(f.peak),budget=std::array<float,4>{3,4,6,3}[c.style],maximumDrive=std::array<float,4>{8,10,12,6}[c.style];
   const float peakBudget=std::max(0.f,c.ceiling-peakDb-positiveBoost+budget);
   p.drive=std::clamp(wanted,0.f,std::min(maximumDrive,peakBudget));
-  add("limiterDrive",p.drive);add("limiterRelease",std::array<float,4>{120,160,70,220}[c.style]);add("ceiling",c.ceiling);add("lim",1);add("order",0);
+  add("limiterDrive",p.drive);add("limiterRelease",std::array<float,4>{120,160,70,220}[c.style]);add("ceiling",c.ceiling);add("lim",1);add("limPresent",1);add("order",0);
   p.reasons.push_back("Limiter: target minus measured input LUFS and estimated EQ level change. Drive is capped by style and estimated peak-reduction budget; limiter moves after EQ.");
   if(wanted<0)p.warnings.push_back("Input is already above the selected target. Drive cannot attenuate it; lower input gain in the DAW.");
   if(wanted>p.drive+.5f)p.warnings.push_back("Drive was restricted to protect dynamics. The requested loudness may not be reached.");
  }else p.reasons.push_back("Limiter excluded: its settings and chain order are preserved.");
- if(f.correlation<0)p.warnings.push_back("Negative input correlation: check mono compatibility. This assistant does not repair phase or stereo width.");
+ if(f.correlation<0)p.warnings.push_back("Negative input correlation: check mono compatibility. Narrowing can help mono compatibility but cannot reconstruct missing phase information.");
  if(f.clips)p.warnings.push_back("Input samples exceeded 0 dBFS. Reduce upstream level; lost transients cannot be recovered by these rules.");
- p.warnings.push_back("Genre/style profiles are explicit DSP heuristics, not a trained AI model. Analog selects gentle settings; no analog processor is added.");
+ p.warnings.push_back("Genre/style profiles are explicit DSP heuristics, not a trained AI model. Analog selects gentle settings and Analog compressor when selected; no standalone Analog Laboratory is added.");
+ p.warnings.push_back("Limiter loudness estimate excludes compressor, Dynamic EQ and stereo changes. Their interaction requires a full output measurement after Apply.");
  p.warnings.push_back("LUFS and EQ predictions describe this fragment only. Re-measure the full processed song. Ceiling is sample peak, not True Peak.");
- p.valid=(c.useEq||c.useLimiter);return p;
+ if(c.useStereo){
+  add("stereoPresent",1);add("stereoOn",1);const auto correlation=f.stereoAnalysed?f.bandCorrelation:std::array<float,4>{f.correlation,f.correlation,f.correlation,f.correlation};add("stereoLowWidth",correlation[0]<.2f?.65f:1.f);add("stereoMidWidth",correlation[1]<.2f?.85f:1.f);add("stereoHighWidth",correlation[2]<.2f?.9f:1.f);add("stereoLowSplit",140);add("stereoHighSplit",2500);add("stereoMonoBass",correlation[0]<0?1.f:0.f);add("stereoMono",0);add("stereoBalance",0);add("stereoAirWidth",correlation[3]<.2f?.9f:1.f);add("stereoTopSplit",8000);
+  p.reasons.push_back("Stereo: preserve width when correlated; narrow conservatively for low/negative measured band correlation (broadband fallback if band data is unavailable). No artificial widening. Inspect per-band correlation and mono after Apply.");
+ }
+ if(c.useDynamics){
+  const float rmsDb=20*std::log10(std::max(1e-9f,f.rms)),crest=20*std::log10(f.peak)-rmsDb;
+  add("dynamicsPresent",1);add("dynamicsOn",1);add("dynamicsMode",c.style==1||c.dynamicsMode>.5f?1.f:0.f);add("dynThreshold",std::clamp(rmsDb+8,-36.f,-8.f));add("dynRatio",crest>14?1.6f:1.2f);add("dynAttack",30);add("dynRelease",180);add("dynKnee",6);add("dynMakeup",0);add("dynMix",1);add("upwardAmount",c.style==2?2.f:0.f);add("upwardThreshold",std::clamp(rmsDb-10,-60.f,-12.f));
+  p.reasons.push_back("Compressor: Analog style selects Analog character, otherwise preserves the chosen mode. Bounded ratio from measured crest factor, no makeup; upward at most 2 dB in Aggressive style. Re-measure loudness: compressor interaction is not included in the limiter estimate.");
+ }
+ if(c.useDynamicEq){
+  add("dynamicEqPresent",1);add("dynamicEqOn",1);
+  for(size_t band=0;band<3;++band){auto id=std::to_string(band+1);const size_t region=std::array<size_t,3>{1,3,4}[band];add("deqFreq"+id,std::array<float,3>{180,3500,7500}[band]);add("deqGain"+id,0);add("deqQ"+id,1);add("deqThreshold"+id,std::clamp(20*std::log10(std::max(1e-9f,f.rms))-6,-48.f,-12.f));add("deqRange"+id,p.shares[region]>p.targetShares[region]*1.4f?-2.f:0.f);add("deqAttack"+id,15);add("deqRelease"+id,160);add("deqBandOn"+id,1);}
+  p.reasons.push_back("Dynamic EQ: up to 2 dB attenuation in broad regions with excess measured energy. This is not resonance detection; static EQ and Dynamic EQ may overlap. Listen and adjust.");
+ }
+ p.valid=(c.useEq||c.useLimiter||c.useStereo||c.useDynamics||c.useDynamicEq);return p;
 }
 }

@@ -3,6 +3,7 @@
 #include <charconv>
 #include <cmath>
 #include <set>
+#include "ModuleParameters.h"
 
 namespace masterlab {
 // State restoration is a host/control-thread operation, never an audio callback operation.
@@ -11,17 +12,19 @@ inline juce::ValueTree validateState(const juce::ValueTree& candidate,
                                     juce::AudioProcessorValueTreeState& parameters,
                                     const juce::Array<juce::AudioProcessorParameter*>& expected) {
     const auto schema=candidate["schemaVersion"].toString();
-    const int sourceCount=schema=="1"?52:(schema=="2"?54:(schema=="3"?86:0));
-    if (!candidate.hasType("MasterLab") || sourceCount==0 || expected.size()!=86
+    const int sourceCount=schema=="1"?52:(schema=="2"?54:(schema=="3"?86:(schema=="4"?static_cast<int>(parameterCount):0)));
+    if (!candidate.hasType("MasterLab") || sourceCount==0 || expected.size()!=static_cast<int>(parameterCount)
         || candidate["eqInstanceId"].toString() != "eq-0001"
         || candidate["limiterInstanceId"].toString() != "limiter-0001"
         || candidate.getNumChildren() != sourceCount) return {};
+    if(schema=="4"&&(candidate["dynamicEqInstanceId"].toString()!="dynamic-eq-0001"||candidate["dynamicsInstanceId"].toString()!="dynamics-0001"||candidate["stereoInstanceId"].toString()!="stereo-0001"))return {};
     std::set<juce::String> permitted,seen;
     for(int i=0;i<sourceCount;++i){auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(expected[i]);if(!parameter)return {};permitted.insert(parameter->paramID);}
     auto canonical = juce::ValueTree("MasterLab");
-    canonical.setProperty("schemaVersion", 3, nullptr);
+    canonical.setProperty("schemaVersion", 4, nullptr);
     canonical.setProperty("eqInstanceId", "eq-0001", nullptr);
     canonical.setProperty("limiterInstanceId", "limiter-0001", nullptr);
+    canonical.setProperty("dynamicEqInstanceId", "dynamic-eq-0001", nullptr);canonical.setProperty("dynamicsInstanceId", "dynamics-0001", nullptr);canonical.setProperty("stereoInstanceId", "stereo-0001", nullptr);
     for (const auto& child : candidate) {
         if (!child.hasType("PARAM") || child.getNumChildren() != 0
             || child.getNumProperties() != 2 || !child.hasProperty("id")

@@ -11,3 +11,13 @@ Wymagany Windows 10/11 x64, prawdziwy build VST3 i FL Studio. Zapisuj wersję ho
 7. Uruchom wiele instancji oraz długie odtwarzanie, obserwuj CPU/RAM.
 
 pluginval nie zastępuje tych testów. Testy GUI i jakości dźwięku pozostają obowiązkowe przed wydaniem.
+
+Nowe przypadki do ręcznego wykonania w FL Studio (nadal niewykonane):
+
+- [ ] Dodać/usunąć i bypassować każdy z pięciu procesorów podczas odtwarzania.
+- [ ] Zapisać FLP z 138 parametrami, otworzyć ponownie i porównać render.
+- [ ] Automatyzować upward, tryb Analog/Digital, podziały stereo i progi Dynamic EQ.
+- [ ] Sprawdzić mono po zmianach szerokości i balansu.
+- [ ] Otwierać/zamykać siedem paneli i zmieniać rozmiar.
+- [ ] Zatwierdzić propozycję pięciu modułów Brain, użyć Undo, zapisać projekt.
+- [ ] Sprawdzić stałe PDC 5 ms także po usunięciu wszystkich modułów.

@@ -6,6 +6,10 @@ on:
         description: Successful Windows VST3 workflow run ID
         required: true
         default: '39225087615'
+      expanded_chain:
+        description: Enable Dynamic EQ, Analog/upward compressor and Stereo Imager (requires modular build)
+        type: boolean
+        default: false
 permissions:
   contents: read
   actions: read
@@ -33,7 +37,9 @@ jobs:
         run: |
           $bundle = (Get-ChildItem vst3-package/extracted -Directory -Recurse -Filter JerzyMasterLabX.vst3 | Select-Object -First 1).FullName
           if (-not $bundle) { throw 'Actual VST3 bundle missing' }
-          python tools/audio/render_comparisons.py --plugin "$bundle" --output audio-examples
+          $extra = @()
+          if ('${{ inputs.expanded_chain }}' -eq 'true') { $extra += '--expanded-chain' }
+          python tools/audio/render_comparisons.py --plugin "$bundle" --output audio-examples @extra
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:

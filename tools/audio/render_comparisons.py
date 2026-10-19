@@ -69,7 +69,7 @@ def measure(path):
     out['crest_db']=out['sample_peak_dbfs']-out['rms_dbfs']
     return out
 
-def plugin(path,kind):
+def plugin(path,kind,expanded=False):
     p=load_plugin(str(plugin_location(path)))
     def raw(key,v):p.parameters[key].raw_value=float(v)
     for band in range(1,17):raw(f'band_{band}_enabled',0)
@@ -81,12 +81,18 @@ def plugin(path,kind):
         raw(f'band_{i}_filter_type',typ/5);raw(f'band_{i}_enabled',1)
     raw('eq_enabled',1);raw('limiter_enabled',1);raw('limiter_before_eq_ceiling_applies_before_eq',0)
     raw('sample_peak_ceiling_dbfs',23/24);raw('limiter_drive_db',(7 if kind==0 else 4)/24);raw('limiter_release_ms',(((140 if kind==0 else 220)-10)/990)**.4)
+    if expanded:
+        for key in ['stereo_in_chain','stereo_enabled','compressor_in_chain','compressor_enabled','dynamic_eq_in_chain','dynamic_eq_enabled']:raw(key,1)
+        raw('stereo_low_width',.25);raw('stereo_mid_width',.5);raw('stereo_high_width',1.15/2);raw('stereo_air_width',1.05/2);raw('stereo_mono_bass',1)
+        raw('compressor_character',1);raw('compressor_threshold',36/60);raw('compressor_ratio',.5/11);raw('compressor_attack',(25-.1)/99.9);raw('compressor_release',170/990);raw('compressor_knee',6/18);raw('compressor_makeup',.5);raw('compressor_dry_wet',.7);raw('upward_maximum_gain',2/18);raw('upward_threshold',20/54)
+        for i,(hz,threshold,depth) in enumerate([(180,-28,-2),(3200,-30,-2),(7500,-34,-1.5)],1):
+            prefix=f'dynamic_eq_{i}_';raw(prefix+'frequency',((hz-20)/19980)**.3);raw(prefix+'threshold',(threshold+60)/60);raw(prefix+'dynamic_range',(depth+12)/24);raw(prefix+'enabled',1)
     return p,bands
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--plugin',required=True,type=Path);parser.add_argument('--output',required=True,type=Path);args=parser.parse_args();args.output.mkdir(parents=True,exist_ok=True)
+    parser=argparse.ArgumentParser();parser.add_argument('--expanded-chain',action='store_true');parser.add_argument('--plugin',required=True,type=Path);parser.add_argument('--output',required=True,type=Path);args=parser.parse_args();args.output.mkdir(parents=True,exist_ok=True)
     binary=args.plugin/('Contents/x86_64-win/JerzyMasterLabX.vst3' if platform.system()=='Windows' else 'Contents/x86_64-linux/JerzyMasterLabX.so')
-    manifest={'platform':platform.system(),'sample_rate':RATE,'pcm_bits':24,'source':'Original deterministic synthetic musical fixtures; no commercial recordings.','plugin_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),'pedalboard':pedalboard.__version__,'numpy':np.__version__,'tests':{},'examples':[],'known_limit':'Sample-peak limiter, not True Peak; direct outputs are not peak-normalized.'}
+    manifest={'expanded_chain':args.expanded_chain,'platform':platform.system(),'sample_rate':RATE,'pcm_bits':24,'source':'Original deterministic synthetic musical fixtures; no commercial recordings.','plugin_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),'pedalboard':pedalboard.__version__,'numpy':np.__version__,'tests':{},'examples':[],'known_limit':'Sample-peak limiter, not True Peak; direct outputs are not peak-normalized.'}
     # Check host PDC after its first sample-rate initialization, without modifying files afterwards.
     dry=load_plugin(str(plugin_location(args.plugin)));dry.eq_enabled=False;dry.limiter_enabled=False
     dry(np.zeros((2,RATE),np.float32),RATE,buffer_size=256)
@@ -95,7 +101,7 @@ def main():
     assert np.argmax(result[0])==12000 and np.max(np.abs(result-impulse))<1e-6,'host PDC failed'
     manifest['tests']['dry_impulse_alignment']='passed, zero residual samples after host initialization'
     for kind,name in enumerate(['01_rytmiczny','02_przestrzenny']):
-        original=source(kind);p,bands=plugin(args.plugin,kind)
+        original=source(kind);p,bands=plugin(args.plugin,kind,args.expanded_chain)
         p(np.zeros((2,RATE),np.float32),RATE,buffer_size=256)
         processed=p(original,RATE,buffer_size=256)
         repeated=p(original,RATE,buffer_size=256)
@@ -109,7 +115,7 @@ def main():
         gain_db=m_before['input_i']-m_after['input_i'];assert gain_db<=0
         write(matched,processed*10**(gain_db/20));m_matched=measure(matched)
         assert abs(m_matched['input_i']-m_before['input_i'])<=.15
-        item={'name':name,'seconds':original.shape[1]/RATE,'bands_hz_db_q_type':bands,'drive_db':7 if kind==0 else 4,'release_ms':140 if kind==0 else 220,'ceiling_dbfs':-1,'eq_then_limiter':True,'determinism_max_error':error,'buffer_256_vs_1024_max_error':block_error,'match_gain_db':gain_db,'files':[]}
+        item={'normalized_parameters':{key:float(parameter.raw_value) for key,parameter in p.parameters.items()},'name':name,'seconds':original.shape[1]/RATE,'bands_hz_db_q_type':bands,'drive_db':7 if kind==0 else 4,'release_ms':140 if kind==0 else 220,'ceiling_dbfs':-1,'eq_then_limiter':True,'determinism_max_error':error,'buffer_256_vs_1024_max_error':block_error,'match_gain_db':gain_db,'files':[]}
         for file,metrics in [(before,m_before),(after,m_after),(matched,m_matched)]:
             item['files'].append({'file':file.name,'measurements':metrics,'sha256':hashlib.sha256(file.read_bytes()).hexdigest()})
         manifest['examples'].append(item)
@@ -119,6 +125,7 @@ def main():
         report+=''
         for item in example['files']:
             m=item['measurements'];report+=f"| {item['file']} | {m['input_i']:.2f} | {m['sample_peak_dbfs']:.2f} | {m['input_tp']:.2f} |\n"
+    report+=('\nDodatkowo aktywne: 3-pasmowy Dynamic EQ, kompresor Analog z upward 2 dB i dry/wet 0,7, 4-pasmowy Stereo Imager z Mono Bass. Pełne wartości normalizowane i reguły ustawienia: measurements.json oraz skrypt.\n' if args.expanded_chain else '')
     report+='\nUstawienia: EQ → limiter. Rytmiczny Drive 7 dB, Release 140 ms; przestrzenny Drive 4 dB, Release 220 ms. Szczegóły EQ, testy powtarzalności/buforów, wersje narzędzi i SHA-256 są w measurements.json. Pusty render inicjalizuje PDC hosta; test impulsowy potwierdza następnie wyrównanie 0 próbek.\n'
     (args.output/'CZYTAJ_PRZED_ODSLUCHEM.md').write_text(report,encoding='utf-8')
     print(json.dumps(manifest,indent=2))

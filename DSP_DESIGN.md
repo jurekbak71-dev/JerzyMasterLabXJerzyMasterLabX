@@ -30,3 +30,5 @@ Nie wykonujemy LRA, true peak, kanałów surround ani certyfikacji całego stand
 
 
 Master Brain: zaimplementowano analizę wejścia poza callback, regułowe propozycje EQ/limitera, panel konfiguracji i raportu, zatwierdzanie oraz jedną transakcję Undo. Zakres, algorytm i ograniczenia opisano w [MASTER_BRAIN.md](MASTER_BRAIN.md). Nie jest to kompletna docelowa implementacja v0.4.0.
+
+Nowe DSP (`ModularDsp.h`): cztery komplementarne pasma M/S z płynnymi szerokościami, stereofoniczny detektor peak kompresora z miękkim knee i bounded upward (+ fade -90/-70 dBFS), Digital lub łagodna kolorystyka Analog, trzy niezależne detektory Dynamic EQ (input minus notch) sterujące filtrami Bell. Soft knee ma testy ciągłości na obu granicach. Bypass 20 ms; dry/wet kompresora wygładzany. Dodatnia range Dynamic EQ podbija, ujemna tłumi. Szczegółowe ograniczenia (1st-order splits, brak oversamplingu) i kolejność: MODULAR_WORKFLOW.md.

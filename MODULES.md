@@ -6,3 +6,5 @@ Planowane: Spectral EQ Pro (16 pasm, M/S, dynamic, linear phase), Smart Dynamics
 
 
 Master Brain: zaimplementowano analizę wejścia poza callback, regułowe propozycje EQ/limitera, panel konfiguracji i raportu, zatwierdzanie oraz jedną transakcję Undo. Zakres, algorytm i ograniczenia opisano w [MASTER_BRAIN.md](MASTER_BRAIN.md). Nie jest to kompletna docelowa implementacja v0.4.0.
+
+Zaimplementowane w etapie modułowym: 4-pasmowy Stereo Architect, 3-pasmowy Dynamic EQ i Smart Dynamics Digital/Analog z Upward Compression. Wszystkie pięć procesorów ma oddzielną obecność/bypass i propozycje Brain. Szczegóły oraz granice algorytmów: MODULAR_WORKFLOW.md. Pozostałe moduły z powyższych planów nadal nie są gotowymi procesorami.

@@ -23,7 +23,7 @@ class GuiSmoke final : private juce::Timer {
         auto* ceiling=dynamic_cast<juce::Slider*>(editor->findChildWithID("limiter-ceiling"));if(!ceiling)return false;ceiling->setValue(-6,juce::sendNotificationSync);
         auto* initialDrive=dynamic_cast<juce::Slider*>(editor->findChildWithID("limiter-drive"));
         auto* initialRelease=dynamic_cast<juce::Slider*>(editor->findChildWithID("limiter-release"));
-        if(!initialDrive||!initialRelease)return false;initialDrive->setValue(12,juce::sendNotificationSync);initialRelease->setValue(150,juce::sendNotificationSync);
+        if(!initialDrive||!initialRelease)return false;initialDrive->setValue(24,juce::sendNotificationSync);initialRelease->setValue(150,juce::sendNotificationSync);
         float firstGain=actual("gain");choice->setSelectedId(16,juce::sendNotificationSync);
         auto* type=dynamic_cast<juce::ComboBox*>(editor->findChildWithID("eq-type"));
         auto* bandPower=dynamic_cast<juce::Button*>(editor->findChildWithID("eq-band-active"));if(!type||!bandPower)return false;
@@ -51,6 +51,11 @@ class GuiSmoke final : private juce::Timer {
         auto* brain=dynamic_cast<juce::Button*>(editor->findChildWithID("view-brain"));auto* analyse=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-analyse"));
         if(!brain||!analyse)return false;brain->onClick();
         auto* genre=dynamic_cast<juce::ComboBox*>(editor->findChildWithID("brain-genre"));if(!genre)return false;genre->setSelectedId(5,juce::sendNotificationSync);
+        parameter("order")->setValueNotifyingHost(0);
+        for(const char* id:{"dynamicEqPresent","dynamicsPresent","stereoPresent"})parameter(id)->setValueNotifyingHost(1);
+        parameter("upwardAmount")->setValueNotifyingHost(4.f/18);
+        auto set=[&](const char* id,float value){auto* p=parameter(id);p->setValueNotifyingHost(p->convertTo0to1(value));};set("dynThreshold",-36);set("deqFreq1",1000);set("deqThreshold1",-42);set("deqRange1",-4);set("deqFreq2",3333);set("deqThreshold2",-42);set("deqRange2",-6);
+
         brainBefore.clear();for(auto* parameter:processor.getParameters())brainBefore.push_back(parameter->getValue());analyse->onClick();
         for(int i=0;i<processor.getParameters().size();++i)if(processor.getParameters()[i]->getValue()!=brainBefore[static_cast<size_t>(i)])return false;
         dynamic_cast<juce::Button*>(editor->findChildWithID("view-eq"))->onClick();return true;
@@ -58,7 +63,7 @@ class GuiSmoke final : private juce::Timer {
     bool controlsFit(){
         for(int i=0;i<editor->getNumChildComponents();++i){auto* a=editor->getChildComponent(i);if(!a->isVisible())continue;
             if(!editor->getLocalBounds().contains(a->getBounds()))return false;
-            for(int j=i+1;j<editor->getNumChildComponents();++j){auto* b=editor->getChildComponent(j);if(b->isVisible()&&a->getBounds().intersects(b->getBounds())){std::cerr<<"Overlapping controls: "<<a->getComponentID()<<" / "<<b->getComponentID()<<'\n';return false;}}
+            for(int j=i+1;j<editor->getNumChildComponents();++j){auto* b=editor->getChildComponent(j);if(b->isVisible()&&a->getBounds().intersects(b->getBounds())){std::cerr<<"Overlapping controls: "<<a->getComponentID()<<" / "<<b->getComponentID()<<" bounds "<<a->getBounds().toString()<<" / "<<b->getBounds().toString()<<'\n';return false;}}
         }
         return true;
     }
@@ -66,7 +71,7 @@ class GuiSmoke final : private juce::Timer {
         for(auto size:{juce::Point<int>(750,550),juce::Point<int>(1000,700),juce::Point<int>(2000,1400)}){
             editor->setSize(size.x,size.y);auto image=editor->createComponentSnapshot(editor->getLocalBounds());
             if(!image.isValid()||image.getWidth()!=size.x||image.getHeight()!=size.y)return false;
-            int curvePixels=0;for(int y=174;y<size.y-271;++y)for(int x=48;x<size.x-252;++x){auto colour=image.getPixelAt(x,y);if(colour.getRed()>180&&colour.getGreen()>130&&colour.getBlue()<150)++curvePixels;}
+            int curvePixels=0;for(int y=174;y<size.y-271;++y)for(int x=48;x<size.x-252;++x){auto colour=image.getPixelAt(x,y);if(std::abs(static_cast<int>(colour.getRed())-181)<14&&std::abs(static_cast<int>(colour.getGreen())-203)<14&&std::abs(static_cast<int>(colour.getBlue())-231)<14)++curvePixels;}
             if(curvePixels<400){std::cerr<<"EQ response missing from real GUI frame: "<<curvePixels<<'\n';return false;}
             if(iteration==0&&size.x==1000){auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/gui-smoke.png");output.getParentDirectory().createDirectory();juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return false;}
             if(!controlsFit())return false;
@@ -76,7 +81,7 @@ class GuiSmoke final : private juce::Timer {
         if(!limiter||!eq)return false;
         // A click on a chain card selects its workspace without changing order.
         const bool limiterFirst=actual("order")>.5f;
-        auto point=juce::Point<float>(limiterFirst?70.f:editor->getWidth()*.5f+70.f,104.f);
+        auto point=juce::Point<float>(24.f+(editor->getWidth()-48.f)/5.f*(limiterFirst?3.5f:4.5f),104.f);
         auto now=juce::Time::getCurrentTime();auto source=juce::Desktop::getInstance().getMainMouseSource();
         juce::MouseEvent click(source,point,juce::ModifierKeys(),1,0,0,0,0,editor.get(),editor.get(),now,point,now,1,false);
         editor->mouseUp(click);
@@ -85,8 +90,8 @@ class GuiSmoke final : private juce::Timer {
         auto* drive=dynamic_cast<juce::Slider*>(editor->findChildWithID("limiter-drive"));
         auto* release=dynamic_cast<juce::Slider*>(editor->findChildWithID("limiter-release"));
         if(!drive||!release||!drive->isVisible()||!release->isVisible())return false;
-        drive->setValue(12,juce::sendNotificationSync);release->setValue(150,juce::sendNotificationSync);
-        if(std::abs(actual("limiterDrive")-12)>.01f||std::abs(actual("limiterRelease")-150)>.11f)return false;
+        drive->setValue(24,juce::sendNotificationSync);release->setValue(150,juce::sendNotificationSync);
+        if(std::abs(actual("limiterDrive")-24)>.01f||std::abs(actual("limiterRelease")-150)>.11f)return false;
         auto* frequency=editor->findChildWithID("eq-frequency");
         if(!frequency||frequency->isVisible()||!editor->findChildWithID("limiter-ceiling")->isVisible())return false;
         for(auto size:{juce::Point<int>(750,550),juce::Point<int>(1000,700),juce::Point<int>(2000,1400)}){
@@ -95,6 +100,11 @@ class GuiSmoke final : private juce::Timer {
             if(!controlsFit())return false;
             if(historyPixels<10||reductionPixels<5){std::cerr<<"Limiter history missing from real GUI frame: "<<historyPixels<<'\n';return false;}
             if(iteration==0&&size.x==1000){auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/limiter-smoke.png");juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return false;}
+        }
+        for(const auto& entry:std::array<std::pair<const char*,const char*>,3>{{{"view-dynamic-eq","dynamic-eq"},{"view-dynamics","dynamics"},{"view-stereo","stereo"}}}){
+            auto* tab=dynamic_cast<juce::Button*>(editor->findChildWithID(entry.first));if(!tab)return false;tab->onClick();
+            for(auto size:{juce::Point<int>(750,550),juce::Point<int>(1000,700),juce::Point<int>(2000,1400)}){editor->setSize(size.x,size.y);if(!controlsFit())return false;auto image=editor->createComponentSnapshot(editor->getLocalBounds());if(!image.isValid())return false;
+                if(iteration==0&&size.x==1000){auto output=juce::File::getCurrentWorkingDirectory().getChildFile(juce::String("build-plugin/")+entry.second+"-smoke.png");juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return false;}}
         }
         auto* inspector=dynamic_cast<juce::Button*>(editor->findChildWithID("view-inspector"));if(!inspector)return false;
         float driveBefore=actual("limiterDrive"),gainBefore=actual("gain16");inspector->onClick();
@@ -119,7 +129,7 @@ class GuiSmoke final : private juce::Timer {
     }
     void timerCallback()override{
         if(phase==0){if(!gestures()){fail("EQ controls, drag, wheel or host gestures failed");return;}feed(2250);phase=1;return;}
-        if(phase==1){feed(1);phase=2;return;}
+        if(phase==1){feed(64);phase=2;return;}
         if(!capture()){fail("GUI resize or measured EQ response rendering failed");return;}
         editor->setVisible(false);editor->removeFromDesktop();editor.reset();
         if(++iteration<3){open();return;}

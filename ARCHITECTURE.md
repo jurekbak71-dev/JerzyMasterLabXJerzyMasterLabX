@@ -23,3 +23,5 @@ Każdy procesor ma niezależne `WindowMeter` i `LoudnessMeter` wejścia/wyjścia
 
 
 Master Brain: zaimplementowano analizę wejścia poza callback, regułowe propozycje EQ/limitera, panel konfiguracji i raportu, zatwierdzanie oraz jedną transakcję Undo. Zakres, algorytm i ograniczenia opisano w [MASTER_BRAIN.md](MASTER_BRAIN.md). Nie jest to kompletna docelowa implementacja v0.4.0.
+
+Nowy etap: `ModularDsp.h` zawiera alokacyjnie niezależne StereoImager, SmartCompressor i DynamicEqualizer. `ModuleParameters.h` definiuje 138 parametrów schema 4 (dopisane do 86 stabilnych indeksów). Kolejność trzech nowych etapów jest stała przed istniejącym dwutorowym EQ/limiterem. Modułowość oznacza tu obecność i bypass; dowolny graf i wiele kopii pozostają przyszłe. Szczegóły: MODULAR_WORKFLOW.md.

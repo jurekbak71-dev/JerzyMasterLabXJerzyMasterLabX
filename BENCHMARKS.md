@@ -26,3 +26,5 @@ W bieżącym etapie: CTest 6/6 passed; ASan/UBSan rdzenia 3/3 passed; rozszerzon
 
 
 Master Brain: zaimplementowano analizę wejścia poza callback, regułowe propozycje EQ/limitera, panel konfiguracji i raportu, zatwierdzanie oraz jedną transakcję Undo. Zakres, algorytm i ograniczenia opisano w [MASTER_BRAIN.md](MASTER_BRAIN.md). Nie jest to kompletna docelowa implementacja v0.4.0.
+
+Etap modułowy: testy funkcjonalne DSP/wrappera obejmują mono sum, selektywność Mono Bass, Analog vs Digital i DC, knee, downward/upward, dodatni/ujemny Dynamic EQ, pełny stan i brak alokacji C++ w aktywnym łańcuchu. Testy wykonywane przy 44,1/48/96/192 kHz. Czas całej lokalnej serii CTest około 6 s nie jest benchmarkiem CPU w DAW ani oceną jakości brzmienia.

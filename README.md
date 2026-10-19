@@ -1,12 +1,16 @@
 # Jerzy MasterLab X
 
-Rozwojowy fundament Phase A, wersja projektu 0.1.0. Nie jest to ukończone wydanie masteringowe. Windows/MSVC przeszedł dla rewizji 9b2ad22, f493e7a i 9486a48; wynik kolejnej rewizji jest publikowany w Actions. FL Studio nadal nie zostało przetestowane.
+Rozwojowy fundament Phase A, wersja projektu 0.1.0. Nie jest to ukończone wydanie masteringowe. Wyniki kompilacji Windows/MSVC, testów i paczki VST3 są publikowane w Actions. FL Studio nadal nie zostało przetestowane.
 
 Szczegółowe braki produktu i kryteria odbioru: [PRODUCT_AUDIT.md](PRODUCT_AUDIT.md). Analiza materiałów Ozone 12: [OZONE12_REVIEW.md](OZONE12_REVIEW.md).
 
 ![Spectral Workspace — rzeczywisty zrzut z testu na sygnale syntetycznym](docs/images/spectral-workspace.png)
 
-## Obecnie zaimplementowane
+## Aktualizacja modułowa
+
+Dodano Stereo Architect (4 pasma), Dynamic EQ (3 pasma) oraz Smart Dynamics z trybem Digital/Analog i Upward Compression. Wszystkie pięć procesorów można dodać/usunąć oraz niezależnie włączyć/wyłączyć. Master Brain proponuje ich ustawienia po analizie, z zatwierdzeniem i Undo. [Obsługa, kolejność i ograniczenia](MODULAR_WORKFLOW.md).
+
+## Wcześniejszy fundament DSP
 
 Stereo C++20 DSP niezależny od JUCE: 16 pasm z typami Bell/Low Shelf/High Shelf/High Pass/Low Pass/Notch i niezależnym płynnym bypassem, szereg EQ/limiter lub limiter/EQ, bypass z przejściem 20 ms, stereo-linked sample-peak limiter z opóźnieniem 5 ms i zabezpieczeniem ceiling. Wrapper JUCE 8.0.6: parametry automatyzacji, XML state z walidacją kompletności i zakresów, stałe zgłaszanie latencji, pomiary input/output w oknie 400 ms oraz LUFS M/S/I, rzeczywisty FFT 4096–32768 energii L/R i vectorscope, dedykowany edytor EQ z węzłami drag, regulacją Q kółkiem i krzywą z aktualnych współczynników DSP. Kolejność limiter/EQ może podnieść końcowy poziom powyżej ceiling.
 
@@ -24,7 +28,7 @@ Przycisk **LIMITER** otwiera osobny widok. **Drive** (0–24 dB) podnosi sygnał
 
 Złoty wykres pokazuje maksymalną redukcję obwiedni w każdym oknie 10 ms, do 10 sekund czasu audio. Turkusowy pokazuje peak końcowego wyjścia. Wykresy mają osobne obszary: redukcja 0–24 dB u góry i output -60–0 dBFS poniżej. Podczas przełączania kolejności pokazana obwiednia jest interpolacją obu torów, a nie pomiarem całkowitego tłumienia łańcucha. Przerwy po przepełnieniu kolejki nie są łączone linią. Bez nowego audio historia pozostaje zatrzymana. Historia nie jest zapisywana jako preset.
 
-Stan schema 3 zawiera 86 parametrów. Schema 1 i 2 są migrowane: brakujące ustawienia otrzymują wartości fabryczne (typ Bell, pasmo aktywne; w schema 1 dodatkowo Drive 0 dB i Release 80 ms). Dotychczasowe ID i indeksy parametrów pozostają bez zmian.
+Stan schema 4 zawiera 138 parametrów. Schema 1–3 są migrowane: nowe procesory pozostają poza łańcuchem, a dotychczasowy tor i pierwsze 86 ID/indeksów są zachowane. Brakujące ustawienia starszych wersji otrzymują wartości fabryczne.
 
 ![Panel limitera — rzeczywisty test na sygnale syntetycznym](docs/images/limiter-workspace.png)
 

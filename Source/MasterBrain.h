@@ -2,6 +2,7 @@
 #include <juce_dsp/juce_dsp.h>
 #include "BrainRules.h"
 #include "LoudnessMeter.h"
+#include "ModularDsp.h"
 #include <mutex>
 namespace masterlab {
 enum class BrainPhase { Idle, Pending, Analysing, Ready, Failed, Cancelled, Applied };
@@ -10,6 +11,7 @@ class MasterBrain final : private juce::Thread {
  struct Packet {std::array<float,128> left{},right{};std::uint64_t generation=0,firstSample=0;int length=0;};
  struct Job {
   std::uint64_t generation=0,count=0,target=0;int order=13,size=8192,head=0,hop=0,fftFrames=0;
+  Split bandLeft,bandRight;std::array<float,3> splitCoefficients{};std::array<double,4> bandLL{},bandRR{},bandLR{};
   double ll=0,rr=0,lr=0;float peak=0;std::uint64_t clips=0;
   BrainConfig config;BrainFeatures features;LoudnessMeter loudness;
   std::unique_ptr<juce::dsp::FFT> fft;
@@ -17,6 +19,7 @@ class MasterBrain final : private juce::Thread {
   std::array<float,65536> left{},right{};
   std::array<double,5> energy{};
   Job(double rate,BrainConfig cfg,std::uint64_t gen):generation(gen),config(cfg){
+   splitCoefficients={static_cast<float>(1-std::exp(-6.283185307179586*140/rate)),static_cast<float>(1-std::exp(-6.283185307179586*2500/rate)),static_cast<float>(1-std::exp(-6.283185307179586*8000/rate))};
    features.rate=rate;target=static_cast<std::uint64_t>(std::ceil(rate*cfg.seconds));order=std::clamp(static_cast<int>(std::ceil(std::log2(rate/6))),12,15);size=1<<order;
    fft=std::make_unique<juce::dsp::FFT>(order);loudness.prepare(rate);
   }
@@ -30,11 +33,14 @@ class MasterBrain final : private juce::Thread {
    }++fftFrames;
   }
   void process(const Packet& packet){
-   for(int i=0;i<packet.length&&count<target;++i){float l=packet.left[i],r=packet.right[i];loudness.push(l,r);ll+=static_cast<double>(l)*l;rr+=static_cast<double>(r)*r;lr+=static_cast<double>(l)*r;peak=std::max(peak,std::max(std::abs(l),std::abs(r)));clips+=std::max(std::abs(l),std::abs(r))>1?1:0;
+   for(int i=0;i<packet.length&&count<target;++i){float l=packet.left[i],r=packet.right[i];
+    const float a=splitCoefficients[0],b=splitCoefficients[1],c=splitCoefficients[2];
+    auto leftBands=bandLeft.tick(l,a,b,c),rightBands=bandRight.tick(r,a,b,c);for(size_t k=0;k<4;++k){bandLL[k]+=static_cast<double>(leftBands[k])*leftBands[k];bandRR[k]+=static_cast<double>(rightBands[k])*rightBands[k];bandLR[k]+=static_cast<double>(leftBands[k])*rightBands[k];}
+    loudness.push(l,r);ll+=static_cast<double>(l)*l;rr+=static_cast<double>(r)*r;lr+=static_cast<double>(l)*r;peak=std::max(peak,std::max(std::abs(l),std::abs(r)));clips+=std::max(std::abs(l),std::abs(r))>1?1:0;
     samples[0][head]=l;samples[1][head]=r;head=(head+1)%size;++count;++hop;if(count>=static_cast<std::uint64_t>(size)&&hop>=size/2){spectrum();hop=0;}
    }
   }
-  BrainFeatures finish(){features.seconds=count/features.rate;features.integrated=loudness.read().integrated;features.peak=peak;features.rms=count?static_cast<float>(std::sqrt((ll+rr)/(2*count))):0;features.correlation=ll*rr>1e-24?static_cast<float>(std::clamp(lr/std::sqrt(ll*rr),-1.,1.)):0;features.clips=clips;features.energy=energy;return features;}
+  BrainFeatures finish(){for(size_t k=0;k<4;++k){features.bandCorrelation[k]=bandLL[k]*bandRR[k]>1e-24?static_cast<float>(std::clamp(bandLR[k]/std::sqrt(bandLL[k]*bandRR[k]),-1.,1.)):0;features.bandWidth[k]=static_cast<float>(std::sqrt(std::max(0.,bandLL[k]+bandRR[k]-2*bandLR[k])/std::max(1e-20,bandLL[k]+bandRR[k]+2*bandLR[k])));}features.stereoAnalysed=true;features.seconds=count/features.rate;features.integrated=loudness.read().integrated;features.peak=peak;features.rms=count?static_cast<float>(std::sqrt((ll+rr)/(2*count))):0;features.correlation=ll*rr>1e-24?static_cast<float>(std::clamp(lr/std::sqrt(ll*rr),-1.,1.)):0;features.clips=clips;features.energy=energy;return features;}
  };
  juce::AbstractFifo fifo;std::vector<Packet> packets;
  std::mutex mutex;std::unique_ptr<Job> job;BrainSnapshot snapshot;
@@ -52,7 +58,7 @@ class MasterBrain final : private juce::Thread {
      if(!job||snapshot.phase!=BrainPhase::Analysing||packet.generation!=job->generation)continue;
      if(packet.firstSample!=job->count){fail("Audio continuity was lost. Reanalyse the fragment.");continue;}
      job->process(packet);snapshot.progress=static_cast<double>(job->count)/job->target;
-     if(job->count==job->target){snapshot.features=job->finish();snapshot.proposal=proposeMastering(snapshot.features,snapshot.config);snapshot.phase=BrainPhase::Ready;snapshot.message=snapshot.proposal.valid?"Analysis complete. Review every proposed change before applying.":((!snapshot.config.useEq&&!snapshot.config.useLimiter)?"No processing modules selected. Analysis is available; Apply is disabled.":"Insufficient material. No proposal can be applied.");}
+     if(job->count==job->target){snapshot.features=job->finish();snapshot.proposal=proposeMastering(snapshot.features,snapshot.config);snapshot.phase=BrainPhase::Ready;snapshot.message=snapshot.proposal.valid?"Analysis complete. Review every proposed change before applying.":((!snapshot.config.useEq&&!snapshot.config.useLimiter&&!snapshot.config.useStereo&&!snapshot.config.useDynamics&&!snapshot.config.useDynamicEq)?"No processing modules selected. Analysis is available; Apply is disabled.":"Insufficient material. No proposal can be applied.");}
     }};consume(start,n);consume(start2,n2);fifo.finishedRead(n+n2);
     if(job&&snapshot.phase==BrainPhase::Pending){snapshot.phase=BrainPhase::Analysing;snapshot.message="Listening to input before processing. Play audio in the DAW.";active.store(job->generation);}
    }
@@ -76,7 +82,7 @@ public:
  void cancelUI(){std::scoped_lock lock(mutex);active.store(0);snapshot.phase=BrainPhase::Cancelled;snapshot.proposal={};snapshot.message="Analysis cancelled. No parameters changed.";}
  void reviseUI(BrainConfig config){
   std::scoped_lock lock(mutex);if(snapshot.phase==BrainPhase::Pending||snapshot.phase==BrainPhase::Analysing)return;
-  config=cleanBrainConfig(config);config.existingEq=snapshot.config.existingEq;config.existingEqEnabled=snapshot.config.existingEqEnabled;
+  config=cleanBrainConfig(config);config.dynamicsMode=snapshot.config.dynamicsMode;config.existingEq=snapshot.config.existingEq;config.existingEqEnabled=snapshot.config.existingEqEnabled;
   const bool durationChanged=config.seconds!=snapshot.config.seconds;snapshot.config=config;
   if(job&&snapshot.phase==BrainPhase::Ready&&!durationChanged){snapshot.proposal=proposeMastering(snapshot.features,config);snapshot.message="Proposal recalculated from the captured fragment. Review before Apply.";}
   else {snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Settings changed. Analyse a new fragment.";}

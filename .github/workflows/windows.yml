@@ -52,3 +52,6 @@ jobs:
             build-plugin/limiter-smoke.png
             build-plugin/inspector-smoke.png
             build-plugin/brain-smoke.png
+            build-plugin/dynamic-eq-smoke.png
+            build-plugin/dynamics-smoke.png
+            build-plugin/stereo-smoke.png

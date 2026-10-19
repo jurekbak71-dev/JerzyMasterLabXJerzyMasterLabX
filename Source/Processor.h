@@ -2,6 +2,8 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_dsp/juce_dsp.h>
 #include "Dsp.h"
+#include "ModularDsp.h"
+#include "ModuleParameters.h"
 #include "LimiterMeter.h"
 #include "WindowMeter.h"
 #include "LoudnessMeter.h"
@@ -14,6 +16,7 @@ public:
  masterlab::MasterBrain brain;
  std::vector<float> brainBaseline;
  masterlab::RoutedEngine engine;
+ masterlab::StereoImager stereo;masterlab::SmartCompressor dynamics;masterlab::DynamicEqualizer dynamicEq;
  masterlab::LimiterMeter limiterMeter;
  masterlab::WindowMeter inputMeter,outputMeter;
  masterlab::LoudnessMeter inputLoudness,outputLoudness;
@@ -24,9 +27,9 @@ public:
  std::array<std::vector<float>,2> hostDryDelay;
  std::array<std::array<float,128>,2> hostDryScratch{};
  size_t hostDryPosition=0;float hostBypassMix=0,hostBypassStep=1.f/960.f;bool hostBypassTarget=false;
- std::array<std::atomic<float>*,86> parameters{};
+ std::array<std::atomic<float>*,masterlab::parameterCount> parameters{};
  juce::AbstractFifo fifo{8192};std::array<float,8192> traceL{},traceR{};
- struct ResponseFrame {std::array<masterlab::Biquad,16> bands;std::array<float,16> blends{};double rate=48000;float eqMix=1;masterlab::MeterReading inputReading,outputReading;masterlab::LoudnessReading inputLufs,outputLufs;};
+ struct ResponseFrame {std::array<masterlab::Biquad,16> bands;std::array<float,16> blends{};double rate=48000;float eqMix=1;masterlab::StereoReading stereo;masterlab::DynamicsReading dynamics;std::array<float,3> dynamicGain{},dynamicBlends{};std::array<masterlab::Biquad,3> dynamicBands{};masterlab::MeterReading inputReading,outputReading;masterlab::LoudnessReading inputLufs,outputLufs;};
  juce::AbstractFifo responseFifo{4};std::array<ResponseFrame,4> responses{};
  std::atomic<double> displayRate{48000};
  std::atomic<float> peak{0},rms{0},correlation{0};
@@ -46,24 +49,54 @@ public:
  p.add(std::make_unique<juce::AudioParameterFloat>("limiterRelease","Limiter release (ms)",juce::NormalisableRange<float>(10.f,1000.f,.1f,.4f),80.f));
  for(int band=1;band<=16;++band){auto suffix=juce::String(band);
  p.add(std::make_unique<juce::AudioParameterChoice>("bandType"+suffix,"Band "+suffix+" filter type",juce::StringArray{"Bell","Low Shelf","High Shelf","High Pass 12 dB/oct","Low Pass 12 dB/oct","Notch"},0));
- p.add(std::make_unique<juce::AudioParameterBool>("bandEnabled"+suffix,"Band "+suffix+" enabled",true));}return p;}
- Processor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,&undoManager,"MasterLab",layout()){state.state.setProperty("schemaVersion",3,nullptr);state.state.setProperty("eqInstanceId","eq-0001",nullptr);state.state.setProperty("limiterInstanceId","limiter-0001",nullptr);const char* ids[]={"frequency","gain","q","ceiling","eq","lim","order"};for(size_t i=0;i<7;++i)parameters[i]=state.getRawParameterValue(ids[i]);for(int k=2;k<=16;++k){int offset=7+(k-2)*3;const auto suffix=juce::String(k);parameters[offset]=state.getRawParameterValue("frequency"+suffix);parameters[offset+1]=state.getRawParameterValue("gain"+suffix);parameters[offset+2]=state.getRawParameterValue("q"+suffix);}
+ p.add(std::make_unique<juce::AudioParameterBool>("bandEnabled"+suffix,"Band "+suffix+" enabled",true));}
+ addModuleParameters(p);return p;}
+ static void addModuleParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
+  auto boolean=[&](const char* id,const char* name,bool initial){p.add(std::make_unique<juce::AudioParameterBool>(id,name,initial));};
+  auto number=[&](const char* id,const char* name,float lo,float hi,float initial){p.add(std::make_unique<juce::AudioParameterFloat>(id,name,lo,hi,initial));};
+  boolean("eqPresent","EQ in chain",true);boolean("limPresent","Limiter in chain",true);
+  boolean("stereoPresent","Stereo in chain",false);boolean("stereoOn","Stereo enabled",true);
+  number("stereoLowWidth","Stereo low width",0,2,1);number("stereoMidWidth","Stereo mid width",0,2,1);number("stereoHighWidth","Stereo high width",0,2,1);
+  number("stereoLowSplit","Stereo low crossover",40,500,140);number("stereoHighSplit","Stereo mid crossover",500,4000,2500);
+  boolean("stereoMonoBass","Stereo mono bass",false);boolean("stereoMono","Stereo mono preview",false);number("stereoBalance","Stereo balance",-1,1,0);
+  boolean("dynamicsPresent","Compressor in chain",false);boolean("dynamicsOn","Compressor enabled",true);
+  p.add(std::make_unique<juce::AudioParameterChoice>("dynamicsMode","Compressor character",juce::StringArray{"Digital","Analog"},0));
+  number("dynThreshold","Compressor threshold",-60,0,-18);number("dynRatio","Compressor ratio",1,12,2);number("dynAttack","Compressor attack",.1f,100,15);number("dynRelease","Compressor release",10,1000,150);number("dynKnee","Compressor knee",0,18,6);number("dynMakeup","Compressor makeup",-12,12,0);number("dynMix","Compressor dry wet",0,1,1);
+  number("upwardAmount","Upward maximum gain",0,18,0);number("upwardThreshold","Upward threshold",-60,-6,-36);
+  boolean("dynamicEqPresent","Dynamic EQ in chain",false);boolean("dynamicEqOn","Dynamic EQ enabled",true);
+  for(int i=0;i<3;++i){auto suffix=juce::String(i+1);auto title="Dynamic EQ "+suffix+" ";
+   p.add(std::make_unique<juce::AudioParameterFloat>("deqFreq"+suffix,title+"frequency",juce::NormalisableRange<float>(20,20000,1,.3f),std::array<float,3>{150,2500,7500}[i]));
+   p.add(std::make_unique<juce::AudioParameterFloat>("deqGain"+suffix,title+"static gain",-12,12,0));p.add(std::make_unique<juce::AudioParameterFloat>("deqQ"+suffix,title+"Q",.2f,6,1));
+   p.add(std::make_unique<juce::AudioParameterFloat>("deqThreshold"+suffix,title+"threshold",-60,0,i==2?-30.f:-24.f));p.add(std::make_unique<juce::AudioParameterFloat>("deqRange"+suffix,title+"dynamic range",-12,12,-3));
+   p.add(std::make_unique<juce::AudioParameterFloat>("deqAttack"+suffix,title+"attack",.1f,100,std::array<float,3>{25,10,3}[i]));p.add(std::make_unique<juce::AudioParameterFloat>("deqRelease"+suffix,title+"release",10,1000,std::array<float,3>{180,120,80}[i]));p.add(std::make_unique<juce::AudioParameterBool>("deqBandOn"+suffix,title+"enabled",true));
+  }
+  number("stereoAirWidth","Stereo air width",0,2,1);number("stereoTopSplit","Stereo top crossover",5000,16000,8000);
+ }
+ void updateModules(){
+  auto v=[&](size_t i){return parameters[i]->load();};
+  stereo.settings({v(88)>.5f&&v(89)>.5f,v(95)>.5f,v(96)>.5f,v(90),v(91),v(92),v(93),v(94),v(97),v(136),v(137)});
+  dynamics.settings({v(98)>.5f&&v(99)>.5f,v(100)>.5f,v(101),v(102),v(103),v(104),v(105),v(106),v(107),v(108),v(109)});
+  masterlab::DynamicEqSettings c;c.enabled=v(110)>.5f&&v(111)>.5f;for(size_t i=0;i<3;++i){size_t k=112+i*8;c.bands[i]={v(k),v(k+1),v(k+2),v(k+3),v(k+4),v(k+5),v(k+6),v(k+7)>.5f};}dynamicEq.settings(c);
+ }
+ Processor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,&undoManager,"MasterLab",layout()){state.state.setProperty("schemaVersion",4,nullptr);state.state.setProperty("eqInstanceId","eq-0001",nullptr);state.state.setProperty("limiterInstanceId","limiter-0001",nullptr);state.state.setProperty("dynamicEqInstanceId","dynamic-eq-0001",nullptr);state.state.setProperty("dynamicsInstanceId","dynamics-0001",nullptr);state.state.setProperty("stereoInstanceId","stereo-0001",nullptr);const char* ids[]={"frequency","gain","q","ceiling","eq","lim","order"};for(size_t i=0;i<7;++i)parameters[i]=state.getRawParameterValue(ids[i]);for(int k=2;k<=16;++k){int offset=7+(k-2)*3;const auto suffix=juce::String(k);parameters[offset]=state.getRawParameterValue("frequency"+suffix);parameters[offset+1]=state.getRawParameterValue("gain"+suffix);parameters[offset+2]=state.getRawParameterValue("q"+suffix);}
  parameters[52]=state.getRawParameterValue("limiterDrive");parameters[53]=state.getRawParameterValue("limiterRelease");
- for(int k=1;k<=16;++k){parameters[54+(k-1)*2]=state.getRawParameterValue("bandType"+juce::String(k));parameters[55+(k-1)*2]=state.getRawParameterValue("bandEnabled"+juce::String(k));}}
+ for(int k=1;k<=16;++k){parameters[54+(k-1)*2]=state.getRawParameterValue("bandType"+juce::String(k));parameters[55+(k-1)*2]=state.getRawParameterValue("bandEnabled"+juce::String(k));}
+ for(size_t i=0;i<masterlab::moduleParameterIds.size();++i)parameters[86+i]=state.getRawParameterValue(masterlab::moduleParameterIds[i]);}
  const juce::String getName()const override{return "JerzyMasterLabX";}
  bool acceptsMidi()const override{return false;}bool producesMidi()const override{return false;}double getTailLengthSeconds()const override{return .1;}
  int getNumPrograms()override{return 1;}int getCurrentProgram()override{return 0;}void setCurrentProgram(int)override{}const juce::String getProgramName(int)override{return "Default";}void changeProgramName(int,const juce::String&)override{}
  bool isBusesLayoutSupported(const BusesLayout& l)const override{return l.getMainInputChannelSet()==juce::AudioChannelSet::stereo()&&l.getMainOutputChannelSet()==juce::AudioChannelSet::stereo();}
- void prepareToPlay(double sr,int)override{engine.parameters(parameters[0]->load(),parameters[1]->load(),parameters[2]->load(),parameters[3]->load(),parameters[4]->load()>.5f,parameters[5]->load()>.5f);engine.limiterParameters(parameters[52]->load(),parameters[53]->load());for(size_t k=0;k<16;++k)engine.setBandMode(k,static_cast<masterlab::FilterType>(static_cast<int>(parameters[54+k*2]->load())),parameters[55+k*2]->load()>.5f);engine.prepare(sr,parameters[6]->load()>.5f);displayRate.store(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000);limiterMeter.prepare(displayRate.load());inputMeter.prepare(displayRate.load());outputMeter.prepare(displayRate.load());inputLoudness.prepare(displayRate.load());outputLoudness.prepare(displayRate.load());brain.prepare(displayRate.load());setLatencySamples(engine.latency());for(auto& channel:hostDryDelay)channel.assign(static_cast<size_t>(engine.latency()+1),0);hostDryPosition=0;hostBypassMix=0;hostBypassTarget=false;hostBypassStep=static_cast<float>(1/(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr*.02:960.));}
- void releaseResources()override{}void reset()override{brain.cancelRT();engine.reset();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;}
+ void prepareToPlay(double sr,int)override{engine.parameters(parameters[0]->load(),parameters[1]->load(),parameters[2]->load(),parameters[3]->load(),parameters[4]->load()>.5f&&parameters[86]->load()>.5f,parameters[5]->load()>.5f&&parameters[87]->load()>.5f);engine.limiterParameters(parameters[52]->load(),parameters[53]->load());for(size_t k=0;k<16;++k)engine.setBandMode(k,static_cast<masterlab::FilterType>(static_cast<int>(parameters[54+k*2]->load())),parameters[55+k*2]->load()>.5f);engine.prepare(sr,parameters[6]->load()>.5f);displayRate.store(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000);limiterMeter.prepare(displayRate.load());inputMeter.prepare(displayRate.load());outputMeter.prepare(displayRate.load());inputLoudness.prepare(displayRate.load());outputLoudness.prepare(displayRate.load());brain.prepare(displayRate.load());updateModules();stereo.prepare(displayRate.load());dynamics.prepare(displayRate.load());dynamicEq.prepare(displayRate.load());setLatencySamples(engine.latency());for(auto& channel:hostDryDelay)channel.assign(static_cast<size_t>(engine.latency()+1),0);hostDryPosition=0;hostBypassMix=0;hostBypassTarget=false;hostBypassStep=static_cast<float>(1/(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr*.02:960.));}
+ void releaseResources()override{}void reset()override{brain.cancelRT();engine.reset();updateModules();stereo.reset();dynamics.reset();dynamicEq.reset();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;}
  void processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,false);}
  void processBlockBypassed(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,true);}
  void renderAudio(juce::AudioBuffer<float>& b,bool hostBypassed){
  juce::ScopedNoDenormals noDenormals;if(b.getNumChannels()<2)return;
  if(resetMeterRequest.exchange(false)){inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();}
  auto value=[&](size_t index){return parameters[index]->load();};
+ updateModules();
  engine.limiterParameters(value(52),value(53));
- engine.parameters(value(0),value(1),value(2),value(3),value(4)>.5f,value(5)>.5f);
+ engine.parameters(value(0),value(1),value(2),value(3),value(4)>.5f&&value(86)>.5f,value(5)>.5f&&value(87)>.5f);
  for(size_t k=1;k<16;++k){size_t offset=7+(k-1)*3;engine.setBand(k,value(offset),value(offset+1),value(offset+2));}
  for(size_t k=0;k<16;++k)engine.setBandMode(k,static_cast<masterlab::FilterType>(static_cast<int>(value(54+k*2))),value(55+k*2)>.5f);
  hostBypassTarget=hostBypassed;
@@ -71,6 +104,7 @@ public:
  for(int offset=0;offset<b.getNumSamples();){int length=std::min(128,b.getNumSamples()-offset);
   for(int i=0;i<length;++i){size_t read=(hostDryPosition+1)%hostDryDelay[0].size();for(int c=0;c<2;++c){inputScratch[c][i]=masterlab::clean(b.getSample(c,offset+i));hostDryDelay[c][hostDryPosition]=inputScratch[c][i];hostDryScratch[c][i]=hostDryDelay[c][read];}hostDryPosition=read;}
   brain.capture(inputScratch[0].data(),inputScratch[1].data(),length);
+  dynamicEq.process(b.getWritePointer(0,offset),b.getWritePointer(1,offset),length);dynamics.process(b.getWritePointer(0,offset),b.getWritePointer(1,offset),length);stereo.process(b.getWritePointer(0,offset),b.getWritePointer(1,offset),length);
   engine.process(b.getWritePointer(0,offset),b.getWritePointer(1,offset),length,value(6)>.5f,limiterGainTrace.data());
   for(int i=0;i<length;++i){hostBypassMix=hostBypassed?std::min(1.f,hostBypassMix+hostBypassStep):std::max(0.f,hostBypassMix-hostBypassStep);limiterGainTrace[i]+=hostBypassMix*(1-limiterGainTrace[i]);for(int c=0;c<2;++c){float wet=b.getSample(c,offset+i);b.setSample(c,offset+i,wet+hostBypassMix*(hostDryScratch[c][i]-wet));}}
   for(int i=0;i<length;++i){
@@ -87,7 +121,7 @@ public:
  }
  int responseStart,responseCount,responseStart2,responseCount2;
  responseFifo.prepareToWrite(1,responseStart,responseCount,responseStart2,responseCount2);
- if(responseCount+responseCount2){int index=responseCount?responseStart:responseStart2;engine.copyEqCoefficients(responses[index].bands);engine.copyBandBlends(responses[index].blends);responses[index].rate=displayRate.load();responses[index].eqMix=engine.eqBlend();responses[index].inputReading=inputMeter.read();responses[index].outputReading=outputMeter.read();responses[index].inputLufs=inputLoudness.read();responses[index].outputLufs=outputLoudness.read();}
+ if(responseCount+responseCount2){int index=responseCount?responseStart:responseStart2;engine.copyEqCoefficients(responses[index].bands);engine.copyBandBlends(responses[index].blends);responses[index].stereo=stereo.read();responses[index].dynamics=dynamics.read();responses[index].dynamicGain=dynamicEq.read();responses[index].dynamicBlends=dynamicEq.bandBlends();dynamicEq.coefficients(responses[index].dynamicBands);responses[index].rate=displayRate.load();responses[index].eqMix=engine.eqBlend();responses[index].inputReading=inputMeter.read();responses[index].outputReading=outputMeter.read();responses[index].inputLufs=inputLoudness.read();responses[index].outputLufs=outputLoudness.read();}
  responseFifo.finishedWrite(responseCount+responseCount2);
  const auto reading=outputMeter.read();peak.store(reading.peak);rms.store(reading.rms);correlation.store(reading.correlation);
  int s1,n1,s2,n2;fifo.prepareToWrite(b.getNumSamples(),s1,n1,s2,n2);
@@ -120,7 +154,7 @@ public:
  }
  void startBrainUI(masterlab::BrainConfig config){
   brainBaseline.clear();for(auto* parameter:parameters)brainBaseline.push_back(parameter->load());
-  config.existingEqEnabled=parameters[4]->load()>.5f;
+  config.existingEqEnabled=parameters[4]->load()>.5f&&parameters[86]->load()>.5f;config.dynamicsMode=static_cast<int>(parameters[100]->load());
   for(size_t i=0;i<16;++i){size_t offset=i==0?0:7+(i-1)*3;config.existingEq[i]={parameters[offset]->load(),parameters[offset+1]->load(),parameters[offset+2]->load(),static_cast<int>(parameters[54+i*2]->load()),parameters[55+i*2]->load()>.5f};}
   brain.startUI(config);
  }
