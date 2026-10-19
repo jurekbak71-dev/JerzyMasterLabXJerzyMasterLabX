@@ -8,6 +8,10 @@ import pedalboard
 
 RATE=48000
 
+def plugin_location(path):
+    # Some Windows VST3 hosts scan the module file rather than the bundle directory.
+    return path/'Contents/x86_64-win/JerzyMasterLabX.vst3' if platform.system()=='Windows' else path
+
 def source(kind):
     rng=np.random.default_rng(57994+kind)
     duration=22; n=duration*RATE; t=np.arange(n)/RATE
@@ -66,7 +70,7 @@ def measure(path):
     return out
 
 def plugin(path,kind):
-    p=load_plugin(str(path))
+    p=load_plugin(str(plugin_location(path)))
     def raw(key,v):p.parameters[key].raw_value=float(v)
     for band in range(1,17):raw(f'band_{band}_enabled',0)
     # Fixed, documented manual processing; not an automatic mastering claim.
@@ -84,7 +88,7 @@ def main():
     binary=args.plugin/('Contents/x86_64-win/JerzyMasterLabX.vst3' if platform.system()=='Windows' else 'Contents/x86_64-linux/JerzyMasterLabX.so')
     manifest={'platform':platform.system(),'sample_rate':RATE,'pcm_bits':24,'source':'Original deterministic synthetic musical fixtures; no commercial recordings.','plugin_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),'pedalboard':pedalboard.__version__,'numpy':np.__version__,'tests':{},'examples':[],'known_limit':'Sample-peak limiter, not True Peak; direct outputs are not peak-normalized.'}
     # Check host PDC after its first sample-rate initialization, without modifying files afterwards.
-    dry=load_plugin(str(args.plugin));dry.eq_enabled=False;dry.limiter_enabled=False
+    dry=load_plugin(str(plugin_location(args.plugin)));dry.eq_enabled=False;dry.limiter_enabled=False
     dry(np.zeros((2,RATE),np.float32),RATE,buffer_size=256)
     impulse=np.zeros((2,RATE),np.float32);impulse[:,12000]=.1
     result=dry(impulse,RATE,buffer_size=256)
