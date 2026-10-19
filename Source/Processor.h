@@ -3,6 +3,8 @@
 #include <juce_dsp/juce_dsp.h>
 #include "Dsp.h"
 #include "LimiterMeter.h"
+#include "WindowMeter.h"
+#include "LoudnessMeter.h"
 #include "StateValidation.h"
 class Processor final: public juce::AudioProcessor {
 public:
@@ -10,6 +12,10 @@ public:
  juce::AudioProcessorValueTreeState state;
  masterlab::RoutedEngine engine;
  masterlab::LimiterMeter limiterMeter;
+ masterlab::WindowMeter inputMeter,outputMeter;
+ masterlab::LoudnessMeter inputLoudness,outputLoudness;
+ std::atomic<bool> resetMeterRequest{false};
+ std::array<std::array<float,128>,2> inputScratch{};
  juce::AbstractFifo limiterFifo{2048};std::array<masterlab::LimiterFrame,2048> limiterFrames{};
  std::array<float,128> limiterGainTrace{};
  std::array<std::vector<float>,2> hostDryDelay;
@@ -17,7 +23,7 @@ public:
  size_t hostDryPosition=0;float hostBypassMix=0,hostBypassStep=1.f/960.f;bool hostBypassTarget=false;
  std::array<std::atomic<float>*,86> parameters{};
  juce::AbstractFifo fifo{8192};std::array<float,8192> traceL{},traceR{};
- struct ResponseFrame {std::array<masterlab::Biquad,16> bands;std::array<float,16> blends{};double rate=48000;float eqMix=1;};
+ struct ResponseFrame {std::array<masterlab::Biquad,16> bands;std::array<float,16> blends{};double rate=48000;float eqMix=1;masterlab::MeterReading inputReading,outputReading;masterlab::LoudnessReading inputLufs,outputLufs;};
  juce::AbstractFifo responseFifo{4};std::array<ResponseFrame,4> responses{};
  std::atomic<double> displayRate{48000};
  std::atomic<float> peak{0},rms{0},correlation{0};
@@ -45,12 +51,13 @@ public:
  bool acceptsMidi()const override{return false;}bool producesMidi()const override{return false;}double getTailLengthSeconds()const override{return .1;}
  int getNumPrograms()override{return 1;}int getCurrentProgram()override{return 0;}void setCurrentProgram(int)override{}const juce::String getProgramName(int)override{return "Default";}void changeProgramName(int,const juce::String&)override{}
  bool isBusesLayoutSupported(const BusesLayout& l)const override{return l.getMainInputChannelSet()==juce::AudioChannelSet::stereo()&&l.getMainOutputChannelSet()==juce::AudioChannelSet::stereo();}
- void prepareToPlay(double sr,int)override{engine.parameters(parameters[0]->load(),parameters[1]->load(),parameters[2]->load(),parameters[3]->load(),parameters[4]->load()>.5f,parameters[5]->load()>.5f);engine.limiterParameters(parameters[52]->load(),parameters[53]->load());for(size_t k=0;k<16;++k)engine.setBandMode(k,static_cast<masterlab::FilterType>(static_cast<int>(parameters[54+k*2]->load())),parameters[55+k*2]->load()>.5f);engine.prepare(sr,parameters[6]->load()>.5f);displayRate.store(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000);limiterMeter.prepare(displayRate.load());setLatencySamples(engine.latency());for(auto& channel:hostDryDelay)channel.assign(static_cast<size_t>(engine.latency()+1),0);hostDryPosition=0;hostBypassMix=0;hostBypassTarget=false;hostBypassStep=static_cast<float>(1/(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr*.02:960.));}
- void releaseResources()override{}void reset()override{engine.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;}
+ void prepareToPlay(double sr,int)override{engine.parameters(parameters[0]->load(),parameters[1]->load(),parameters[2]->load(),parameters[3]->load(),parameters[4]->load()>.5f,parameters[5]->load()>.5f);engine.limiterParameters(parameters[52]->load(),parameters[53]->load());for(size_t k=0;k<16;++k)engine.setBandMode(k,static_cast<masterlab::FilterType>(static_cast<int>(parameters[54+k*2]->load())),parameters[55+k*2]->load()>.5f);engine.prepare(sr,parameters[6]->load()>.5f);displayRate.store(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000);limiterMeter.prepare(displayRate.load());inputMeter.prepare(displayRate.load());outputMeter.prepare(displayRate.load());inputLoudness.prepare(displayRate.load());outputLoudness.prepare(displayRate.load());setLatencySamples(engine.latency());for(auto& channel:hostDryDelay)channel.assign(static_cast<size_t>(engine.latency()+1),0);hostDryPosition=0;hostBypassMix=0;hostBypassTarget=false;hostBypassStep=static_cast<float>(1/(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr*.02:960.));}
+ void releaseResources()override{}void reset()override{engine.reset();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;}
  void processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,false);}
  void processBlockBypassed(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,true);}
  void renderAudio(juce::AudioBuffer<float>& b,bool hostBypassed){
  juce::ScopedNoDenormals noDenormals;if(b.getNumChannels()<2)return;
+ if(resetMeterRequest.exchange(false)){inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();}
  auto value=[&](size_t index){return parameters[index]->load();};
  engine.limiterParameters(value(52),value(53));
  engine.parameters(value(0),value(1),value(2),value(3),value(4)>.5f,value(5)>.5f);
@@ -59,10 +66,11 @@ public:
  hostBypassTarget=hostBypassed;
  if(hostDryDelay[0].empty()){b.clear();return;}
  for(int offset=0;offset<b.getNumSamples();){int length=std::min(128,b.getNumSamples()-offset);
-  for(int i=0;i<length;++i){size_t read=(hostDryPosition+1)%hostDryDelay[0].size();for(int c=0;c<2;++c){hostDryDelay[c][hostDryPosition]=masterlab::clean(b.getSample(c,offset+i));hostDryScratch[c][i]=hostDryDelay[c][read];}hostDryPosition=read;}
+  for(int i=0;i<length;++i){size_t read=(hostDryPosition+1)%hostDryDelay[0].size();for(int c=0;c<2;++c){inputScratch[c][i]=masterlab::clean(b.getSample(c,offset+i));hostDryDelay[c][hostDryPosition]=inputScratch[c][i];hostDryScratch[c][i]=hostDryDelay[c][read];}hostDryPosition=read;}
   engine.process(b.getWritePointer(0,offset),b.getWritePointer(1,offset),length,value(6)>.5f,limiterGainTrace.data());
   for(int i=0;i<length;++i){hostBypassMix=hostBypassed?std::min(1.f,hostBypassMix+hostBypassStep):std::max(0.f,hostBypassMix-hostBypassStep);limiterGainTrace[i]+=hostBypassMix*(1-limiterGainTrace[i]);for(int c=0;c<2;++c){float wet=b.getSample(c,offset+i);b.setSample(c,offset+i,wet+hostBypassMix*(hostDryScratch[c][i]-wet));}}
   for(int i=0;i<length;++i){
+   inputMeter.push(inputScratch[0][i],inputScratch[1][i]);outputMeter.push(b.getSample(0,offset+i),b.getSample(1,offset+i));inputLoudness.push(inputScratch[0][i],inputScratch[1][i]);outputLoudness.push(b.getSample(0,offset+i),b.getSample(1,offset+i));
    masterlab::LimiterFrame frame;
    // The reported envelope includes module and host bypass and route crossfades.
    if(limiterMeter.push(limiterGainTrace[i],b.getSample(0,offset+i),b.getSample(1,offset+i),frame)){
@@ -75,11 +83,9 @@ public:
  }
  int responseStart,responseCount,responseStart2,responseCount2;
  responseFifo.prepareToWrite(1,responseStart,responseCount,responseStart2,responseCount2);
- if(responseCount+responseCount2){int index=responseCount?responseStart:responseStart2;engine.copyEqCoefficients(responses[index].bands);engine.copyBandBlends(responses[index].blends);responses[index].rate=displayRate.load();responses[index].eqMix=engine.eqBlend();}
+ if(responseCount+responseCount2){int index=responseCount?responseStart:responseStart2;engine.copyEqCoefficients(responses[index].bands);engine.copyBandBlends(responses[index].blends);responses[index].rate=displayRate.load();responses[index].eqMix=engine.eqBlend();responses[index].inputReading=inputMeter.read();responses[index].outputReading=outputMeter.read();responses[index].inputLufs=inputLoudness.read();responses[index].outputLufs=outputLoudness.read();}
  responseFifo.finishedWrite(responseCount+responseCount2);
- double ll=0,rr=0,lr=0;float pk=0;
- for(int i=0;i<b.getNumSamples();++i){float l=b.getSample(0,i),r=b.getSample(1,i);ll+=l*l;rr+=r*r;lr+=l*r;pk=std::max(pk,std::max(std::abs(l),std::abs(r)));}
- peak.store(pk);rms.store(static_cast<float>(std::sqrt((ll+rr)/std::max(1,2*b.getNumSamples()))));correlation.store(static_cast<float>(lr/std::sqrt(std::max(1e-20,ll*rr))));
+ const auto reading=outputMeter.read();peak.store(reading.peak);rms.store(reading.rms);correlation.store(reading.correlation);
  int s1,n1,s2,n2;fifo.prepareToWrite(b.getNumSamples(),s1,n1,s2,n2);
  for(int j=0;j<n1;++j){traceL[s1+j]=b.getSample(0,j);traceR[s1+j]=b.getSample(1,j);}for(int j=0;j<n2;++j){traceL[s2+j]=b.getSample(0,n1+j);traceR[s2+j]=b.getSample(1,n1+j);}fifo.finishedWrite(n1+n2);
  }

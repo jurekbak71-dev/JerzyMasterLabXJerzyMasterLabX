@@ -17,20 +17,61 @@ class Editor final : public juce::AudioProcessorEditor,
     juce::ToggleButton bandEnabled{"Band"};
     std::unique_ptr<ComboAttachment> typeAttachment;
     std::unique_ptr<ButtonAttachment> bandEnabledAttachment;
+    juce::TextButton resetMetersButton{"RESET METERS"};
     juce::TextButton undoButton{"UNDO"},redoButton{"REDO"},presetButton{"PRESET"};
     std::unique_ptr<juce::FileChooser> presetChooser;
-    juce::TextButton eqView{"SPECTRAL EQ"}, limiterView{"LIMITER"};
-    bool showingLimiter=false;
+    juce::TextButton eqView{"SPECTRAL EQ"}, limiterView{"LIMITER"}, inspectorView{"INSPECTOR"};
+    bool showingLimiter=false,showingInspector=false;
     std::array<masterlab::LimiterFrame,1000> limiterHistory{};
     size_t historyHead=0,historyCount=0;
     double lastLimiterUpdate=0;
     void showLimiter(bool enabled){
-        endDrag();showingLimiter=enabled;
+        endDrag();resetMetersButton.setVisible(false);showingInspector=false;showingLimiter=enabled;inspectorView.setToggleState(false,juce::dontSendNotification);
         for(auto* component:std::array<juce::Component*,11>{&bandChoice,&fftChoice,&frequency,&gain,&quality,&frequencyLabel,&gainLabel,&qualityLabel,&eqEnabled,&ceiling,&ceilingLabel})component->setVisible(!enabled);
         typeChoice.setVisible(!enabled);bandEnabled.setVisible(!enabled);
         ceiling.setVisible(true);ceilingLabel.setVisible(true);
         drive.setVisible(enabled);driveLabel.setVisible(enabled);release.setVisible(enabled);releaseLabel.setVisible(enabled);
         eqView.setToggleState(!enabled,juce::dontSendNotification);limiterView.setToggleState(enabled,juce::dontSendNotification);repaint();
+    }
+    void showInspector(){
+        endDrag();resetMetersButton.setVisible(true);showingInspector=true;showingLimiter=false;
+        for(auto* component:std::initializer_list<juce::Component*>{&frequency,&gain,&quality,&ceiling,&drive,&release,&frequencyLabel,&gainLabel,&qualityLabel,&ceilingLabel,&driveLabel,&releaseLabel,&bandChoice,&fftChoice,&typeChoice,&bandEnabled,&eqEnabled,&limiterEnabled})component->setVisible(false);
+        eqView.setToggleState(false,juce::dontSendNotification);limiterView.setToggleState(false,juce::dontSendNotification);inspectorView.setToggleState(true,juce::dontSendNotification);repaint();
+    }
+    juce::String dbText(float level) const {return level>1e-10f?juce::String(juce::Decibels::gainToDecibels(level),1):juce::String("--");}
+    juce::String lufsText(float value) const {return value>-119?juce::String(value,1):juce::String("--");}
+    void paintInspector(juce::Graphics& g){
+        auto area=plot();const bool compact=area.getHeight()<220;
+        g.setColour(muted);g.setFont(12);g.drawText("MASTER INSPECTOR  /  INPUT - OUTPUT",48,144,getWidth()-300,20,juce::Justification::left);
+        for(int i=0;i<2;++i){auto reading=i==0?response.inputReading:response.outputReading;auto loudness=i==0?response.inputLufs:response.outputLufs;float x=24.f+i*(area.getWidth()+48)/2,w=(area.getWidth()+48)/2-10;
+            g.setColour(panel);g.fillRoundedRectangle(x,162,w,area.getHeight()+24,8);
+            g.setColour(i==0?muted:accent);g.setFont(13);g.drawText(i==0?"INPUT":"OUTPUT",static_cast<int>(x)+16,176,static_cast<int>(w)-32,20,juce::Justification::left);
+            g.setColour(reading.peak>1?juce::Colour(0xffee927f):juce::Colours::whitesmoke);g.setFont(compact?26.f:38.f);g.drawText(dbText(reading.peak),static_cast<int>(x)+16,compact?200:204,static_cast<int>(w)-32,44,juce::Justification::left);
+            g.setColour(muted);g.setFont(11);g.drawText("SAMPLE PEAK / dBFS",static_cast<int>(x)+16,244,static_cast<int>(w)-32,18,juce::Justification::left);
+            const float barY=compact?270.f:280.f;float normal=juce::jlimit(0.f,1.f,(juce::Decibels::gainToDecibels(reading.peak,-60.f)+60)/60);
+            g.setColour(juce::Colour(0xff0a1119));g.fillRoundedRectangle(x+16,barY,w-32,8,4);g.setColour(i==0?curve:accent);g.fillRoundedRectangle(x+16,barY,(w-32)*normal,8,4);
+            g.setColour(muted);g.setFont(12);g.drawText("RMS (400 ms)  "+dbText(reading.rms)+" dBFS",static_cast<int>(x)+16,compact?287:312,static_cast<int>(w)-32,22,juce::Justification::left);
+            if(!compact){g.drawText("MOMENTARY  "+lufsText(loudness.momentary)+" LUFS",static_cast<int>(x)+16,340,static_cast<int>(w)-32,20,juce::Justification::left);
+                g.drawText("SHORT-TERM  "+lufsText(loudness.shortTerm)+" LUFS",static_cast<int>(x)+16,366,static_cast<int>(w)-32,20,juce::Justification::left);
+                if(area.getHeight()>290){g.setColour(reading.clippedSamples?juce::Colour(0xffee927f):muted);g.drawText("CLIP SAMPLES  "+juce::String(reading.clippedSamples),static_cast<int>(x)+16,404,static_cast<int>(w)-32,20,juce::Justification::left);
+                    g.setColour(muted);}
+            }
+        }
+        int x=getWidth()-218;g.setColour(panel);g.fillRoundedRectangle(static_cast<float>(x),162,194,area.getHeight()+36,8);g.setColour(muted);g.setFont(12);g.drawText("STEREO / OUTPUT",x+16,176,162,20,juce::Justification::left);
+        float radius=compact?42.f:56.f,cx=x+97.f,cy=compact?242.f:260.f;
+        g.setColour(juce::Colour(0xff3c4c5c));g.drawEllipse(cx-radius,cy-radius,radius*2,radius*2,1);g.drawLine(cx-radius,cy,cx+radius,cy);g.drawLine(cx,cy-radius,cx,cy+radius);
+        {juce::Graphics::ScopedSaveState save(g);g.reduceClipRegion(juce::Rectangle<float>(cx-radius,cy-radius,radius*2,radius*2).toNearestInt());g.setColour(accent.withAlpha(.5f));for(auto point:scope)g.fillEllipse(cx+point.x*radius-1,cy-point.y*radius-1,2,2);}
+        g.setColour(juce::Colours::whitesmoke);g.setFont(14);g.drawText("CORR  "+juce::String(response.outputReading.correlation,3),x+16,static_cast<int>(cy+radius)+12,162,24,juce::Justification::left);
+        if(!compact){g.setColour(muted);g.setFont(12);g.drawText("MID  "+dbText(response.outputReading.midRms)+" dBFS",x+16,360,162,20,juce::Justification::left);g.drawText("SIDE  "+dbText(response.outputReading.sideRms)+" dBFS",x+16,386,162,20,juce::Justification::left);
+            if(area.getHeight()>290)g.drawText("HEADROOM  "+(response.outputReading.peak>0?juce::String(-juce::Decibels::gainToDecibels(response.outputReading.peak),1):juce::String("--"))+" dB",x+16,430,162,20,juce::Justification::left);
+        }
+        const int dock=getHeight()-174,cell=(getWidth()-64)/4;
+        for(int i=0;i<4;++i){int left=40+i*cell;g.setColour(muted);g.setFont(12);g.drawText(std::array<const char*,4>{"INPUT LUFS-I","OUTPUT LUFS-I","CORRELATION","ENERGY BALANCE"}[i],left,dock+14,cell-32,20,juce::Justification::left);
+            auto reading=response.outputReading;juce::String text=i==0?lufsText(response.inputLufs.integrated):(i==1?lufsText(response.outputLufs.integrated):(i==2?juce::String(reading.correlation,3):(std::abs(reading.balance)<.001f?juce::String("CENTER"):juce::String(reading.balance<0?"L ":"R ")+juce::String(std::abs(reading.balance)*100,1)+"%")));
+            g.setColour(i>=2?accent:juce::Colours::whitesmoke);g.setFont(26);g.drawText(text,left,dock+43,cell-32,38,juce::Justification::left);
+            g.setColour(muted);g.setFont(11);g.drawText(i<2?"LUFS / gated integrated":(i==2?"-1 ... +1":"(R energy - L) / total"),left,dock+101,cell-32,24,juce::Justification::left);
+        }
+        g.setColour(muted);g.setFont(11);g.drawText("LUFS: K-weighted / M 400 ms / S 3 s / I since reset   |   True Peak unavailable",24,getHeight()-25,getWidth()-48,18,juce::Justification::left);
     }
     void paintLimiter(juce::Graphics& g){
         const auto area=plot();
@@ -224,10 +265,11 @@ public:
         eqAttachment=std::make_unique<ButtonAttachment>(processor.state,"eq",eqEnabled);
         limiterAttachment=std::make_unique<ButtonAttachment>(processor.state,"lim",limiterEnabled);
         ceilingAttachment=std::make_unique<SliderAttachment>(processor.state,"ceiling",ceiling);
-        addAndMakeVisible(eqView);addAndMakeVisible(limiterView);
+        addAndMakeVisible(eqView);addAndMakeVisible(limiterView);addAndMakeVisible(inspectorView);inspectorView.setComponentID("view-inspector");inspectorView.onClick=[this]{showInspector();};
         eqView.setComponentID("view-eq");limiterView.setComponentID("view-limiter");
         eqView.onClick=[this]{showLimiter(false);};limiterView.onClick=[this]{showLimiter(true);};
         eqView.setClickingTogglesState(false);limiterView.setClickingTogglesState(false);
+        addAndMakeVisible(resetMetersButton);resetMetersButton.setComponentID("reset-meters");resetMetersButton.onClick=[this]{processor.resetMeterRequest.store(true);};resetMetersButton.setTooltip("Reset RMS, sample peaks and LUFS at the next audio callback. Audio settings and processing are preserved.");resetMetersButton.setVisible(false);
         addAndMakeVisible(undoButton);addAndMakeVisible(redoButton);addAndMakeVisible(presetButton);
         undoButton.setComponentID("undo");redoButton.setComponentID("redo");presetButton.setComponentID("preset");
         undoButton.onClick=[this]{endDrag();processor.undo();};redoButton.onClick=[this]{endDrag();processor.redo();};
@@ -253,8 +295,9 @@ public:
     }
     ~Editor() override {stopTimer();endDrag();setLookAndFeel(nullptr);}
     void resized() override {
-        presetButton.setBounds(320,14,136,26);undoButton.setBounds(320,48,64,26);redoButton.setBounds(392,48,64,26);
-        eqView.setBounds(getWidth()-270,48,120,26);limiterView.setBounds(getWidth()-142,48,118,26);
+        resetMetersButton.setBounds(getWidth()-210,136,186,26);
+        presetButton.setBounds(320,14,106,26);undoButton.setBounds(436,14,62,26);redoButton.setBounds(508,14,62,26);
+        eqView.setBounds(getWidth()-416,48,128,26);limiterView.setBounds(getWidth()-280,48,128,26);inspectorView.setBounds(getWidth()-144,48,128,26);
         const int top=getHeight()-163,width=(getWidth()-64)/4;
         for(int i=0;i<4;++i){auto* label=std::array<juce::Label*,4>{&frequencyLabel,&gainLabel,&qualityLabel,&ceilingLabel}[i];auto* slider=std::array<juce::Slider*,4>{&frequency,&gain,&quality,&ceiling}[i];label->setBounds(32+i*width,top,width-12,22);slider->setBounds(32+i*width,top+22,width-16,113);}
         driveLabel.setBounds(32,top,width-12,22);drive.setBounds(32,top+22,width-16,113);
@@ -270,7 +313,7 @@ public:
         auto* parameter=processor.state.getParameter("order");processor.beginUiTransaction("Module order");parameter->beginChangeGesture();parameter->setValueNotifyingHost(first?1.f:0.f);parameter->endChangeGesture();processor.finishUiTransaction();repaint();
     }
     void mouseDown(const juce::MouseEvent& event) override {
-        if(showingLimiter||!plot().expanded(12).contains(event.position))return;
+        if(showingInspector||showingLimiter||!plot().expanded(12).contains(event.position))return;
         int nearest=selectedBand;float distance=event.position.getDistanceFrom(node(nearest));
         for(int i=0;i<16;++i){if(i!=selectedBand&&bandType(i)==0&&std::abs(value("gain",i))<.01f)continue;float d=event.position.getDistanceFrom(node(i));if(d<distance){distance=d;nearest=i;}}
         if(distance>14)return;
@@ -292,7 +335,7 @@ public:
         if(!moved&&event.position.y>=84&&event.position.y<=132){bool first=processor.state.getRawParameterValue("order")->load()>.5f;showLimiter(event.position.x>getWidth()/2?!first:first);}
     }
     void mouseWheelMove(const juce::MouseEvent& event,const juce::MouseWheelDetails& wheel) override {
-        if(!showingLimiter&&plot().contains(event.position)&&event.position.getDistanceFrom(node(selectedBand))<24){setParameter("q",juce::jlimit(.1f,10.f,value("q",selectedBand)*std::exp(wheel.deltaY*2)),true);repaint();}
+        if(!showingInspector&&!showingLimiter&&plot().contains(event.position)&&event.position.getDistanceFrom(node(selectedBand))<24){setParameter("q",juce::jlimit(.1f,10.f,value("q",selectedBand)*std::exp(wheel.deltaY*2)),true);repaint();}
         else AudioProcessorEditor::mouseWheelMove(event,wheel);
     }
     void paint(juce::Graphics& g) override {
@@ -306,13 +349,14 @@ public:
         const int dock=getHeight()-174,cell=(getWidth()-64)/4;
         for(int i=0;i<4;++i){g.setColour(panel);g.fillRoundedRectangle(static_cast<float>(24+i*cell),static_cast<float>(dock),static_cast<float>(cell-8),146.f,7);g.setColour(juce::Colour(0xff2b3a49));g.drawRoundedRectangle(static_cast<float>(24+i*cell)+.5f,static_cast<float>(dock)+.5f,static_cast<float>(cell-9),145.f,7,1);}
         bool first=processor.state.getRawParameterValue("order")->load()>.5f;
-        for(int i=0;i<2;++i){int x=24+i*(getWidth()/2);bool isEq=i==0?!first:first,active=isEq?!showingLimiter:showingLimiter;auto colour=isEq?accent:curve;
+        for(int i=0;i<2;++i){int x=24+i*(getWidth()/2);bool isEq=i==0?!first:first,active=!showingInspector&&(isEq?!showingLimiter:showingLimiter);auto colour=isEq?accent:curve;
             g.setColour(active?juce::Colour(0xff20323c):panel);g.fillRoundedRectangle(static_cast<float>(x),84.f,getWidth()*.5f-48,48,6);
             g.setColour(active?colour:juce::Colour(0xff354553));g.drawRoundedRectangle(static_cast<float>(x)+.5f,84.5f,getWidth()*.5f-49,47,6,1);
             g.setColour(colour);g.setFont(12);g.drawText("0"+juce::String(i+1),x+12,92,30,24,juce::Justification::left);
             g.setColour(juce::Colours::whitesmoke);g.setFont(juce::Font(juce::FontOptions(15.f,juce::Font::bold)));g.drawText(isEq?"SPECTRAL EQ":"LIMITER",x+50,90,getWidth()/2-116,22,juce::Justification::left);
             g.setColour(muted);g.setFont(11);g.drawText(isEq?"16-band EQ  /  drag to reorder":"Lookahead dynamics  /  drag to reorder",x+50,111,getWidth()/2-116,16,juce::Justification::left);
         }
+        if(showingInspector){paintInspector(g);return;}
         if(showingLimiter){paintLimiter(g);g.setColour(first?curve:muted);g.setFont(11);g.drawText(first?"EQ follows limiter: final output may exceed limiter ceiling":"SAMPLE PEAK  /  True Peak unavailable",24,getHeight()-25,getWidth()-48,18,juce::Justification::left);return;}
         auto area=plot();g.setColour(juce::Colour(0xff141c26));g.fillRoundedRectangle(area.expanded(24,12),8);
         g.setFont(11);
@@ -330,7 +374,7 @@ public:
         const float radius=std::min(56.f,(getHeight()-488.f)*.5f),cx=inspectorX+97.f,cy=204.f+radius;g.setColour(juce::Colour(0xff3c4c5c));g.drawEllipse(cx-radius,cy-radius,2*radius,2*radius,1);g.drawLine(cx-radius,cy,cx+radius,cy);g.drawLine(cx,cy-radius,cx,cy+radius);
         {juce::Graphics::ScopedSaveState save(g);g.reduceClipRegion(juce::Rectangle<int>(inspectorX+24,204,146,static_cast<int>(radius*2)));g.setColour(accent.withAlpha(.45f));for(auto point:scope)g.fillEllipse(cx+point.x*radius-1,cy-point.y*radius-1,2,2);}
         g.setColour(juce::Colours::whitesmoke);g.drawText("CORR "+juce::String(processor.correlation.load(),3),inspectorX+12,static_cast<int>(cy+radius+10),170,20,juce::Justification::left);
-        g.setColour(muted);g.setFont(11);g.drawText("5 ms lookahead / sample peak",inspectorX+12,static_cast<int>(cy+radius+34),170,20,juce::Justification::left);
+        g.setColour(muted);g.setFont(11);g.drawText("400 ms sliding / output",inspectorX+12,static_cast<int>(cy+radius+34),170,20,juce::Justification::left);
         const float correlation=juce::jlimit(-1.f,1.f,processor.correlation.load());
         const float barY=cy+radius+64;
         g.setColour(juce::Colour(0xff0a1119));g.fillRoundedRectangle(inspectorX+16.f,barY,162,6,3);

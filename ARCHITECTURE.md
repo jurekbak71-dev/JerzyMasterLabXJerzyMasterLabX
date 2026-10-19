@@ -17,3 +17,6 @@ Telemetry limitera korzysta z `LimiterMeter.h`: 100 obserwacji na sekundę audio
 Schema 3 dopisuje 32 parametry (bandType1..16, bandEnabled1..16) po poprzednich 54. Migracja akceptuje wyłącznie właściwy zestaw pól danej wersji, uzupełnia brakujące wartości fabryczne i zapisuje kanoniczny schema 3. Krzywa DSP otrzymuje również 16 blendów bypassu przez istniejącą kolejkę odpowiedzi.
 
 `Processor.h` oddziela wrapper i stan od definicji edytora w `Plugin.cpp`. UndoManager jest własnością procesora i jest podłączony do APVTS. Operacje snapshot/Undo/preset są operacjami sterującymi poza callbackiem. Host restore używa replaceState i czyści historię, preset użytkownika stosuje poprawnie zwalidowane parametry jako jedną transakcję z powiadomieniami hosta.
+
+
+Każdy procesor ma niezależne `WindowMeter` i `LoudnessMeter` wejścia/wyjścia. Wszystkie bufory są alokowane w prepareToPlay; SPSC ramka odpowiedzi przenosi spójny snapshot danych do UI. Peak/RMS/correlation używane w innych panelach pochodzą teraz z okna 400 ms, a nie z bloku hosta. Reset mierników z GUI jest żądaniem atomic<bool>, wykonanym na początku callbacku bez resetowania silnika DSP. Stanu pomiarów nie zapisujemy w presetach ani projektach. Mierniki nie zależą od obecności edytora.

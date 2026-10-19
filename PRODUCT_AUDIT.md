@@ -61,3 +61,5 @@ Nie kopiować pikseli, ikon, nazw własnych algorytmów ani układów graficznyc
 - Dynamiczny łańcuch i wiele instancji przetestowane w zakresie stanu, automatyzacji, latencji i bezpieczeństwa realtime.
 - Oceniony limiter: pomiary szczytów, zniekształceń, transjentów i odsłuch przy wyrównanej głośności. Bez deklarowania przewagi nad Ozone bez testów.
 - Rzeczywisty artefakt Windows plus potwierdzone testy FL Studio opisane w FL_STUDIO_TESTS.md. Oddzielić status kompilacji od oceny produktu.
+
+Aktualizacja 19 października 2026: powyższy audyt jest historyczny. Bieżący kod zawiera dedykowane GUI, sześć typów EQ, bypass pasm, Undo/Redo, presety oraz Master Inspector z oknem 400 ms i LUFS M/S/I (testy względem FFmpeg). Bieżący zakres i ograniczenia opisują README.md, GUI_SPEC.md i DSP_DESIGN.md.

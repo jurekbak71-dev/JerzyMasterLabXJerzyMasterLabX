@@ -1,6 +1,6 @@
 # Jerzy MasterLab X
 
-Rozwojowy fundament Phase A, wersja projektu 0.1.0. Nie jest to ukończone wydanie masteringowe. Wcześniejszy commit b4405d0 miał udany workflow Windows pokazany przez użytkownika; status nowej rewizji należy sprawdzić osobno w Actions. FL Studio nadal nie zostało przetestowane.
+Rozwojowy fundament Phase A, wersja projektu 0.1.0. Nie jest to ukończone wydanie masteringowe. Windows/MSVC przeszedł dla rewizji 9b2ad22, f493e7a i 9486a48; wynik kolejnej rewizji jest publikowany w Actions. FL Studio nadal nie zostało przetestowane.
 
 Szczegółowe braki produktu i kryteria odbioru: [PRODUCT_AUDIT.md](PRODUCT_AUDIT.md). Analiza materiałów Ozone 12: [OZONE12_REVIEW.md](OZONE12_REVIEW.md).
 
@@ -8,7 +8,7 @@ Szczegółowe braki produktu i kryteria odbioru: [PRODUCT_AUDIT.md](PRODUCT_AUDI
 
 ## Obecnie zaimplementowane
 
-Stereo C++20 DSP niezależny od JUCE: 16 pasm z typami Bell/Low Shelf/High Shelf/High Pass/Low Pass/Notch i niezależnym płynnym bypassem, szereg EQ/limiter lub limiter/EQ, bypass z przejściem 20 ms, stereo-linked sample-peak limiter z opóźnieniem 5 ms i zabezpieczeniem ceiling. Wrapper JUCE 8.0.6: parametry automatyzacji, XML state z walidacją kompletności i zakresów, stałe zgłaszanie latencji, pomiar output peak/RMS/correlation, rzeczywisty FFT 4096–32768 energii L/R i vectorscope, dedykowany edytor EQ z węzłami drag, regulacją Q kółkiem i krzywą z aktualnych współczynników DSP. Kolejność limiter/EQ może podnieść końcowy poziom powyżej ceiling.
+Stereo C++20 DSP niezależny od JUCE: 16 pasm z typami Bell/Low Shelf/High Shelf/High Pass/Low Pass/Notch i niezależnym płynnym bypassem, szereg EQ/limiter lub limiter/EQ, bypass z przejściem 20 ms, stereo-linked sample-peak limiter z opóźnieniem 5 ms i zabezpieczeniem ceiling. Wrapper JUCE 8.0.6: parametry automatyzacji, XML state z walidacją kompletności i zakresów, stałe zgłaszanie latencji, pomiary input/output w oknie 400 ms oraz LUFS M/S/I, rzeczywisty FFT 4096–32768 energii L/R i vectorscope, dedykowany edytor EQ z węzłami drag, regulacją Q kółkiem i krzywą z aktualnych współczynników DSP. Kolejność limiter/EQ może podnieść końcowy poziom powyżej ceiling.
 
 Limiter jest wczesnym rozwiązaniem sample-peak z końcowym twardym ograniczeniem, które może zniekształcać. Nie zapewnia True Peak ani kontroli aliasingu. Zmiana kolejności korzysta z 20 ms crossfade dwóch stale aktywnych torów z wyrównaną latencją. Bypass hosta ma osobny, opóźniony tor dry i takie samo płynne przejście. Utrzymywanie obu torów zwiększa CPU. Używaj wyłącznie do prac rozwojowych i odsłuchów kontrolnych.
 
@@ -57,3 +57,14 @@ Interfejs Studio: wspólna stylistyka EQ i limitera, podświetlenie aktywnego mo
 Typ filtra wybierasz obok numeru pasma. High Pass i Low Pass mają stałe nachylenie 12 dB/oktawę; Q reguluje rezonans. W HP/LP/Notch gain jest nieużywany. Przycisk Band wyłącza wybrane pasmo płynnym przejściem 20 ms. Charakterystyka uwzględnia aktualne współczynniki i blend każdego pasma.
 
 Przyciski UNDO/REDO obsługują historię ustawień. PRESET otwiera zapis/odczyt plików `.jmlx` z całym stanem toru; wczytanie presetu można cofnąć. Przywrócenie projektu przez hosta czyści poprzednią historię Undo. Automatyzacja hosta może również trafić do historii APVTS; przed ręcznym porównaniem zatrzymaj odtwarzanie automatyki.
+
+
+## Master Inspector
+
+Trzeci widok pokazuje osobno wejście i wyjście: sample peak, nieważony RMS z przesuwanego okna 400 ms, LUFS Momentary (400 ms), Short-Term (3 s) i Integrated od początku analizy. Do tego korelacja, energia Mid/Side, balans energii, headroom i liczba próbek stereo przekraczających 0 dBFS w oknie 400 ms. Pomiar integrated obejmuje cały przebieg od przygotowania/resetu, a nie tylko widoczny fragment GUI. Brak danych lub cisza w bramkowanym pomiarze jest oznaczana `--`.
+
+**RESET METERS** rozpoczyna nowy pomiar przy następnym callbacku. Nie zmienia parametrów, PDC ani przetwarzanego audio. Mierniki działają także przy zamkniętym oknie. Odtwarzanie tego samego fragmentu w pętli wlicza go wielokrotnie do integrated; przed pomiarem całego utworu zresetuj mierniki i odtwórz cały materiał jeden raz.
+
+LUFS wykorzystuje ważenie K i podwójne bramkowanie; histogram integrated ma rozdzielczość 0,01 LU. Zestaw 16 syntetycznych przypadków porównano z FFmpeg ebur128 przy 44,1–192 kHz, z tolerancją 0,11 LU uwzględniającą zaokrąglenia referencji. To nie pełna certyfikacja BS.1770/EBU R128. LRA i True Peak pozostają niezaimplementowane; sam limiter nadal ogranicza sample peak.
+
+![Master Inspector — rzeczywisty zrzut testu GUI](docs/images/master-inspector.png)

@@ -47,7 +47,7 @@ FFT pracuje na energii L/R, więc sygnały przeciwfazowe nie znikają jak przy w
 
 ## Nadal istotnie poniżej zamówionego produktu
 
-Nadal brakuje pełnego grafu i wielu instancji, pełnego panelu dynamiki, True Peak, oversamplingu, LUFS/LRA, referencji, wyrównanego A/B, Undo/Redo, pełnych trybów EQ i imagera oraz asystenta. Nowy edytor EQ jest postępem w konkretnym module, nie odpowiednikiem kompletnego Ozone 12 Advanced. Udana kompilacja Windows nie rozstrzyga jakości odsłuchowej ani testów FL Studio.
+Nadal brakuje pełnego grafu i wielu instancji, pełnego panelu dynamiki, True Peak, oversamplingu, LRA, referencji, wyrównanego A/B, pełnych trybów EQ i imagera oraz asystenta. Nowy edytor EQ jest postępem w konkretnym module, nie odpowiednikiem kompletnego Ozone 12 Advanced. Udana kompilacja Windows nie rozstrzyga jakości odsłuchowej ani testów FL Studio.
 
 
 ## Ustalenia z podręcznika E
@@ -84,7 +84,7 @@ Nadal brakuje pełnego grafu i wielu instancji, pełnego panelu dynamiki, True P
 - **Str. 14 / PDF 23:** wybór nowego targetu po ręcznej edycji może nadpisać ustawienia. W naszym projekcie obowiązuje wymaganie użytkownika: propozycje Master Brain wymagają akceptacji; zachowanie Ozone nie znosi tego wymagania.
 - **Str. 79–81 / PDF 88–90:** Stem EQ wykorzystuje separację ML na Vocals/Bass/Drums/Other i niezależną korekcję. Nie można zastąpić go zwykłym filtrem częstotliwościowym i zachować tej samej nazwy funkcji.
 - **Str. 82–83 / PDF 91–92:** Unlimiter estymuje transjenty siecią ML; Amount reguluje rekonstrukcję. Nie daje matematycznej gwarancji odzyskania oryginalnego przebiegu po nieliniowym limitowaniu.
-- **Str. 117 / PDF 126:** metering rozróżnia RMS, Peak, momentary 400 ms, short-term 3 s i integrated. Aktualne blokowe RMS i sample peak MasterLab nie są zamiennikami tych pomiarów.
+- **Str. 117 / PDF 126:** metering rozróżnia RMS, Peak, momentary 400 ms, short-term 3 s i integrated. MasterLab ma obecnie osobne LUFS M/S/I i pomiary RMS/peak w oknie 400 ms; ich zakres i ograniczenia walidacji opisano w DSP_DESIGN.md.
 
 ## Kolejność dalszych prac i kryteria odbioru
 
@@ -102,3 +102,5 @@ Poniższa lista jest planem brakujących funkcji, nie deklaracją ich implementa
 Profesjonalna ocena brzmienia wymaga własnych pomiarów i legalnie dostępnego Ozone uruchomionego na tych samych plikach. Analiza instrukcji ustala funkcje i ergonomię; nie mierzy transparentności, artefaktów ani przewagi dźwiękowej.
 
 Aktualizacja 19 października 2026: podstawowa implementacja priorytetu 1 jest dostępna (panel, Drive, Release, ceiling, historia GR i PDC). Nie oznacza to jakości ani kompletu funkcji Maximizera. Dokładne znaczenie obwiedni i ograniczenia pomiaru opisano w DSP_DESIGN.md.
+
+Dalsza aktualizacja: dodano sześć typów filtrów, bypass pasma, Undo/Redo, presety plikowe i Master Inspector z LUFS M/S/I porównanym z FFmpeg. Nadal brak pełnej walidacji EBU, LRA, True Peak, dynamicznego grafu i pozostałych modułów.

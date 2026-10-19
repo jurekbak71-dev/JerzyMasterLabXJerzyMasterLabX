@@ -7,3 +7,8 @@
 - v1.0: testy hostów, odsłuchy, CPU/RAM, audyt licencji i paczki instalacyjne.
 
 Bez deklaracji przewagi brzmieniowej bez rzetelnych porównań.
+
+
+Postęp bieżący: 16 pasm/sześć typów EQ i bypass, limiter z historią GR i kontrolą Drive/Release, Undo/Redo, pliki presetów, Inspector wejścia/wyjścia i LUFS M/S/I, testy alokacji callbacku i referencje FFmpeg. Wszystkie moduły v0.2–v0.4 pozostają osobnymi zadaniami implementacyjnymi, nie ukończonymi pozycjami.
+
+Następne bramki Phase A: dynamiczny model instancji i routingu, walidacja całego toru na rzeczywistych WAV, długie sesje, FL Studio/FLP/PDC/offline WAV, audyt licencji. Rozwój jakości limitera: true-peak detection/control, oversampling, aliasing i testy odsłuchowe. Pomiary: rozszerzone wektory EBU, LRA i historia loudness. Dopiero potem oznaczenie pełnego wydania.

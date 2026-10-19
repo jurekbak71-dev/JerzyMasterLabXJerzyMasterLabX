@@ -21,3 +21,6 @@ Studio GUI: przebudowano oba widoki, typografię, nawigację modułów i kontrol
 EQ schema 3: sześć typów filtrów na każdym z 16 pasm, płynny bypass pasma, krzywe aktualnej odpowiedzi i migracja schema 1/2. Dodano testy DSP filtrów, integralności wyborów i kontroli GUI. Linux CTest 8/8 oraz GUI zaliczone. HP/LP mają 12 dB/oktawę; nie dodano Linear Phase, Dynamic EQ ani regulowanego slope.
 
 Dodano Undo/Redo, zapis i odczyt pełnych presetów `.jmlx` oraz testy plików, transakcji i odrzucania błędnych danych. Podział wrappera do `Processor.h`. Linux CTest 9/9, GUI i pluginval strictness 5 zaliczone.
+
+
+Master Inspector: stałe okno 400 ms dla input/output peak/RMS/correlation/M/S/balance, headroom i licznik przekroczeń. LUFS M/S/I z ważeniem K i dwiema bramkami, histogram integrated 0,01 LU i reset bez zmiany DSP. Pomiar działa bez GUI. FFmpeg ebur128: 16 referencji przy 44,1–192 kHz, 48 odczytów I/M/S w tolerancji 0,11 LU. Nie dodano LRA ani True Peak i nie deklarujemy pełnej certyfikacji standardu. CTest 13/13, ASan/UBSan 8/8, trzy widoki GUI i pluginval strictness 5 na Linux zaliczone. Windows tej rewizji wymaga osobnego CI.

@@ -1,4 +1,12 @@
-# Pomiary
+# Pomiary bieżące
+
+Aktualizacja 19 października 2026: CTest 13/13 passed; ASan/UBSan rdzenia 8/8 passed; trzy widoki GUI oraz pluginval strictness 5 na Linux zaliczone. Test Inspector obejmuje C++ new w pełnym callbacku, pomiar bez edytora, reset bez zmiany audio/PDC i zmianę sample rate. Guard nadal nie przechwytuje bezpośredniego malloc ani zewnętrznych bibliotek hosta.
+
+LUFS: 16 niezależnych wyników FFmpeg 7.1.5 ebur128 przy czterech sample rates, 48 odczytów I/M/S, tolerancja 0,11 LU; plik tests/data/loudness-reference.csv. Reprodukcja: `python tests/generate_loudness_reference.py --probe build-plugin/loudness_probe`. Generator nie zmienia CSV bez jawnego --output. Mierniki RMS/peak/M/S mają osobne testy przesuwanego okna i kalibracji. To nie komplet oficjalnych wektorów EBU ani pełna certyfikacja.
+
+Benchmark rdzenia obu aktywnych torów (bez nowych mierników wrappera), bufor 256, pięć sekund syntetycznego audio: 44,1 kHz 32,9× realtime; 48 kHz 28,7×; 96 kHz 15,1×; 192 kHz 6,44×. Wyniki ze współdzielonej maszyny i różnego obciążenia nie dowodzą przyspieszenia kodu względem poprzedniej sesji ani wydajności na Windows. Brak pełnego benchmarku CPU/RAM wrappera i długiej sesji FL Studio.
+
+## Historyczne wyniki wcześniejszych rewizji
 
 Bieżąca maszyna: Linux, GCC 14.2.0, CMake 4.4.4, Release. CTest: 1/1 passed, test obejmuje ceiling, opóźnienie impulsu, deterministyczność bloków 4096 vs 37, NaN/Inf przy 44.1/48/96/192 kHz oraz gain EQ przy 1 kHz. Dodatkowo testowana jest suma dwóch pasm (+12 dB) i brak C++ `new` w badanym wywołaniu DSP. Pełny CTest po dodaniu edytora i analizy: 6/6 passed (DSP oraz zapis/odtworzenie parametrów, PDC 240 próbek przy 48 kHz i deterministyczny render bez edytora; ponadto dokładny crossfade między rozgrzanymi torami, stała latencja, reset i niezależność od segmentacji bloków). Test wrappera obejmuje automatyzację kolejności, rozmiary bufora 1/32/257/4097 i bypass hosta przy długości bufora 8193, mimo hintu 32. Testy rdzenia z ASan/UBSan: 2/2 passed, bez zgłoszeń sanitizerów. Guard C++ new obejmuje również RoutedEngine podczas przejścia.
 

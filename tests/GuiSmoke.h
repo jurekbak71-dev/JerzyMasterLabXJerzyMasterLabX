@@ -90,6 +90,14 @@ class GuiSmoke final : private juce::Timer {
             if(historyPixels<10||reductionPixels<5){std::cerr<<"Limiter history missing from real GUI frame: "<<historyPixels<<'\n';return false;}
             if(iteration==0&&size.x==1000){auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/limiter-smoke.png");juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return false;}
         }
+        auto* inspector=dynamic_cast<juce::Button*>(editor->findChildWithID("view-inspector"));if(!inspector)return false;
+        float driveBefore=actual("limiterDrive"),gainBefore=actual("gain16");inspector->onClick();
+        if(editor->findChildWithID("limiter-ceiling")->isVisible()||frequency->isVisible())return false;
+        for(auto size:{juce::Point<int>(750,550),juce::Point<int>(1000,700),juce::Point<int>(2000,1400)}){
+            editor->setSize(size.x,size.y);if(!controlsFit())return false;auto image=editor->createComponentSnapshot(editor->getLocalBounds());if(!image.isValid())return false;
+            if(iteration==0&&size.x==1000){auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/inspector-smoke.png");juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return false;}
+        }
+        if(actual("limiterDrive")!=driveBefore||actual("gain16")!=gainBefore)return false;
         eq->onClick();if(!frequency->isVisible()||drive->isVisible()||release->isVisible())return false;
         return true;
     }
