@@ -19,3 +19,5 @@ Walidacja tego etapu w Linux: Release VST3 zbudowany, CTest 7/7, test obu widok�
 Studio GUI: przebudowano oba widoki, typografię, nawigację modułów i kontrolki; rozdzielono osie historii limitera, powiększono odczyty output i GR, dodano karty parametrów oraz peak/RMS i pasek korelacji z istniejących pomiarów. Zachowano identyfikatory parametrów, stan i DSP. Testy lokalne: build Linux VST3, CTest 7/7, ponowne otwieranie i resize obu widoków, test przecięć kontrolek i kliknięcia modułu, pluginval strictness 5 — zaliczone. Status Windows nowej rewizji wymaga wyniku Actions.
 
 EQ schema 3: sześć typów filtrów na każdym z 16 pasm, płynny bypass pasma, krzywe aktualnej odpowiedzi i migracja schema 1/2. Dodano testy DSP filtrów, integralności wyborów i kontroli GUI. Linux CTest 8/8 oraz GUI zaliczone. HP/LP mają 12 dB/oktawę; nie dodano Linear Phase, Dynamic EQ ani regulowanego slope.
+
+Dodano Undo/Redo, zapis i odczyt pełnych presetów `.jmlx` oraz testy plików, transakcji i odrzucania błędnych danych. Podział wrappera do `Processor.h`. Linux CTest 9/9, GUI i pluginval strictness 5 zaliczone.

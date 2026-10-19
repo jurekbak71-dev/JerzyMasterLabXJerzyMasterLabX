@@ -17,6 +17,8 @@ class Editor final : public juce::AudioProcessorEditor,
     juce::ToggleButton bandEnabled{"Band"};
     std::unique_ptr<ComboAttachment> typeAttachment;
     std::unique_ptr<ButtonAttachment> bandEnabledAttachment;
+    juce::TextButton undoButton{"UNDO"},redoButton{"REDO"},presetButton{"PRESET"};
+    std::unique_ptr<juce::FileChooser> presetChooser;
     juce::TextButton eqView{"SPECTRAL EQ"}, limiterView{"LIMITER"};
     bool showingLimiter=false;
     std::array<masterlab::LimiterFrame,1000> limiterHistory{};
@@ -140,17 +142,18 @@ class Editor final : public juce::AudioProcessorEditor,
     }
     void setParameter(const char* base,float number,bool completeGesture=false) {
         auto* parameter=processor.state.getParameter(parameterId(base,selectedBand));
-        if(completeGesture)parameter->beginChangeGesture();
+        if(completeGesture){processor.beginUiTransaction("EQ Q");parameter->beginChangeGesture();}
         parameter->setValueNotifyingHost(parameter->convertTo0to1(number));
-        if(completeGesture)parameter->endChangeGesture();
+        if(completeGesture){parameter->endChangeGesture();processor.finishUiTransaction();}
     }
     void endDrag() {
         if(!draggingNode)return;
         processor.state.getParameter(parameterId("frequency",selectedBand))->endChangeGesture();
         processor.state.getParameter(parameterId("gain",selectedBand))->endChangeGesture();
-        draggingNode=false;
+        draggingNode=false;processor.finishUiTransaction();
     }
     void timerCallback() override {
+        undoButton.setEnabled(processor.undoManager.canUndo());redoButton.setEnabled(processor.undoManager.canRedo());
         gain.setEnabled(gainApplies(selectedBand));gainLabel.setText(gainApplies(selectedBand)?"GAIN":"GAIN / NOT USED",juce::dontSendNotification);
         int start,count,start2,count2;
         processor.limiterFifo.prepareToRead(processor.limiterFifo.getNumReady(),start,count,start2,count2);
@@ -225,11 +228,32 @@ public:
         eqView.setComponentID("view-eq");limiterView.setComponentID("view-limiter");
         eqView.onClick=[this]{showLimiter(false);};limiterView.onClick=[this]{showLimiter(true);};
         eqView.setClickingTogglesState(false);limiterView.setClickingTogglesState(false);
+        addAndMakeVisible(undoButton);addAndMakeVisible(redoButton);addAndMakeVisible(presetButton);
+        undoButton.setComponentID("undo");redoButton.setComponentID("redo");presetButton.setComponentID("preset");
+        undoButton.onClick=[this]{endDrag();processor.undo();};redoButton.onClick=[this]{endDrag();processor.redo();};
+        undoButton.setTooltip("Undo the last parameter transaction. Host automation may also be recorded while it runs.");
+        redoButton.setTooltip("Redo an undone transaction.");
+        presetButton.onClick=[this]{
+            juce::PopupMenu menu;menu.addItem(1,"Load preset...");menu.addItem(2,"Save preset...");
+            auto safe=juce::Component::SafePointer<Editor>(this);
+            menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(presetButton),[safe](int selection){if(safe&&(selection==1||selection==2))safe->choosePreset(selection==2);});
+        };
         selectBand(0);showLimiter(false);
         setResizable(true,true);setResizeLimits(750,550,2000,1400);setSize(1200,800);startTimerHz(30);
     }
+    void choosePreset(bool save){
+        auto initial=juce::File::getSpecialLocation(juce::File::userDocumentsDirectory).getChildFile("MasterLab.jmlx");
+        presetChooser=std::make_unique<juce::FileChooser>(save?"Save MasterLab preset":"Load MasterLab preset",initial,"*.jmlx");
+        auto safe=juce::Component::SafePointer<Editor>(this);
+        int flags=save?(juce::FileBrowserComponent::saveMode|juce::FileBrowserComponent::canSelectFiles|juce::FileBrowserComponent::warnAboutOverwriting):(juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectFiles);
+        presetChooser->launchAsync(flags,[safe,save](const juce::FileChooser& chooser){if(!safe)return;auto file=chooser.getResult();if(file==juce::File{})return;
+            bool ok=save?safe->processor.savePreset(file):safe->processor.loadPreset(file);
+            safe->presetButton.setButtonText(ok?"PRESET":"PRESET ERROR");safe->presetButton.setTooltip(ok?file.getFileName():"Preset could not be read or written. Invalid data leaves parameters unchanged.");
+        });
+    }
     ~Editor() override {stopTimer();endDrag();setLookAndFeel(nullptr);}
     void resized() override {
+        presetButton.setBounds(320,14,136,26);undoButton.setBounds(320,48,64,26);redoButton.setBounds(392,48,64,26);
         eqView.setBounds(getWidth()-270,48,120,26);limiterView.setBounds(getWidth()-142,48,118,26);
         const int top=getHeight()-163,width=(getWidth()-64)/4;
         for(int i=0;i<4;++i){auto* label=std::array<juce::Label*,4>{&frequencyLabel,&gainLabel,&qualityLabel,&ceilingLabel}[i];auto* slider=std::array<juce::Slider*,4>{&frequency,&gain,&quality,&ceiling}[i];label->setBounds(32+i*width,top,width-12,22);slider->setBounds(32+i*width,top+22,width-16,113);}
@@ -243,7 +267,7 @@ public:
         if(details.localPosition.y<82||details.localPosition.y>132)return;
         bool right=details.localPosition.x>getWidth()/2;
         bool first=details.description=="eq"?right:!right;
-        auto* parameter=processor.state.getParameter("order");parameter->beginChangeGesture();parameter->setValueNotifyingHost(first?1.f:0.f);parameter->endChangeGesture();repaint();
+        auto* parameter=processor.state.getParameter("order");processor.beginUiTransaction("Module order");parameter->beginChangeGesture();parameter->setValueNotifyingHost(first?1.f:0.f);parameter->endChangeGesture();processor.finishUiTransaction();repaint();
     }
     void mouseDown(const juce::MouseEvent& event) override {
         if(showingLimiter||!plot().expanded(12).contains(event.position))return;
@@ -251,6 +275,7 @@ public:
         for(int i=0;i<16;++i){if(i!=selectedBand&&bandType(i)==0&&std::abs(value("gain",i))<.01f)continue;float d=event.position.getDistanceFrom(node(i));if(d<distance){distance=d;nearest=i;}}
         if(distance>14)return;
         selectBand(nearest);draggingNode=true;
+        processor.beginUiTransaction("EQ node");
         processor.state.getParameter(parameterId("frequency",selectedBand))->beginChangeGesture();
         processor.state.getParameter(parameterId("gain",selectedBand))->beginChangeGesture();
     }
@@ -277,7 +302,7 @@ public:
         g.setColour(juce::Colours::whitesmoke);g.setFont(juce::Font(juce::FontOptions(23.f,juce::Font::bold)));g.drawText("MASTERLAB",42,12,190,30,juce::Justification::left);
         g.setColour(accent);g.drawText("X",190,12,40,30,juce::Justification::left);
         g.setColour(muted);g.setFont(11);g.drawText("JERZY  /  MODULAR MASTERING",42,43,300,18,juce::Justification::left);
-        g.drawText(juce::String(sampleRate()/1000,1)+" kHz   /   STEREO   /   DEVELOPMENT",getWidth()-335,14,310,22,juce::Justification::right);
+        if(getWidth()>=1000)g.drawText(juce::String(sampleRate()/1000,1)+" kHz   /   STEREO   /   DEVELOPMENT",getWidth()-335,14,310,22,juce::Justification::right);
         const int dock=getHeight()-174,cell=(getWidth()-64)/4;
         for(int i=0;i<4;++i){g.setColour(panel);g.fillRoundedRectangle(static_cast<float>(24+i*cell),static_cast<float>(dock),static_cast<float>(cell-8),146.f,7);g.setColour(juce::Colour(0xff2b3a49));g.drawRoundedRectangle(static_cast<float>(24+i*cell)+.5f,static_cast<float>(dock)+.5f,static_cast<float>(cell-9),145.f,7,1);}
         bool first=processor.state.getRawParameterValue("order")->load()>.5f;

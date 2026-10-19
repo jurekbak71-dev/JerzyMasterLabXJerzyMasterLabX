@@ -15,3 +15,5 @@ Dalszy rozwój: stabilne ID instancji modułów, stała pula parametrów automat
 Telemetry limitera korzysta z `LimiterMeter.h`: 100 obserwacji na sekundę audio, FIFO SPSC, brak pracy graficznej i alokacji w callbacku. Przełączanie panelu EQ/limiter nie zmienia DSP.
 
 Schema 3 dopisuje 32 parametry (bandType1..16, bandEnabled1..16) po poprzednich 54. Migracja akceptuje wyłącznie właściwy zestaw pól danej wersji, uzupełnia brakujące wartości fabryczne i zapisuje kanoniczny schema 3. Krzywa DSP otrzymuje również 16 blendów bypassu przez istniejącą kolejkę odpowiedzi.
+
+`Processor.h` oddziela wrapper i stan od definicji edytora w `Plugin.cpp`. UndoManager jest własnością procesora i jest podłączony do APVTS. Operacje snapshot/Undo/preset są operacjami sterującymi poza callbackiem. Host restore używa replaceState i czyści historię, preset użytkownika stosuje poprawnie zwalidowane parametry jako jedną transakcję z powiadomieniami hosta.

@@ -42,6 +42,10 @@ class GuiSmoke final : private juce::Timer {
         editor->mouseDown(event(start,false));editor->mouseDrag(event(end,true));editor->mouseUp(event(end,true));
         parameter("frequency16")->removeListener(&listener);parameter("gain16")->removeListener(&listener);
         if(listener.begins!=2||listener.ends!=2||listener.changes<2||std::abs(actual("frequency16")-2000)>1||std::abs(actual("gain16")-6)>.02f)return false;
+        auto* undo=dynamic_cast<juce::Button*>(editor->findChildWithID("undo"));auto* redo=dynamic_cast<juce::Button*>(editor->findChildWithID("redo"));
+        if(!undo||!redo)return false;undo->onClick();
+        if(std::abs(actual("frequency16")-3333)>1||std::abs(actual("gain16")+4.5)>.02f)return false;
+        redo->onClick();if(std::abs(actual("frequency16")-2000)>1||std::abs(actual("gain16")-6)>.02f)return false;
         float oldQ=actual("q16");juce::MouseWheelDetails wheel{};wheel.deltaY=.2f;editor->mouseWheelMove(event(end,false),wheel);
         return actual("q16")>oldQ&&actual("gain")==firstGain;
     }

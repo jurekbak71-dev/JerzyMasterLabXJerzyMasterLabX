@@ -37,3 +37,5 @@ Limiter oddziela obszar redukcji (0–24 dB) od historii wyjściowego peak (-60�
 Testy GUI używają ponad 10 sekund syntetycznego sygnału o zmiennej amplitudzie. Sprawdzają także kliknięcie karty oraz brak przecięć widocznych kontrolek w obu widokach przy trzech rozmiarach. Zrzuty w README są aktualnymi wynikami tych testów, nie renderami koncepcyjnymi.
 
 Lista typu filtra i przycisk Band wiążą się z aktualnie wybranym pasmem. HP/LP/Notch nie używają gain; kontrolka gain jest wtedy wyłączona, a węzeł pozostaje na osi 0 dB. Krzywe uwzględniają bypass pasma, nie tylko globalny EQ. Test GUI sprawdza wszystkie typy na paśmie 16 i izolację od pasma 1.
+
+Undo/Redo jest oparte na UndoManager/APVTS. Węzeł EQ obejmuje frequency i gain w jednej transakcji; kółko Q i zmiana kolejności mają osobne granice. Presety `.jmlx` zawierają cały stan, mają limit 1 MiB i tę samą walidację/migrację co stan hosta. Zapis plików i systemowy chooser pracują wyłącznie na wątku UI. Wczytanie jest transakcją Undo; przywrócenie stanu hosta resetuje historię. Host automation może być rejestrowana w historii; nie deklarujemy oddzielnego systemu historii wyłącznie dla ręcznych zmian.

@@ -55,3 +55,5 @@ Przed dystrybucją wybierz i spełnij odpowiednie warunki JUCE 8 (AGPLv3 lub lic
 Interfejs Studio: wspólna stylistyka EQ i limitera, podświetlenie aktywnego modułu, wybór widoku kliknięciem karty, większe odczyty i wydzielone karty parametrów. Domyślne okno 1200×800, minimum 750×550. Bary Peak i RMS mierzą dwa różne wskaźniki wyjścia; nie są miernikami kanałów L/R.
 
 Typ filtra wybierasz obok numeru pasma. High Pass i Low Pass mają stałe nachylenie 12 dB/oktawę; Q reguluje rezonans. W HP/LP/Notch gain jest nieużywany. Przycisk Band wyłącza wybrane pasmo płynnym przejściem 20 ms. Charakterystyka uwzględnia aktualne współczynniki i blend każdego pasma.
+
+Przyciski UNDO/REDO obsługują historię ustawień. PRESET otwiera zapis/odczyt plików `.jmlx` z całym stanem toru; wczytanie presetu można cofnąć. Przywrócenie projektu przez hosta czyści poprzednią historię Undo. Automatyzacja hosta może również trafić do historii APVTS; przed ręcznym porównaniem zatrzymaj odtwarzanie automatyki.
