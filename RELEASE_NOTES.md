@@ -24,3 +24,8 @@ Dodano Undo/Redo, zapis i odczyt pełnych presetów `.jmlx` oraz testy plików, 
 
 
 Master Inspector: stałe okno 400 ms dla input/output peak/RMS/correlation/M/S/balance, headroom i licznik przekroczeń. LUFS M/S/I z ważeniem K i dwiema bramkami, histogram integrated 0,01 LU i reset bez zmiany DSP. Pomiar działa bez GUI. FFmpeg ebur128: 16 referencji przy 44,1–192 kHz, 48 odczytów I/M/S w tolerancji 0,11 LU. Nie dodano LRA ani True Peak i nie deklarujemy pełnej certyfikacji standardu. CTest 13/13, ASan/UBSan 8/8, trzy widoki GUI i pluginval strictness 5 na Linux zaliczone. Windows tej rewizji wymaga osobnego CI.
+
+
+Master Brain: zaimplementowano analizę wejścia poza callback, regułowe propozycje EQ/limitera, panel konfiguracji i raportu, zatwierdzanie oraz jedną transakcję Undo. Zakres, algorytm i ograniczenia opisano w [MASTER_BRAIN.md](MASTER_BRAIN.md). Nie jest to kompletna docelowa implementacja v0.4.0.
+
+Walidacja Master Brain w Linux: Release VST3, CTest 15/15, rdzeń ASan/UBSan 9/9, rzeczywisty test GUI (otwieranie, trzy rozmiary, analiza/Apply/Undo), pluginval strictness 5 — zaliczone. Build Windows jest weryfikowany oddzielnie w Actions.

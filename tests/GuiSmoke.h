@@ -5,7 +5,7 @@ class GuiSmoke final : private juce::Timer {
     juce::AudioProcessor& processor;
     std::unique_ptr<juce::AudioProcessorEditor> editor;
     int iteration=0,phase=0,sample=0;
-    bool success=true;
+    bool success=true;std::vector<float> brainBefore;
     void fail(const char* message){std::cerr<<message<<'\n';success=false;stopTimer();editor.reset();juce::MessageManager::getInstance()->stopDispatchLoop();}
     juce::RangedAudioParameter* parameter(const char* id){for(auto* p:processor.getParameters())if(auto* ranged=dynamic_cast<juce::RangedAudioParameter*>(p))if(ranged->paramID==id)return ranged;return nullptr;}
     float actual(const char* id){auto* p=parameter(id);return p->convertFrom0to1(p->getValue());}
@@ -47,7 +47,13 @@ class GuiSmoke final : private juce::Timer {
         if(std::abs(actual("frequency16")-3333)>1||std::abs(actual("gain16")+4.5)>.02f)return false;
         redo->onClick();if(std::abs(actual("frequency16")-2000)>1||std::abs(actual("gain16")-6)>.02f)return false;
         float oldQ=actual("q16");juce::MouseWheelDetails wheel{};wheel.deltaY=.2f;editor->mouseWheelMove(event(end,false),wheel);
-        return actual("q16")>oldQ&&actual("gain")==firstGain;
+        if(!(actual("q16")>oldQ&&actual("gain")==firstGain))return false;
+        auto* brain=dynamic_cast<juce::Button*>(editor->findChildWithID("view-brain"));auto* analyse=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-analyse"));
+        if(!brain||!analyse)return false;brain->onClick();
+        auto* genre=dynamic_cast<juce::ComboBox*>(editor->findChildWithID("brain-genre"));if(!genre)return false;genre->setSelectedId(5,juce::sendNotificationSync);
+        brainBefore.clear();for(auto* parameter:processor.getParameters())brainBefore.push_back(parameter->getValue());analyse->onClick();
+        for(int i=0;i<processor.getParameters().size();++i)if(processor.getParameters()[i]->getValue()!=brainBefore[static_cast<size_t>(i)])return false;
+        dynamic_cast<juce::Button*>(editor->findChildWithID("view-eq"))->onClick();return true;
     }
     bool controlsFit(){
         for(int i=0;i<editor->getNumChildComponents();++i){auto* a=editor->getChildComponent(i);if(!a->isVisible())continue;
@@ -97,6 +103,16 @@ class GuiSmoke final : private juce::Timer {
             editor->setSize(size.x,size.y);if(!controlsFit())return false;auto image=editor->createComponentSnapshot(editor->getLocalBounds());if(!image.isValid())return false;
             if(iteration==0&&size.x==1000){auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/inspector-smoke.png");juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return false;}
         }
+        auto* brain=dynamic_cast<juce::Button*>(editor->findChildWithID("view-brain"));auto* apply=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-apply"));auto* report=dynamic_cast<juce::TextEditor*>(editor->findChildWithID("brain-report"));
+        if(!brain||!apply||!report)return false;brain->onClick();
+        if(!apply->isEnabled()||!report->getText().contains("PROPOSED EQ")){std::cerr<<report->getText()<<'\n';return false;}
+        for(int i=0;i<processor.getParameters().size();++i)if(processor.getParameters()[i]->getValue()!=brainBefore[static_cast<size_t>(i)])return false;
+        for(auto size:{juce::Point<int>(750,550),juce::Point<int>(1000,700),juce::Point<int>(2000,1400)}){
+            editor->setSize(size.x,size.y);if(!controlsFit())return false;auto image=editor->createComponentSnapshot(editor->getLocalBounds());if(!image.isValid())return false;
+            if(iteration==0&&size.x==1000){auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/brain-smoke.png");juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return false;}
+        }
+        apply->onClick();if(apply->isEnabled())return false;dynamic_cast<juce::Button*>(editor->findChildWithID("undo"))->onClick();
+        for(int i=0;i<processor.getParameters().size();++i)if(processor.getParameters()[i]->getValue()!=brainBefore[static_cast<size_t>(i)])return false;
         if(actual("limiterDrive")!=driveBefore||actual("gain16")!=gainBefore)return false;
         eq->onClick();if(!frequency->isVisible()||drive->isVisible()||release->isVisible())return false;
         return true;

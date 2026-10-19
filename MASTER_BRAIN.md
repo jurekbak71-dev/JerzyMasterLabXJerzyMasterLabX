@@ -1,0 +1,19 @@
+# Master Brain — asystent regułowy
+
+Otwórz **MASTER BRAIN**, wybierz gatunek, styl, długość analizy (8/16/30/60 sekund), docelowy LUFS i ceiling próbek. Zaznacz EQ i/lub limiter. Naciśnij **ANALYSE AUDIO** i odtwórz reprezentatywny fragment w czasie rzeczywistym. Zatrzymanie transportu zatrzymuje zbieranie próbek. Anulowanie nie zmienia DSP.
+
+Asystent mierzy wejście przed procesorami: LUFS Integrated, peak próbek, RMS, korelację, przekroczenia i energię pięciu regionów widma. FFT i obliczanie propozycji działają na osobnym wątku; audio callback wyłącznie kopiuje próbki do przygotowanej kolejki. Przepełnienie unieważnia analizę zamiast akceptować niepełne dane. Analiza nie zależy od otwartego edytora.
+
+Wynik zawiera proponowane korekty EQ, Drive limitera, uzasadnienie i ostrzeżenia. Można zmienić profil i przeliczyć propozycję z zebranych danych. **APPLY PROPOSAL** wymaga świadomego kliknięcia. Całość można cofnąć jednym Undo. Ręczna zmiana parametrów DSP od rozpoczęcia analizy blokuje zastosowanie starej propozycji; wykonaj nową analizę. Podczas zatwierdzania wstrzymaj automatykę hosta.
+
+## Reguły i ograniczenia
+
+To heurystyki DSP, nie wytrenowana sieć ani algorytm iZotope. Dziewięć profili gatunkowych to ręcznie ustalone proporcje energii. Pięć szerokich korekt jest ograniczonych do ±3 dB; Intensity zmienia korekcję tonalną. Wybór EQ zastępuje ustawienia wszystkich 16 pasm, pozostałe wyłącza. Wyłączenie wyboru EQ zachowuje istniejący korektor. Styl Analog oznacza łagodniejsze ustawienia, nie dodaje saturacji.
+
+Drive wynika z różnicy LUFS i przybliżonego wpływu EQ, z konserwatywnym ograniczeniem przewidywanej redukcji. Nie gwarantuje osiągnięcia celu. Za głośne wejście wymaga ściszenia w DAW. Limiter jest sample-peak: brak True Peak, oversamplingu i odpowiednika IRC. Nie ma separacji stemów, uczenia profilu z referencji ani automatycznej klasyfikacji gatunku. Analiza fragmentu nie zastępuje pomiaru całego utworu.
+
+Ustawienia i raport analizy są tymczasowe. Zatwierdzone parametry DSP zapisują się standardowo w projekcie hosta i presetach `.jmlx`; sam raport nie jest serializowany. Szybki eksport offline może przepełnić kolejkę analizy — analizuj podczas zwykłego odtwarzania.
+
+## Walidacja
+
+Testy obejmują kombinacje gatunków/stylów/intensywności, granice korekcji, wykluczenie modułów, ciszę i błędne dane. Test procesora sprawdza rzeczywiste osiem sekund analizy, brak automatycznych zmian, brak alokacji C++ w callback podczas zbierania, odrzucenie nieaktualnej propozycji, Apply/Undo, anulowanie i przepełnienie. Test GUI otwiera panel w trzech rozmiarach, zatwierdza i cofa propozycję. Nie wykonano testu FL Studio ani porównania brzmieniowego z Ozone.

@@ -44,3 +44,6 @@ Undo/Redo jest oparte na UndoManager/APVTS. Węzeł EQ obejmuje frequency i gain
 ## Master Inspector
 
 Trzecia zakładka pokazuje rzeczywiste wejście/wyjście, peak i RMS, LUFS M/S/I, stereo, headroom i przekroczenia full scale. Duże wartości w dolnych kartach to integrated wejścia/wyjścia, korelacja i balans energii. System pomiaru jest niezależny od GUI. RESET METERS nie jest resetem parametrów ani audio; jest wykonywany na wątku audio jako operacja O(1). W najmniejszym oknie część szczegółów (M/S i odczyty pomocnicze) jest ukrywana, ale integrated pozostaje widoczne. Preset, Undo/Redo i trzy zakładki mieszczą się przy minimalnej szerokości. Testy obejmują wszystkie trzy widoki i brak przecięć kontrolek przy trzech rozmiarach.
+
+
+Master Brain: zaimplementowano analizę wejścia poza callback, regułowe propozycje EQ/limitera, panel konfiguracji i raportu, zatwierdzanie oraz jedną transakcję Undo. Zakres, algorytm i ograniczenia opisano w [MASTER_BRAIN.md](MASTER_BRAIN.md). Nie jest to kompletna docelowa implementacja v0.4.0.

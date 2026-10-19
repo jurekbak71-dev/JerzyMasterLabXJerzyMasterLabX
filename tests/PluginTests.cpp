@@ -30,6 +30,6 @@ int main(int argc,char**){
  bypassed->reset();dry.clear();dry.setSample(0,0,.1f);dry.setSample(1,0,.1f);bypassed->processBlockBypassed(dry,midi);
  if(std::abs(dry.getSample(0,240)-.1f)>1e-6f||dry.getSample(0,0)!=0){std::cerr<<"bypass reset lost latency";return 1;}
  bypassed->releaseResources();
- if(argc>1){GuiSmoke smoke(*a);juce::MessageManager::getInstance()->runDispatchLoop();if(!smoke.passed())return 1;std::cout<<"Passed: custom EQ controls, node drag, Q wheel, host gestures, response rendering, reopen and resize at three sizes\n";}
+ if(argc>1){GuiSmoke smoke(*a);juce::MessageManager::getInstance()->runDispatchLoop();if(!smoke.passed())return 1;std::cout<<"Passed: custom EQ controls, node drag, Q wheel, host gestures, response rendering, Master Brain analysis/approval/Undo, reopen and resize at three sizes\n";}
  a->releaseResources();b->releaseResources();std::cout<<"Passed: parameter state roundtrip, fixed PDC, automated routing, oversized buffers, host bypass, deterministic render without editor\n";
 }

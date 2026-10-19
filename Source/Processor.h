@@ -5,11 +5,14 @@
 #include "LimiterMeter.h"
 #include "WindowMeter.h"
 #include "LoudnessMeter.h"
+#include "MasterBrain.h"
 #include "StateValidation.h"
 class Processor final: public juce::AudioProcessor {
 public:
  juce::UndoManager undoManager{1000000,100};
  juce::AudioProcessorValueTreeState state;
+ masterlab::MasterBrain brain;
+ std::vector<float> brainBaseline;
  masterlab::RoutedEngine engine;
  masterlab::LimiterMeter limiterMeter;
  masterlab::WindowMeter inputMeter,outputMeter;
@@ -51,8 +54,8 @@ public:
  bool acceptsMidi()const override{return false;}bool producesMidi()const override{return false;}double getTailLengthSeconds()const override{return .1;}
  int getNumPrograms()override{return 1;}int getCurrentProgram()override{return 0;}void setCurrentProgram(int)override{}const juce::String getProgramName(int)override{return "Default";}void changeProgramName(int,const juce::String&)override{}
  bool isBusesLayoutSupported(const BusesLayout& l)const override{return l.getMainInputChannelSet()==juce::AudioChannelSet::stereo()&&l.getMainOutputChannelSet()==juce::AudioChannelSet::stereo();}
- void prepareToPlay(double sr,int)override{engine.parameters(parameters[0]->load(),parameters[1]->load(),parameters[2]->load(),parameters[3]->load(),parameters[4]->load()>.5f,parameters[5]->load()>.5f);engine.limiterParameters(parameters[52]->load(),parameters[53]->load());for(size_t k=0;k<16;++k)engine.setBandMode(k,static_cast<masterlab::FilterType>(static_cast<int>(parameters[54+k*2]->load())),parameters[55+k*2]->load()>.5f);engine.prepare(sr,parameters[6]->load()>.5f);displayRate.store(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000);limiterMeter.prepare(displayRate.load());inputMeter.prepare(displayRate.load());outputMeter.prepare(displayRate.load());inputLoudness.prepare(displayRate.load());outputLoudness.prepare(displayRate.load());setLatencySamples(engine.latency());for(auto& channel:hostDryDelay)channel.assign(static_cast<size_t>(engine.latency()+1),0);hostDryPosition=0;hostBypassMix=0;hostBypassTarget=false;hostBypassStep=static_cast<float>(1/(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr*.02:960.));}
- void releaseResources()override{}void reset()override{engine.reset();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;}
+ void prepareToPlay(double sr,int)override{engine.parameters(parameters[0]->load(),parameters[1]->load(),parameters[2]->load(),parameters[3]->load(),parameters[4]->load()>.5f,parameters[5]->load()>.5f);engine.limiterParameters(parameters[52]->load(),parameters[53]->load());for(size_t k=0;k<16;++k)engine.setBandMode(k,static_cast<masterlab::FilterType>(static_cast<int>(parameters[54+k*2]->load())),parameters[55+k*2]->load()>.5f);engine.prepare(sr,parameters[6]->load()>.5f);displayRate.store(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000);limiterMeter.prepare(displayRate.load());inputMeter.prepare(displayRate.load());outputMeter.prepare(displayRate.load());inputLoudness.prepare(displayRate.load());outputLoudness.prepare(displayRate.load());brain.prepare(displayRate.load());setLatencySamples(engine.latency());for(auto& channel:hostDryDelay)channel.assign(static_cast<size_t>(engine.latency()+1),0);hostDryPosition=0;hostBypassMix=0;hostBypassTarget=false;hostBypassStep=static_cast<float>(1/(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr*.02:960.));}
+ void releaseResources()override{}void reset()override{brain.cancelRT();engine.reset();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;}
  void processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,false);}
  void processBlockBypassed(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,true);}
  void renderAudio(juce::AudioBuffer<float>& b,bool hostBypassed){
@@ -67,6 +70,7 @@ public:
  if(hostDryDelay[0].empty()){b.clear();return;}
  for(int offset=0;offset<b.getNumSamples();){int length=std::min(128,b.getNumSamples()-offset);
   for(int i=0;i<length;++i){size_t read=(hostDryPosition+1)%hostDryDelay[0].size();for(int c=0;c<2;++c){inputScratch[c][i]=masterlab::clean(b.getSample(c,offset+i));hostDryDelay[c][hostDryPosition]=inputScratch[c][i];hostDryScratch[c][i]=hostDryDelay[c][read];}hostDryPosition=read;}
+  brain.capture(inputScratch[0].data(),inputScratch[1].data(),length);
   engine.process(b.getWritePointer(0,offset),b.getWritePointer(1,offset),length,value(6)>.5f,limiterGainTrace.data());
   for(int i=0;i<length;++i){hostBypassMix=hostBypassed?std::min(1.f,hostBypassMix+hostBypassStep):std::max(0.f,hostBypassMix-hostBypassStep);limiterGainTrace[i]+=hostBypassMix*(1-limiterGainTrace[i]);for(int c=0;c<2;++c){float wet=b.getSample(c,offset+i);b.setSample(c,offset+i,wet+hostBypassMix*(hostDryScratch[c][i]-wet));}}
   for(int i=0;i<length;++i){
@@ -113,6 +117,20 @@ public:
  bool loadPreset(const juce::File& file){
   juce::FileInputStream input(file);if(!input.openedOk()||input.getTotalLength()>1024*1024)return false;
   juce::MemoryBlock data;input.readIntoMemoryBlock(data,1024*1024+1);return applyPreset(data.getData(),static_cast<int>(data.getSize()));
+ }
+ void startBrainUI(masterlab::BrainConfig config){
+  brainBaseline.clear();for(auto* parameter:parameters)brainBaseline.push_back(parameter->load());
+  config.existingEqEnabled=parameters[4]->load()>.5f;
+  for(size_t i=0;i<16;++i){size_t offset=i==0?0:7+(i-1)*3;config.existingEq[i]={parameters[offset]->load(),parameters[offset+1]->load(),parameters[offset+2]->load(),static_cast<int>(parameters[54+i*2]->load()),parameters[55+i*2]->load()>.5f};}
+  brain.startUI(config);
+ }
+ bool brainStaleUI()const {if(brainBaseline.size()!=parameters.size())return true;for(size_t i=0;i<parameters.size();++i)if(parameters[i]->load()!=brainBaseline[i])return true;return false;}
+ bool applyBrainUI(){
+  auto result=brain.readUI();if(result.phase!=masterlab::BrainPhase::Ready||!result.proposal.valid||brainStaleUI())return false;
+  for(const auto& [id,value]:result.proposal.changes){auto* parameter=state.getParameter(id);if(!parameter||!std::isfinite(value)||value<parameter->getNormalisableRange().start||value>parameter->getNormalisableRange().end)return false;}
+  beginUiTransaction("Master Brain proposal");
+  for(const auto& [id,value]:result.proposal.changes){auto* parameter=state.getParameter(id);parameter->beginChangeGesture();parameter->setValueNotifyingHost(parameter->convertTo0to1(value));parameter->endChangeGesture();}
+  finishUiTransaction();brain.markAppliedUI();return true;
  }
  bool hasEditor()const override{return true;}juce::AudioProcessorEditor* createEditor()override;
 };

@@ -12,6 +12,12 @@ Stereo C++20 DSP niezależny od JUCE: 16 pasm z typami Bell/Low Shelf/High Shelf
 
 Limiter jest wczesnym rozwiązaniem sample-peak z końcowym twardym ograniczeniem, które może zniekształcać. Nie zapewnia True Peak ani kontroli aliasingu. Zmiana kolejności korzysta z 20 ms crossfade dwóch stale aktywnych torów z wyrównaną latencją. Bypass hosta ma osobny, opóźniony tor dry i takie samo płynne przejście. Utrzymywanie obu torów zwiększa CPU. Używaj wyłącznie do prac rozwojowych i odsłuchów kontrolnych.
 
+## Master Brain
+
+Asystent analizuje 8–60 sekund rzeczywistego wejścia, proponuje EQ i ustawienia limitera z uzasadnieniem. Zmiany wymagają zatwierdzenia i można je cofnąć jednym Undo. To jawne heurystyki, nie wytrenowany model AI. [Obsługa i ograniczenia](MASTER_BRAIN.md).
+
+![Master Brain — rzeczywisty test GUI](docs/images/master-brain.png)
+
 ## Panel limitera
 
 Przycisk **LIMITER** otwiera osobny widok. **Drive** (0–24 dB) podnosi sygnał przetwarzany przez limiter, **Release** (10–1000 ms) steruje powrotem obwiedni, a **Sample Ceiling** ustawia limit próbek. Drive znika po płynnym wyłączeniu modułu. Krótki release i wysoki drive mogą zwiększać zniekształcenia.

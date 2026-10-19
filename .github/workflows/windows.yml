@@ -50,3 +50,4 @@ jobs:
             build-plugin/gui-smoke.png
             build-plugin/limiter-smoke.png
             build-plugin/inspector-smoke.png
+            build-plugin/brain-smoke.png

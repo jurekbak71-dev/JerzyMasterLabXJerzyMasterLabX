@@ -104,3 +104,23 @@ Profesjonalna ocena brzmienia wymaga własnych pomiarów i legalnie dostępnego 
 Aktualizacja 19 października 2026: podstawowa implementacja priorytetu 1 jest dostępna (panel, Drive, Release, ceiling, historia GR i PDC). Nie oznacza to jakości ani kompletu funkcji Maximizera. Dokładne znaczenie obwiedni i ograniczenia pomiaru opisano w DSP_DESIGN.md.
 
 Dalsza aktualizacja: dodano sześć typów filtrów, bypass pasma, Undo/Redo, presety plikowe i Master Inspector z LUFS M/S/I porównanym z FFmpeg. Nadal brak pełnej walidacji EBU, LRA, True Peak, dynamicznego grafu i pozostałych modułów.
+
+
+## Dodatkowy materiał wideo i bieżący asystent
+
+Przejrzano próbki obrazu z przesłanego filmu „What’s new in Ozone 12” (około 7 minut). Widoczne są konfiguracja celu i modułów, analiza oraz podgląd wyników tonalnych/głośności. Nie analizowano narracji ani porównań odsłuchowych. Master Brain wykorzystuje ogólny przebieg konfiguracja → analiza → przegląd → zatwierdzenie, z własnymi regułami i interfejsem. Nie implementuje pokazanych Stem EQ, Bass Control, Unlimiter ani IRC 5. Szczegóły: MASTER_BRAIN.md.
+
+### Szczegółowy przegląd obrazu filmu producenta
+
+Przejrzano plansze z klatkami co 4 sekundy przez cały materiał (7:01). Znaczniki poniżej są przybliżone; nie przeprowadzono odsłuchu ścieżki audio.
+
+| Czas | Widoczne działanie | Wniosek dla MasterLab X |
+|---|---|---|
+| 0:52–1:24 | Stem EQ: wybór Vocals/Bass/Drums/Other, osobne kolorowe widma, węzły i poziomy stemów | Oddzielny procesor wymaga rzeczywistej separacji; zwykły EQ miksu go nie zastępuje |
+| 1:48–2:44 | Bass Control: Balance, Punch, cutoff, zoom przebiegu, Sustain Power i Peak Control z progami | Docelowy Bass Architect powinien łączyć analizę przebiegu i niezależne sterowanie poziomem, atakiem i sustain |
+| 2:48–3:36 | Unlimiter: Amount, input/output gain, Learn Threshold, przebieg i linia progu | Rekonstrukcja transjentów to osobny problem DSP, nie ujemny Drive limitera |
+| 3:44–4:32 | Maximizer: wybór IRC 5, gain, output, True Peak, historia, Upward Compress, Soft Clip, Transient Emphasis, Stereo Independence | Obecny sample-peak limiter ma znacznie mniejszy zakres; potrzebna niezależna walidacja TP, zniekształceń i transjentów |
+| 4:36–5:16 | Custom Assistant: lista celów i ulubionych, wybór modułów, intensity, LUFS/output/TP, czas w taktach, uruchomienie analizy | Zachować wybór uczestniczących modułów i konfigurację przed analizą; obecne sekundy nie są synchronizacją do taktów |
+| 5:20–6:04 | Wyniki: Tonal Balance, historia Loudness, Vocal Balance, Dynamics Match, Width Match, Clarity i Stabilizer, bypass/relearn | Raport tekstowy i pięć korekt nie stanowią pełnego odpowiednika; potrzebny graficzny widok celu i pomiarów oraz rzeczywiste procesory |
+
+Wspólna kompozycja widoczna w demonstracjach: poziomy łańcuch modułów nad dużą przestrzenią wykresu, stale dostępne mierniki I/O z prawej, główne kontrolki wokół wykresu, narzędzia odsłuchu Delta/Bypass/Gain Match. To kryteria ergonomii dla własnego interfejsu; nie kopiujemy grafiki ani oznaczeń algorytmów.

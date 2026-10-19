@@ -12,3 +12,6 @@ Bez deklaracji przewagi brzmieniowej bez rzetelnych porównań.
 Postęp bieżący: 16 pasm/sześć typów EQ i bypass, limiter z historią GR i kontrolą Drive/Release, Undo/Redo, pliki presetów, Inspector wejścia/wyjścia i LUFS M/S/I, testy alokacji callbacku i referencje FFmpeg. Wszystkie moduły v0.2–v0.4 pozostają osobnymi zadaniami implementacyjnymi, nie ukończonymi pozycjami.
 
 Następne bramki Phase A: dynamiczny model instancji i routingu, walidacja całego toru na rzeczywistych WAV, długie sesje, FL Studio/FLP/PDC/offline WAV, audyt licencji. Rozwój jakości limitera: true-peak detection/control, oversampling, aliasing i testy odsłuchowe. Pomiary: rozszerzone wektory EBU, LRA i historia loudness. Dopiero potem oznaczenie pełnego wydania.
+
+
+Master Brain: zaimplementowano analizę wejścia poza callback, regułowe propozycje EQ/limitera, panel konfiguracji i raportu, zatwierdzanie oraz jedną transakcję Undo. Zakres, algorytm i ograniczenia opisano w [MASTER_BRAIN.md](MASTER_BRAIN.md). Nie jest to kompletna docelowa implementacja v0.4.0.

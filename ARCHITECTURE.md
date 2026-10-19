@@ -20,3 +20,6 @@ Schema 3 dopisuje 32 parametry (bandType1..16, bandEnabled1..16) po poprzednich 
 
 
 Każdy procesor ma niezależne `WindowMeter` i `LoudnessMeter` wejścia/wyjścia. Wszystkie bufory są alokowane w prepareToPlay; SPSC ramka odpowiedzi przenosi spójny snapshot danych do UI. Peak/RMS/correlation używane w innych panelach pochodzą teraz z okna 400 ms, a nie z bloku hosta. Reset mierników z GUI jest żądaniem atomic<bool>, wykonanym na początku callbacku bez resetowania silnika DSP. Stanu pomiarów nie zapisujemy w presetach ani projektach. Mierniki nie zależą od obecności edytora.
+
+
+Master Brain: zaimplementowano analizę wejścia poza callback, regułowe propozycje EQ/limitera, panel konfiguracji i raportu, zatwierdzanie oraz jedną transakcję Undo. Zakres, algorytm i ograniczenia opisano w [MASTER_BRAIN.md](MASTER_BRAIN.md). Nie jest to kompletna docelowa implementacja v0.4.0.

@@ -23,3 +23,6 @@ Walidacja stanu: odtworzenie wszystkich 52 parametrów, 14 wadliwych struktur XM
 Dodano testy response (20 kombinacji sample rate/częstotliwości, porównanie krzywej z pomiarem amplitudy audio i sprawdzenie rzeczywistego wygładzania współczynników) oraz analysis (amplituda Hann, energia jednego kanału i zachowanie sygnału L=-R przy wszystkich rozmiarach FFT). Nowe testy GUI uruchamiają pętlę komunikatów i sprawdzają kontrolki wybranego pasma, drag, kółko Q, begin/end gestów hosta, obecność rzeczywistej krzywej, resize/reopen oraz zmianę FFT bez zmiany latencji. Poprzedni test niepustego okna nie dawał tych gwarancji.
 
 W bieżącym etapie: CTest 6/6 passed; ASan/UBSan rdzenia 3/3 passed; rozszerzony test GUI i pluginval strictness 5 zakończone kodem 0 na Linux. Test GUI faktycznie przetwarza analizę przy FFT 4096, 8192 i 32768, a test analizy sprawdza wszystkie cztery rozmiary. Nowy kod GUI wymaga osobnego potwierdzenia w workflow Windows oraz FL Studio.
+
+
+Master Brain: zaimplementowano analizę wejścia poza callback, regułowe propozycje EQ/limitera, panel konfiguracji i raportu, zatwierdzanie oraz jedną transakcję Undo. Zakres, algorytm i ograniczenia opisano w [MASTER_BRAIN.md](MASTER_BRAIN.md). Nie jest to kompletna docelowa implementacja v0.4.0.
