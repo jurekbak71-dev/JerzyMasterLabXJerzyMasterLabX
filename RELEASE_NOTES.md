@@ -29,3 +29,5 @@ Master Inspector: stałe okno 400 ms dla input/output peak/RMS/correlation/M/S/b
 Master Brain: zaimplementowano analizę wejścia poza callback, regułowe propozycje EQ/limitera, panel konfiguracji i raportu, zatwierdzanie oraz jedną transakcję Undo. Zakres, algorytm i ograniczenia opisano w [MASTER_BRAIN.md](MASTER_BRAIN.md). Nie jest to kompletna docelowa implementacja v0.4.0.
 
 Walidacja Master Brain w Linux: Release VST3, CTest 15/15, rdzeń ASan/UBSan 9/9, rzeczywisty test GUI (otwieranie, trzy rozmiary, analiza/Apply/Undo), pluginval strictness 5 — zaliczone. Build Windows jest weryfikowany oddzielnie w Actions.
+
+Potwierdzony Windows/MSVC dla `144aa41`: workflow `39221591050` zakończony sukcesem, wraz z testami DSP, GUI i pluginval 1.0.3. Wygenerowany artefakt `JerzyMasterLabX-v0.1.0-Windows-x64` (ID `12172186866`, 3 304 975 bajtów). To rozwojowa paczka VST3 z Master Brain, nie wydanie o pełnym zakresie Ozone. Brak testu FL Studio i porównania brzmieniowego.

@@ -153,3 +153,37 @@ Przesłany plik ma 24:28, obraz 1280×720 i ścieżkę audio. Przejrzano obraz w
 3. Graficzne wyniki asystenta: pomiar i cel z jednostkami, propozycja oddzielona od zastosowanego DSP.
 4. Bypass, Delta, mono i porównanie poziomu muszą mieć rzeczywiste tory sygnałowe z kompensacją latencji oraz jednoznaczny status.
 5. Najpierw zweryfikować True Peak i jakość limitera; dodawanie pokręteł nazwanych jak w filmie nie dostarcza odpowiadających im algorytmów.
+
+## Uzupełnienie po przeczytaniu całej polskiej transkrypcji
+
+Źródło: dostarczone przez użytkownika automatyczne napisy „Przerażająco funkcjonalny iZotope Ozone 12 – test, analiza i opinia”. Przeczytano cały plik, następnie zestawiono go z wcześniejszym przeglądem obrazu. To analiza tekstu narracji, nie bezpośredni odsłuch ani własny test audio. Napisy nie mają znaczników czasu, zawierają błędy nazw i fragmenty tekstów piosenek. Czasy w poprzedniej tabeli pochodzą wyłącznie z obrazu.
+
+### Co komentarz dodaje do obrazu
+
+- Autor traktuje asystenta jako szybki punkt wyjścia, ale wskazuje też pełną obsługę ręczną. Profile gatunkowe są wyborem estetycznym, nie obiektywnym testem jakości. Nasz asystent musi pozostawić użytkownikowi decyzję i ręczną edycję.
+- W demonstracji podnosi wokal, bębny i zmienia barwę wybranych źródeł gotowego miksu. To uzasadnia docelowy Stem Processor; zwykłe filtry M/S nie są separacją stemów. Wypowiedź o podobnych efektach M/S nie oznacza równoważności algorytmów.
+- Opisuje nadrzędną wtyczkę i osobne procesory oraz komunikację instancji Match EQ. Nasza architektura powinna umożliwić niezależne wrappery, ale obecny produkt nie implementuje komunikacji między instancjami.
+- Match EQ przechwytuje referencję i materiał docelowy, pozwala regulować głębokość i wygładzanie. Autor warunkuje naturalny efekt podobieństwem dynamiki obu materiałów. Nie należy obiecywać uniwersalnego dopasowania dowolnych utworów.
+- Według komentarza można załadować do 10 referencji, dzielonych automatycznie lub ręcznie na sekcje. Limit i zachowanie należy potwierdzić instrukcją przed projektowaniem własnego importu; sam film nie jest specyfikacją implementacyjną.
+- W Bass Control przebieg przedstawia niskie pasmo, a nie pełny miks. Podaje okolice 100–150 Hz jako typowy kontekst przykładu, nie obowiązkową częstotliwość podziału dla każdej muzyki.
+- Kontrola basu musi być oceniana wraz z wpływem na limiter. Autor opisuje wzajemne oddziaływanie Balance, Punch, Sustain Power i Peak Control. Własne testy muszą mierzyć redukcję limitera po korekcji basu, a nie tylko odpowiedź wydzielonego pasma.
+- Komentarz mówi o używaniu dopasowania poziomu do porównania przed/po, podczas gdy późniejsza plansza ostrzega przed ustawianiem basu z aktywnym Gain Match. Zachowujemy oba konteksty: decyzje tonalne podejmować także w pełnym torze przy stałym poziomie wejścia, a ocenę jakości wykonywać w kontrolowanym porównaniu z wyrównaną głośnością. Nie wnioskujemy, że każda kompensacja poziomu jest kompresorem.
+- Autor opisuje Upward Compress jako podnoszenie cichszych elementów oraz omawia Soft Clip i nacisk na transjenty. To wymagania oddzielnych procesów DSP, nie alternatywne nazwy regulatora Drive.
+- W Unlimiter podkreśla celowo ograniczony zakres kontrolek i potrzebę zapasu na pojawiające się transjenty (około 6 dB w przykładzie). Własny procesor ma pokazywać headroom i nie może obiecywać odtworzenia oryginalnych, utraconych szczytów.
+
+### Jak oddzielamy opinię od weryfikowalnego wymagania
+
+Oceny typu „najlepszy”, „naturalny” i „muzycznie brzmiący” należą do recenzenta. Nie stanowią wyniku naszych pomiarów ani podstawy do deklaracji równoważności MasterLab X. Podane w narracji 12–14 dB odstępu i ekstremalne −3,5 LUFS dotyczą opinii/przykładów; nie traktujemy ich jako uniwersalnych progów jakości. Crest factor (peak/RMS) i różnica peak/LUFS wymagają osobnych nazw i jednostek. Nie dodajemy celu −3,5 LUFS do automatycznych zaleceń na podstawie demonstracji.
+
+### Kolejność rozwoju wynikająca z obu filmów i instrukcji
+
+| Priorytet | Konkretna zmiana | Warunek uznania za wykonaną |
+|---|---|---|
+| 1 | Stały panel I/O, narzędzia odsłuchu i graficzne wyniki asystenta | Prawdziwe pomiary, czytelne jednostki, testy resize i zgodności wykresu z DSP |
+| 2 | True Peak i rozwój limitera | Niezależne referencje pomiarowe, inter-sample stress tests, poprawny ceiling, testy latencji i zniekształceń przy 44,1–192 kHz |
+| 3 | Stereo Architect i dynamika | Rzeczywista obróbka M/S, odsłuch mono, pomiary korelacji, kompresja i testy automatyki |
+| 4 | Bass Architect i kontrola transjentów | Wydzielone pasmo, rzeczywisty przebieg, testy interakcji z limiterem i odsłuch porównawczy |
+| 5 | Reference/Match | Import WAV poza callback, pomiary obu materiałów, sekcje, wyrównane A/B, ograniczona i zatwierdzana korekcja |
+| 6 | Stem Processor i rekonstrukcja dynamiki | Najpierw wykonalność, licencja modelu, koszt obliczeń i jawne testy artefaktów; osobne procesory z własnymi kryteriami |
+
+Obecny Master Brain realizuje pomiar fragmentu i zatwierdzane heurystyki EQ/limitera. Nie realizuje pełnego Master Assistant Ozone, dopasowania szerokości/dynamiki, korekcji wokalu, Stem EQ ani nauczonego modelu.
