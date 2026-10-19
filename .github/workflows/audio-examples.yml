@@ -1,0 +1,43 @@
+name: Audio before-after WAV
+on:
+  workflow_dispatch:
+    inputs:
+      vst3_run:
+        description: Successful Windows VST3 workflow run ID
+        required: true
+        default: '39225087615'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  render:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: JerzyMasterLabX-v0.1.0-Windows-x64
+          run-id: ${{ inputs.vst3_run }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: vst3-package
+      - name: Install pinned offline host
+        run: python -m pip install -r tools/audio/requirements.txt
+      - name: Extract actual Windows binary
+        shell: pwsh
+        run: Expand-Archive vst3-package/JerzyMasterLabX-v0.1.0-Windows-x64.zip -DestinationPath vst3-package/extracted
+      - name: Render and verify audio
+        shell: pwsh
+        run: |
+          $bundle = (Get-ChildItem vst3-package/extracted -Directory -Recurse -Filter JerzyMasterLabX.vst3 | Select-Object -First 1).FullName
+          if (-not $bundle) { throw 'Actual VST3 bundle missing' }
+          python tools/audio/render_comparisons.py --plugin "$bundle" --output audio-examples
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JerzyMasterLabX-before-after-WAV
+          path: audio-examples/
+          if-no-files-found: error
+          retention-days: 30

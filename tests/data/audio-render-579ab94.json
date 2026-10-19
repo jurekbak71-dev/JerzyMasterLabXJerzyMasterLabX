@@ -1,0 +1,164 @@
+{
+  "sample_rate": 48000,
+  "pcm_bits": 24,
+  "source": "Original deterministic synthetic musical fixtures; no commercial recordings.",
+  "plugin_sha256": "f19051fb9d02e51c8a3b14ddfe304fd5c862ddccddd0bc0a541a703db938845d",
+  "pedalboard": "0.9.26",
+  "numpy": "2.5.4",
+  "tests": {
+    "dry_impulse_alignment": "passed, zero residual samples after host initialization"
+  },
+  "examples": [
+    {
+      "name": "01_rytmiczny",
+      "seconds": 22.0,
+      "bands_hz_db_q_type": [
+        [
+          75,
+          -1.5,
+          0.707,
+          1
+        ],
+        [
+          320,
+          -1.8,
+          1.0,
+          0
+        ],
+        [
+          3500,
+          1.2,
+          0.8,
+          0
+        ],
+        [
+          9000,
+          1.0,
+          0.707,
+          2
+        ]
+      ],
+      "drive_db": 7,
+      "release_ms": 140,
+      "ceiling_dbfs": -1,
+      "eq_then_limiter": true,
+      "determinism_max_error": 0.0,
+      "buffer_256_vs_1024_max_error": 0.0,
+      "match_gain_db": -5.960000000000001,
+      "files": [
+        {
+          "file": "01_rytmiczny_PRZED.wav",
+          "measurements": {
+            "input_i": -23.0,
+            "input_tp": -5.97,
+            "input_lra": 3.1,
+            "input_thresh": -33.41,
+            "sample_peak_dbfs": -6.000002556648029,
+            "rms_dbfs": -23.623503472093617,
+            "crest_db": 17.62350091544559
+          },
+          "sha256": "66d7626fe293b5dbc4372e93ae4271ab2a470661b6bc92768a9591bb9007c8a4"
+        },
+        {
+          "file": "01_rytmiczny_PO.wav",
+          "measurements": {
+            "input_i": -17.04,
+            "input_tp": 0.04,
+            "input_lra": 3.3,
+            "input_thresh": -27.49,
+            "sample_peak_dbfs": -1.0000008709134622,
+            "rms_dbfs": -17.843040215554083,
+            "crest_db": 16.843039344640623
+          },
+          "sha256": "ad1d44fefc4d5bba48c15ab0e4e885e91d9617c627f74391750e53c9002085bf"
+        },
+        {
+          "file": "01_rytmiczny_PO_LUFS_MATCH.wav",
+          "measurements": {
+            "input_i": -23.01,
+            "input_tp": -5.92,
+            "input_lra": 3.3,
+            "input_thresh": -33.42,
+            "sample_peak_dbfs": -6.960002694951958,
+            "rms_dbfs": -23.80304069654345,
+            "crest_db": 16.843038001591495
+          },
+          "sha256": "5a85f275a1fa23a7bb1067594d25238d8c02166dcfab562b2c6a97242b321edb"
+        }
+      ]
+    },
+    {
+      "name": "02_przestrzenny",
+      "seconds": 22.0,
+      "bands_hz_db_q_type": [
+        [
+          100,
+          -0.8,
+          0.707,
+          1
+        ],
+        [
+          600,
+          -1.2,
+          0.8,
+          0
+        ],
+        [
+          7000,
+          0.8,
+          0.707,
+          2
+        ]
+      ],
+      "drive_db": 4,
+      "release_ms": 220,
+      "ceiling_dbfs": -1,
+      "eq_then_limiter": true,
+      "determinism_max_error": 0.0,
+      "buffer_256_vs_1024_max_error": 0.0,
+      "match_gain_db": -3.710000000000001,
+      "files": [
+        {
+          "file": "02_przestrzenny_PRZED.wav",
+          "measurements": {
+            "input_i": -25.53,
+            "input_tp": -5.82,
+            "input_lra": 4.1,
+            "input_thresh": -35.91,
+            "sample_peak_dbfs": -6.000002556648029,
+            "rms_dbfs": -26.6598333534443,
+            "crest_db": 20.65983079679627
+          },
+          "sha256": "878bca4a8096a79cc38c66a6cc692bdc0e22912bad99fd778218506f6f691d75"
+        },
+        {
+          "file": "02_przestrzenny_PO.wav",
+          "measurements": {
+            "input_i": -21.82,
+            "input_tp": -1.86,
+            "input_lra": 4.0,
+            "input_thresh": -32.21,
+            "sample_peak_dbfs": -2.075308000474607,
+            "rms_dbfs": -23.157466004105363,
+            "crest_db": 21.082158003630756
+          },
+          "sha256": "6e933c24c8a19d3b1ed970e52cd066f5e25aeebe37f9f661c82eb01025384ab1"
+        },
+        {
+          "file": "02_przestrzenny_PO_LUFS_MATCH.wav",
+          "measurements": {
+            "input_i": -25.53,
+            "input_tp": -5.57,
+            "input_lra": 4.0,
+            "input_thresh": -35.91,
+            "sample_peak_dbfs": -5.78530867712799,
+            "rms_dbfs": -26.867466075909814,
+            "crest_db": 21.082157398781824
+          },
+          "sha256": "98f7632688fd1fe42eb0bcae82e1020a74d5ab7f67297ee2357f3c906ef2375a"
+        }
+      ]
+    }
+  ],
+  "known_limit": "Sample-peak limiter, not True Peak; direct outputs are not peak-normalized."
+}
