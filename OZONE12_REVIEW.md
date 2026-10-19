@@ -187,3 +187,11 @@ Oceny typu „najlepszy”, „naturalny” i „muzycznie brzmiący” należą
 | 6 | Stem Processor i rekonstrukcja dynamiki | Najpierw wykonalność, licencja modelu, koszt obliczeń i jawne testy artefaktów; osobne procesory z własnymi kryteriami |
 
 Obecny Master Brain realizuje pomiar fragmentu i zatwierdzane heurystyki EQ/limitera. Nie realizuje pełnego Master Assistant Ozone, dopasowania szerokości/dynamiki, korekcji wokalu, Stem EQ ani nauczonego modelu.
+
+## Pełne napisy filmu producenta
+
+Przeczytano cały przesłany plik angielskich napisów „What's new in Ozone 12, your complete mastering suite”. Potwierdza on: separację źródeł w czasie rzeczywistym w Stem EQ; progi, Punch, Balance i wskaźniki sweet spot w Bass Control; sieci neuronowe do tworzenia transjentów w Unlimiter; nowy tryb IRC5; Custom Flow z wyborem gatunków/ulubionych lub profilu z referencji, celu LUFS, modułów, intensywności, czasu analizy oraz zapisu konfiguracji domyślnej. Po analizie można edytować łańcuch z widoku asystenta i modułów.
+
+Deklaracje producenta o braku pompowania/zniekształceń i „odzyskaniu” transjentów są marketingiem, nie gwarancją dla każdego sygnału. Nie ujawniają algorytmu IRC5 ani wag modeli. MasterLab X nie wykorzystuje ich nazw do oznaczania własnego DSP. Docelowa rekonstrukcja transjentów będzie tworzyć estymatę; nie odwróci matematycznie nieodwracalnego ograniczania.
+
+Konkretny krok implementacyjny po analizie obu filmów: Master Brain pokazuje zmierzony udział energii pięciu regionów, jawny profil docelowy gatunku oraz przybliżony balans po proponowanym EQ. Target pochodzi z tych samych reguł co propozycja; wykres nie ma imitować szczegółowej krzywej spektralnej, której obecny pomiar nie dostarcza.

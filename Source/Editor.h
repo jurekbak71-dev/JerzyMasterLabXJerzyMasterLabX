@@ -69,6 +69,12 @@ class Editor final : public juce::AudioProcessorEditor,
             report+="\nINPUT: "+lufsText(f.integrated)+" LUFS-I   |   peak "+dbText(f.peak)+" dBFS   |   correlation "+juce::String(f.correlation,3)+"\n";
             report+="Captured "+juce::String(f.seconds,1)+" s. Target "+juce::String(snapshot.config.targetLufs,1)+" LUFS.\n";
             if(p.valid){report+="\nPROPOSED EQ (low to high): ";for(float gain:p.gains)report+=juce::String(gain,1)+" dB   ";report+="\nLimiter drive: "+juce::String(p.drive,1)+" dB. Estimated EQ level change: "+juce::String(p.eqEstimate,1)+" dB.\n";}
+            if(p.targetShares[0]>0){
+                report+="\nTONAL ENERGY %: input / genre target / EQ estimate\n";
+                constexpr std::array<const char*,5> regions{"20-80 Hz","80-250 Hz","250 Hz-2 kHz","2-6 kHz","6-20 kHz"};
+                for(size_t i=0;i<5;++i)report+=juce::String(regions[i])+": "+juce::String(100*p.shares[i],1)+" / "+juce::String(100*p.targetShares[i],1)+" / "+juce::String(100*p.estimatedShares[i],1)+"\n";
+                report+="EQ estimate uses five representative frequencies; excludes limiter and is not a measured output. Chart clips at +/-18 dB. Target is a heuristic, not a quality standard.\n";
+            }
             for(const auto& line:p.reasons)report+="\n"+juce::String(line)+"\n";
             for(const auto& line:p.warnings)report+="\nNOTE: "+juce::String(line)+"\n";
             if(stale&&snapshot.phase==masterlab::BrainPhase::Ready)report="SETTINGS CHANGED: reanalyse before Apply.\n\n"+report;
@@ -82,19 +88,27 @@ class Editor final : public juce::AudioProcessorEditor,
         g.setColour(juce::Colour(0xff0a1119));g.fillRoundedRectangle(40.f,294.f,getWidth()-80.f,18.f,4.f);
         if(brainProgress>0){g.setColour(accent.withAlpha(.35f));g.fillRoundedRectangle(40.f,294.f,static_cast<float>((getWidth()-80)*brainProgress),18.f,4.f);}
         g.setColour(juce::Colours::whitesmoke);g.setFont(11);g.drawText(brainProgressText,40,294,getWidth()-80,18,juce::Justification::centred);
-        const int cardWidth=std::clamp(getWidth()/3,218,360),cardHeight=getHeight()-426;
+        const int cardWidth=std::clamp(getWidth()/2-48,300,600),cardHeight=getHeight()-426;
         g.setColour(panel);g.fillRoundedRectangle(24.f,342.f,static_cast<float>(cardWidth),static_cast<float>(cardHeight),8.f);
-        g.setColour(muted);g.setFont(11);g.drawText("PROPOSED EQ / dB",36,350,cardWidth-24,20,juce::Justification::left);
-        const bool valid=brainSnapshot.proposal.valid&&(brainSnapshot.phase==masterlab::BrainPhase::Ready||brainSnapshot.phase==masterlab::BrainPhase::Applied)&&brainSnapshot.config.useEq;
+        g.setColour(muted);g.setFont(11);g.drawText("TONAL BALANCE / RELATIVE TO TARGET",36,350,cardWidth-24,18,juce::Justification::left);
+        const bool valid=(brainSnapshot.phase==masterlab::BrainPhase::Ready||brainSnapshot.phase==masterlab::BrainPhase::Applied)&&brainSnapshot.proposal.targetShares[0]>0;
         if(valid){
-            constexpr std::array<const char*,5> names{"SUB","BASS","MID","PRESENCE","AIR"};
-            for(int i=0;i<5;++i){const int y=378+i*(cardHeight-43)/5;const float value=brainSnapshot.proposal.gains[static_cast<size_t>(i)],centre=24.f+83.f+(cardWidth-141.f)/2.f,extent=value*(cardWidth-141.f)/6.f;
-                g.setColour(muted);g.drawText(names[static_cast<size_t>(i)],36,y,66,18,juce::Justification::left);
-                g.setColour(juce::Colour(0xff344452));g.drawLine(centre,y+1.f,centre,y+17.f);
-                g.setColour(value>=0?accent:curve);g.fillRoundedRectangle(std::min(centre,centre+extent),y+5.f,std::max(1.f,std::abs(extent)),8.f,2.f);
-                g.setColour(juce::Colours::whitesmoke);g.drawText(juce::String(value,1),cardWidth-24,y,48,18,juce::Justification::right);
+            g.setColour(juce::Colours::whitesmoke);g.drawText("INPUT",36,370,54,16,juce::Justification::left);
+            g.setColour(accent);g.drawText("EQ ESTIMATE",92,370,94,16,juce::Justification::left);
+            const float left=60.f,right=cardWidth+8.f,top=398.f,bottom=342.f+cardHeight-32.f;
+            auto yFor=[&](double db){return juce::jmap(static_cast<float>(std::clamp(db,-18.,18.)), -18.f,18.f,bottom,top);};
+            for(int db:{-18,-9,0,9,18}){const float y=yFor(db);g.setColour(db==0?accent.withAlpha(.45f):muted.withAlpha(.15f));g.drawLine(left,y,right,y);g.setColour(muted);g.drawText(juce::String(db),30,static_cast<int>(y)-7,26,14,juce::Justification::right);}
+            juce::Path measured,estimated;
+            constexpr std::array<const char*,5> names{"SUB","BASS","MID","PRES","AIR"};
+            for(size_t i=0;i<5;++i){const float x=left+(right-left)*static_cast<float>(i)/4.f;const auto& proposal=brainSnapshot.proposal;
+                const double target=std::max(1e-20f,proposal.targetShares[i]);
+                const float measuredY=yFor(10*std::log10(std::max(1e-20f,proposal.shares[i])/target)),estimatedY=yFor(10*std::log10(std::max(1e-20f,proposal.estimatedShares[i])/target));
+                if(i==0){measured.startNewSubPath(x,measuredY);estimated.startNewSubPath(x,estimatedY);}else{measured.lineTo(x,measuredY);estimated.lineTo(x,estimatedY);}
+                g.setColour(juce::Colours::whitesmoke);g.fillEllipse(x-2.5f,measuredY-2.5f,5.f,5.f);g.setColour(accent);g.fillEllipse(x-2.5f,estimatedY-2.5f,5.f,5.f);
+                g.setColour(muted);g.drawText(names[i],static_cast<int>(x)-21,static_cast<int>(bottom)+5,42,14,juce::Justification::centred);
             }
-        }else{g.setColour(muted);g.drawFittedText(brainSnapshot.config.useEq?"Awaiting analysis":"Current EQ preserved",36,382,cardWidth-24,cardHeight-48,juce::Justification::centred,2);}
+            g.setColour(juce::Colours::whitesmoke);g.strokePath(measured,juce::PathStrokeType(1.5f));g.setColour(accent);g.strokePath(estimated,juce::PathStrokeType(1.8f));
+        }else{g.setColour(muted);g.drawFittedText("Play audio and analyse to measure five frequency regions.",36,382,cardWidth-24,cardHeight-48,juce::Justification::centred,3);}
         g.setColour(muted);g.setFont(11);g.drawText("Review the proposal. EQ settings may be replaced; Apply is one Undo transaction.",40,getHeight()-66,getWidth()-280,36,juce::Justification::left);
         g.drawText("Explicit DSP rules / no trained AI model / sample-peak limiter",24,getHeight()-25,getWidth()-48,18,juce::Justification::left);
     }
@@ -384,7 +398,7 @@ public:
         for(int i=0;i<4;++i)brainLabels[static_cast<size_t>(i)].setBounds(40+i*brainCell,166,brainCell-12,20);
         brainGenre.setBounds(40,190,brainCell-12,28);brainStyle.setBounds(40+brainCell,190,brainCell-12,28);brainTarget.setBounds(40+2*brainCell,190,brainCell-12,28);brainCeiling.setBounds(40+3*brainCell,190,brainCell-12,28);
         brainLabels[4].setBounds(40,226,brainCell-12,20);brainLabels[5].setBounds(40+brainCell,226,brainCell-12,20);brainDuration.setBounds(40,248,brainCell-12,28);brainIntensity.setBounds(40+brainCell,248,brainCell-12,28);
-        brainEq.setBounds(40+2*brainCell,248,64,28);brainLimiter.setBounds(108+2*brainCell,248,brainCell-80,28);brainAnalyse.setBounds(40+3*brainCell,242,brainCell-12,34);const int resultWidth=std::clamp(getWidth()/3,218,360);brainReport.setBounds(36+resultWidth,342,getWidth()-60-resultWidth,getHeight()-426);brainApply.setBounds(getWidth()-210,getHeight()-66,186,34);
+        brainEq.setBounds(40+2*brainCell,248,64,28);brainLimiter.setBounds(108+2*brainCell,248,brainCell-80,28);brainAnalyse.setBounds(40+3*brainCell,242,brainCell-12,34);const int resultWidth=std::clamp(getWidth()/2-48,300,600);brainReport.setBounds(36+resultWidth,342,getWidth()-60-resultWidth,getHeight()-426);brainApply.setBounds(getWidth()-210,getHeight()-66,186,34);
         const int top=getHeight()-163,width=(getWidth()-64)/4;
         for(int i=0;i<4;++i){auto* label=std::array<juce::Label*,4>{&frequencyLabel,&gainLabel,&qualityLabel,&ceilingLabel}[i];auto* slider=std::array<juce::Slider*,4>{&frequency,&gain,&quality,&ceiling}[i];label->setBounds(32+i*width,top,width-12,22);slider->setBounds(32+i*width,top+22,width-16,113);}
         driveLabel.setBounds(32,top,width-12,22);drive.setBounds(32,top+22,width-16,113);

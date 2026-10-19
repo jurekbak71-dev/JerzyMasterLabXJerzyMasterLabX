@@ -17,3 +17,9 @@ Ustawienia i raport analizy są tymczasowe. Zatwierdzone parametry DSP zapisują
 ## Walidacja
 
 Testy obejmują kombinacje gatunków/stylów/intensywności, granice korekcji, wykluczenie modułów, ciszę i błędne dane. Test procesora sprawdza rzeczywiste osiem sekund analizy, brak automatycznych zmian, brak alokacji C++ w callback podczas zbierania, odrzucenie nieaktualnej propozycji, Apply/Undo, anulowanie i przepełnienie. Test GUI otwiera panel w trzech rozmiarach, zatwierdza i cofa propozycję. Nie wykonano testu FL Studio ani porównania brzmieniowego z Ozone.
+
+## Graficzny balans tonalny
+
+Panel wyników pokazuje pięć zmierzonych udziałów energii względem celu gatunkowego (0 dB). Biała linia to wejście; turkusowa to **EQ ESTIMATE**, czyli przybliżenie po EQ obliczone z rzeczywistych charakterystyk filtrów w pięciu częstotliwościach reprezentatywnych. To nie pomiar przetworzonego wyjścia i nie uwzględnia limitera. Udziały są ponownie normalizowane do całkowitej energii analizowanych regionów. Szczegółowy raport zawiera procenty wejścia/celu/estymaty oraz korekty EQ. Przy EQ wykluczonym estymata uwzględnia zachowany korektor.
+
+Oś ma zakres ±18 dB i przycina odchylenia poza skalą; liczby w raporcie pozostają dostępne. Pięć punktów oznacza szerokie regiony (20–80, 80–250, 250–2000, 2000–6000, 6000–20000 Hz), nie pełną krzywą FFT. Profil docelowy jest heurystyką estetyczną, nie wzorcem jakości. Po Apply trzeba zmierzyć i odsłuchać pełne wyjście. Testy porównują estymowane udziały z energią sinusów faktycznie przepuszczonych przez proponowane filtry przy 44,1/48/96/192 kHz.

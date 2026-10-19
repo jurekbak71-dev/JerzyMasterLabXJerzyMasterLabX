@@ -16,7 +16,7 @@ struct BrainFeatures {
 };
 struct BrainProposal {
  bool valid=false;std::vector<std::pair<std::string,float>> changes;
- std::array<float,5> gains{},shares{};float drive=0,eqEstimate=0;
+ std::array<float,5> gains{},shares{},targetShares{},estimatedShares{};float drive=0,eqEstimate=0;
  std::vector<std::string> reasons,warnings;
 };
 inline constexpr std::array<const char*,9> brainGenres{"Rock","Punk","Post-Punk","Dark Wave","Electronic","Techno","Ambient","Pop","Acoustic"};
@@ -37,7 +37,7 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
  const std::array<float,5> frequencies{70,180,800,3500,9000},qualities{.7071f,.8f,.65f,.7f,.7071f};
  const std::array<int,5> types{1,0,0,0,2};
  for(size_t i=0;i<5;++i){
-  double desired=target[i]/totalTarget;
+  double desired=target[i]/totalTarget;p.targetShares[i]=static_cast<float>(desired);
   if(p.shares[i]>1e-5&&desired>1e-5){double deviation=10*std::log10(p.shares[i]/desired);float correction=std::abs(deviation)>1?static_cast<float>(-.35*deviation):0;
    const float styleScale=std::array<float,4>{.75f,.85f,1.f,.65f}[c.style];p.gains[i]=std::clamp(correction*c.intensity*styleScale,-3.f,3.f);
   }
@@ -54,13 +54,16 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
  const std::array<double,5> centres{40,140,700,3500,11000};double predicted=0;float positiveBoost=0;
  for(size_t region=0;region<5;++region){double amplitude=1;
   for(size_t band=0;band<(c.useEq?5:16);++band){
+   if(c.useEq&&std::abs(p.gains[band])<=.01f)continue;
    if(!c.useEq&&(!c.existingEqEnabled||!c.existingEq[band].enabled))continue;
    Biquad filter;float gain=c.useEq?p.gains[band]:c.existingEq[band].gain;
    filter.configure(f.rate,c.useEq?frequencies[band]:c.existingEq[band].frequency,gain,c.useEq?qualities[band]:c.existingEq[band].q,static_cast<FilterType>(c.useEq?types[band]:c.existingEq[band].type));
    amplitude*=filter.magnitude(f.rate,std::min(centres[region],f.rate*.45));positiveBoost=std::max(positiveBoost,std::max(0.f,gain));
   }
-  predicted+=f.energy[region]*amplitude*amplitude;
+  const double regionEnergy=f.energy[region]*amplitude*amplitude;
+  p.estimatedShares[region]=static_cast<float>(regionEnergy/sum);predicted+=regionEnergy;
  }
+ for(auto& share:p.estimatedShares)share=static_cast<float>(share/(predicted/sum));
  p.eqEstimate=static_cast<float>(10*std::log10(std::max(1e-20,predicted/sum)));
  if(c.useLimiter){
   const float wanted=c.targetLufs-f.integrated-p.eqEstimate;

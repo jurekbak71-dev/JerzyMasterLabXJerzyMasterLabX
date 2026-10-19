@@ -31,3 +31,5 @@ Master Brain: zaimplementowano analizę wejścia poza callback, regułowe propoz
 Walidacja Master Brain w Linux: Release VST3, CTest 15/15, rdzeń ASan/UBSan 9/9, rzeczywisty test GUI (otwieranie, trzy rozmiary, analiza/Apply/Undo), pluginval strictness 5 — zaliczone. Build Windows jest weryfikowany oddzielnie w Actions.
 
 Potwierdzony Windows/MSVC dla `144aa41`: workflow `39221591050` zakończony sukcesem, wraz z testami DSP, GUI i pluginval 1.0.3. Wygenerowany artefakt `JerzyMasterLabX-v0.1.0-Windows-x64` (ID `12172186866`, 3 304 975 bajtów). To rozwojowa paczka VST3 z Master Brain, nie wydanie o pełnym zakresie Ozone. Brak testu FL Studio i porównania brzmieniowego.
+
+Master Brain — balans tonalny: dodano wykres wejścia względem celu gatunkowego oraz estymatę wpływu EQ z rzeczywistych charakterystyk filtrów, liczby energii w raporcie i test zgodności z renderowanymi sinusami przy czterech sample rates. Wykres pokazuje pięć regionów, nie pełną krzywą widmową; estymata nie obejmuje limitera. Linux Release VST3, CTest 15/15, GUI w trzech rozmiarach i pluginval strictness 5 zaliczone. Zaktualizowano analizę pełnych napisów obu filmów.
