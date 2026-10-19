@@ -118,4 +118,10 @@ def main():
     report+='\nUstawienia: EQ → limiter. Rytmiczny Drive 7 dB, Release 140 ms; przestrzenny Drive 4 dB, Release 220 ms. Szczegóły EQ, testy powtarzalności/buforów, wersje narzędzi i SHA-256 są w measurements.json. Pusty render inicjalizuje PDC hosta; test impulsowy potwierdza następnie wyrównanie 0 próbek.\n'
     (args.output/'CZYTAJ_PRZED_ODSLUCHEM.md').write_text(report,encoding='utf-8')
     print(json.dumps(manifest,indent=2))
-if __name__=='__main__':main()
+if __name__=='__main__':
+    try:main()
+    except Exception:
+        import traceback
+        print('::error::'+traceback.format_exc().replace('\r','').replace('\n','%0A'),flush=True)
+        raise
+
