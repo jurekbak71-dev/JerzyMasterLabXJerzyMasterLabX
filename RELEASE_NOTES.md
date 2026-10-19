@@ -14,3 +14,6 @@ Dedykowany Spectral Workspace zastąpił listę parametrów JUCE. Dodano edycję
 19 października 2026: dodano Limiter Workspace z Drive 0–24 dB, Release 10–1000 ms, ceiling, rzeczywistą historią obwiedni GR i peak wyjścia oraz odczytem PDC. Nowe parametry są automatyzowane, wygładzane i zapisane w schema 2. Schema 1 migruje jawnie do ustawień Drive 0 dB/Release 80 ms. Pomiar 10 ms nie zależy od host buffer size; GUI nie steruje działaniem DSP. Nie dodano True Peak ani LUFS.
 
 Walidacja tego etapu w Linux: Release VST3 zbudowany, CTest 7/7, test obu widoków GUI przy trzech rozmiarach i ponownych otwarciach, pluginval strictness 5 (exit 0), rdzeń ASan/UBSan 4/4. Nowa kompilacja Windows/MSVC i testy FL Studio nie zostały potwierdzone lokalnie.
+
+
+Studio GUI: przebudowano oba widoki, typografię, nawigację modułów i kontrolki; rozdzielono osie historii limitera, powiększono odczyty output i GR, dodano karty parametrów oraz peak/RMS i pasek korelacji z istniejących pomiarów. Zachowano identyfikatory parametrów, stan i DSP. Testy lokalne: build Linux VST3, CTest 7/7, ponowne otwieranie i resize obu widoków, test przecięć kontrolek i kliknięcia modułu, pluginval strictness 5 — zaliczone. Status Windows nowej rewizji wymaga wyniku Actions.

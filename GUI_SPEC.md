@@ -26,3 +26,12 @@ Zoom 75–200% i HiDPI, osiem pełnych widoków, dodawanie/usuwanie/powielanie m
 Oddzielny przycisk widoku, trzy kontrolki Drive/Release/Sample Ceiling, bypass modułu, historia GR i output peak, maksimum widocznego zakresu oraz odczyt PDC. Dane 10 ms są generowane w DSP; repaint nie tworzy wartości pomiarów. Okno pokazuje do 10 s audio, obwiednia jest ograniczana wizualnie do 24 dB (wartość maksimum nadal pokazuje głębszą redukcję). Wskaźnik braku nowego audio jest statusem dostarczania danych, nie rozpoznaniem transportu hosta. Linie nie łączą luk utraconych ramek. Generacja i zegar wykrywają reset historii. Po ponownym otwarciu edytor odbiera pozostałe ramki kolejki; pełna historia sesji nie jest gwarantowana.
 
 Test GUI przełącza widoki, sprawdza widoczność i powiązanie nowych kontrolek z parametrami, obecność niezerowej redukcji na wykresie i trzy rozmiary okna. Zapisuje również `build-plugin/limiter-smoke.png`; workflow Windows archiwizuje oba zrzuty.
+
+
+## Studio — przebudowa interfejsu
+
+Wspólny `StudioTheme.h` rysuje własne pokrętła ze wskazówką, podziałką i pierścieniem, zakładki z widocznym zaznaczeniem oraz większe wartości numeryczne. Układ ma pasek tożsamości, stale widoczny łańcuch z zaznaczonym modułem, większy obszar wykresu i cztery karty parametrów. Kliknięcie karty zmienia widok; przeciągnięcie nadal zmienia kolejność. Domyślny rozmiar to 1200×800, minimalny pozostaje 750×550.
+
+Limiter oddziela obszar redukcji (0–24 dB) od historii wyjściowego peak (-60–0 dBFS). Wypełnienie i linie pochodzą z tej samej telemetrycznej historii. Oś czasu pokazuje ostatnie 10 sekund audio. Boczne bary podpisane Peak/RMS reprezentują blokowe metryki całego stereo, nie kanały L/R i nie normowany loudness. Przy małym oknie znikają bary, pozostają wartości liczbowe. EQ ma wypełnione widmo, wykres odpowiedzi i odczyt korelacji z paskiem -1..+1. Grafika i gradienty pozostają w rendererze programowym.
+
+Testy GUI używają ponad 10 sekund syntetycznego sygnału o zmiennej amplitudzie. Sprawdzają także kliknięcie karty oraz brak przecięć widocznych kontrolek w obu widokach przy trzech rozmiarach. Zrzuty w README są aktualnymi wynikami tych testów, nie renderami koncepcyjnymi.

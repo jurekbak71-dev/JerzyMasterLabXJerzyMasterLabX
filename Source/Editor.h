@@ -1,5 +1,6 @@
 #pragma once
 #include "Analysis.h"
+#include "StudioTheme.h"
 
 // Included after Processor. GUI work and FFT never run in the audio callback.
 class Editor final : public juce::AudioProcessorEditor,
@@ -9,7 +10,7 @@ class Editor final : public juce::AudioProcessorEditor,
     using SliderAttachment = juce::AudioProcessorValueTreeState::SliderAttachment;
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
     Processor& processor;
-    juce::LookAndFeel_V4 theme;
+    StudioTheme theme;
     juce::TooltipWindow tooltips{this, 600};
     juce::ComboBox bandChoice, fftChoice;
     juce::TextButton eqView{"SPECTRAL EQ"}, limiterView{"LIMITER"};
@@ -25,38 +26,62 @@ class Editor final : public juce::AudioProcessorEditor,
         eqView.setToggleState(!enabled,juce::dontSendNotification);limiterView.setToggleState(enabled,juce::dontSendNotification);repaint();
     }
     void paintLimiter(juce::Graphics& g){
-        auto area=plot();g.setColour(panel);g.fillRoundedRectangle(area.expanded(24,12),8);
-        g.setFont(11);
-        for(int db:{0,6,12,18,24}){float y=area.getY()+area.getHeight()*db/24.f;g.setColour(juce::Colour(0xff344151));g.drawHorizontalLine(static_cast<int>(y),area.getX(),area.getRight());g.setColour(muted);g.drawText(juce::String(db),8,static_cast<int>(y)-8,32,16,juce::Justification::right);}
-        g.setColour(curve);g.drawText("GAIN REDUCTION ENVELOPE / dB",48,143,getWidth()-300,20,juce::Justification::left);
+        const auto area=plot();
+        const float split=area.getY()+area.getHeight()*.65f;
+        const float grHeight=split-area.getY()-22;
+        g.setColour(panel);g.fillRoundedRectangle(area.expanded(24,12),8);
+        g.setColour(juce::Colour(0xff0c131c));g.fillRect(area);
+        g.setFont(12);
+        for(int seconds=0;seconds<=10;seconds+=2){float x=area.getX()+area.getWidth()*seconds/10.f;g.setColour(juce::Colour(0xff24313e));g.drawVerticalLine(static_cast<int>(x),area.getY(),area.getBottom());g.setColour(muted);g.drawText(seconds==10?"NOW":juce::String(seconds-10)+" s",static_cast<int>(x)-18,static_cast<int>(area.getBottom())+5,40,18,juce::Justification::centred);}
+        for(int db:{0,6,12,18,24}){float y=area.getY()+grHeight*db/24.f;g.setColour(juce::Colour(0xff293645));g.drawHorizontalLine(static_cast<int>(y),area.getX(),area.getRight());g.setColour(muted);g.drawText(juce::String(db),8,static_cast<int>(y)-8,32,16,juce::Justification::right);}
+        g.setColour(curve);g.setFont(12);g.drawText("GAIN REDUCTION",48,144,170,20,juce::Justification::left);
+        g.setColour(muted);g.drawText("10 s  /  AUDIO CLOCK",getWidth()-476,144,224,20,juce::Justification::right);
+        g.setColour(accent);g.setFont(11);g.drawText("OUTPUT PEAK   -60 ... 0 dBFS",static_cast<int>(area.getX())+10,static_cast<int>(split)-18,240,18,juce::Justification::left);
+        g.setColour(juce::Colour(0xff354657));g.drawHorizontalLine(static_cast<int>(split),area.getX(),area.getRight());
         float maximumReduction=0,maximumPeak=0;
         if(historyCount){
             const auto latest=limiterHistory[(historyHead+999)%1000].endSample;
             const double duration=sampleRate()*10.;
-            juce::Path reduction,output;bool started=false;std::uint64_t previous=0;
+            juce::Path reduction,output,fill;bool started=false;std::uint64_t previous=0;float lastX=0;
             for(size_t i=0;i<historyCount;++i){const auto& frame=limiterHistory[(historyHead+1000-historyCount+i)%1000];
                 double age=static_cast<double>(latest-frame.endSample);if(age>duration)continue;
                 float x=area.getRight()-static_cast<float>(age/duration)*area.getWidth();
                 float gr=-juce::Decibels::gainToDecibels(frame.minimumGain,-120.f);
-                float y=area.getY()+area.getHeight()*juce::jlimit(0.f,1.f,gr/24.f);
+                float y=area.getY()+grHeight*juce::jlimit(0.f,1.f,gr/24.f);
                 float peakDb=juce::Decibels::gainToDecibels(frame.outputPeak,-100.f);
-                float py=area.getBottom()-area.getHeight()*juce::jlimit(0.f,1.f,(peakDb+60)/60.f);
+                float py=area.getBottom()-(area.getBottom()-split-8)*juce::jlimit(0.f,1.f,(peakDb+60)/60.f);
                 const bool gap=started&&frame.endSample-previous>std::ceil(sampleRate()*.01)+1;
-                if(!started||gap){reduction.startNewSubPath(x,y);output.startNewSubPath(x,py);}else{reduction.lineTo(x,y);output.lineTo(x,py);}
-                started=true;previous=frame.endSample;maximumReduction=std::max(maximumReduction,gr);maximumPeak=std::max(maximumPeak,frame.outputPeak);
+                if(!started||gap){if(started){fill.lineTo(lastX,area.getY());fill.closeSubPath();}reduction.startNewSubPath(x,y);output.startNewSubPath(x,py);fill.startNewSubPath(x,area.getY());fill.lineTo(x,y);}else{reduction.lineTo(x,y);output.lineTo(x,py);fill.lineTo(x,y);}
+                started=true;previous=frame.endSample;lastX=x;maximumReduction=std::max(maximumReduction,gr);maximumPeak=std::max(maximumPeak,frame.outputPeak);
             }
-            juce::Graphics::ScopedSaveState save(g);g.reduceClipRegion(area.toNearestInt());g.setColour(accent.withAlpha(.55f));g.strokePath(output,juce::PathStrokeType(1.2f));g.setColour(curve);g.strokePath(reduction,juce::PathStrokeType(2));
+            if(started){fill.lineTo(lastX,area.getY());fill.closeSubPath();}
+            juce::Graphics::ScopedSaveState save(g);g.reduceClipRegion(area.toNearestInt());
+            g.setGradientFill(juce::ColourGradient(curve.withAlpha(.23f),0,area.getY(),curve.withAlpha(.04f),0,split,false));g.fillPath(fill);
+            g.setColour(accent.withAlpha(.10f));g.strokePath(output,juce::PathStrokeType(5));g.setColour(accent);g.strokePath(output,juce::PathStrokeType(1.6f));
+            g.setColour(curve.withAlpha(.10f));g.strokePath(reduction,juce::PathStrokeType(7));g.setColour(curve);g.strokePath(reduction,juce::PathStrokeType(2));
         }
-        int x=getWidth()-218;g.setColour(panel);g.fillRoundedRectangle(static_cast<float>(x),162.f,194.f,static_cast<float>(getHeight()-390),8);
-        g.setColour(juce::Colours::whitesmoke);g.setFont(13);g.drawText("LIMITER INSPECTOR",x+12,174,174,20,juce::Justification::left);
-        g.setFont(12);g.drawText("GR max / 10 s: "+juce::String(maximumReduction,1)+" dB",x+12,207,174,20,juce::Justification::left);
-        g.drawText("Out max: "+juce::String(juce::Decibels::gainToDecibels(maximumPeak),1)+" dBFS",x+12,231,174,20,juce::Justification::left);
-        g.setColour(muted);g.drawText("PDC: "+juce::String(processor.getLatencySamples())+" samples",x+12,255,174,20,juce::Justification::left);
-        g.setFont(11);g.drawText("Lookahead 5 ms / release "+juce::String(processor.state.getRawParameterValue("limiterRelease")->load(),1)+" ms",48,static_cast<int>(area.getBottom())+5,getWidth()-300,20,juce::Justification::left);
-        g.drawText("10 s audio history | GR: 0..24 dB | teal: output -60..0 dBFS",48,static_cast<int>(area.getBottom())+25,getWidth()-300,20,juce::Justification::left);
-        g.drawText("Envelope includes route/bypass blend; not total chain attenuation.",28,getHeight()-226,getWidth()-240,20,juce::Justification::left);
-        g.drawText("SAMPLE PEAK ONLY / NO TRUE PEAK",28,getHeight()-203,getWidth()-240,20,juce::Justification::left);
-        if(!historyCount||juce::Time::getMillisecondCounterHiRes()-lastLimiterUpdate>500)g.drawText("No new audio / history held",x+12,280,174,20,juce::Justification::left);
+        const int x=getWidth()-218;
+        g.setColour(panel);g.fillRoundedRectangle(static_cast<float>(x),162.f,194.f,area.getHeight()+36,8);
+        g.setColour(muted);g.setFont(12);g.drawText("MASTER OUTPUT",x+16,176,162,20,juce::Justification::left);
+        g.setColour(juce::Colours::whitesmoke);g.setFont(juce::Font(juce::FontOptions(34.f,juce::Font::bold)));g.drawText(juce::String(juce::Decibels::gainToDecibels(processor.peak.load()),1),x+16,202,150,42,juce::Justification::left);
+        g.setColour(muted);g.setFont(12);g.drawText("SAMPLE PEAK / dBFS",x+16,244,162,18,juce::Justification::left);
+        g.setColour(curve);g.setFont(24);g.drawText(juce::String(maximumReduction,1)+" dB",x+16,274,162,30,juce::Justification::left);
+        g.setColour(muted);g.setFont(11);g.drawText("MAX GR / VISIBLE HISTORY",x+16,307,166,18,juce::Justification::left);
+        if(area.getHeight()>235){
+            const float top=345,bottom=area.getBottom()-10,height=bottom-top;
+            for(int k=0;k<2;++k){float level=k==0?processor.peak.load():processor.rms.load();float db=juce::Decibels::gainToDecibels(level,-60.f);float f=juce::jlimit(0.f,1.f,(db+60)/60);
+                float bx=x+20.f+k*76;g.setColour(juce::Colour(0xff0a1119));g.fillRoundedRectangle(bx,top,52,height,4);
+                g.setGradientFill(juce::ColourGradient(accent,bx,bottom-height,juce::Colour(0xff267d86),bx,bottom,false));g.fillRect(bx,bottom-height*f,52.f,height*f);
+                g.setColour(muted);g.setFont(11);g.drawText(k==0?"PEAK":"RMS",static_cast<int>(bx),static_cast<int>(bottom)+4,52,16,juce::Justification::centred);
+            }
+        }
+        const int dock=getHeight()-174,cell=(getWidth()-64)/4;
+        g.setColour(muted);g.setFont(12);g.drawText("LOOKAHEAD",48+cell*2,dock+15,cell-32,20,juce::Justification::left);
+        g.setColour(juce::Colours::whitesmoke);g.setFont(26);g.drawText("5.0 ms",48+cell*2,dock+41,cell-32,32,juce::Justification::left);
+        g.setColour(muted);g.setFont(12);g.drawText("PDC  "+juce::String(processor.getLatencySamples())+" samples",48+cell*2,dock+88,cell-32,20,juce::Justification::left);
+        g.drawText(juce::String(sampleRate()/1000,1)+" kHz / stereo",48+cell*2,dock+109,cell-32,20,juce::Justification::left);
+
+        if(!historyCount||juce::Time::getMillisecondCounterHiRes()-lastLimiterUpdate>500){g.setColour(muted);g.drawText("WAITING FOR AUDIO",area.toNearestInt().reduced(10),juce::Justification::centred);}
     }
     juce::Slider frequency, gain, quality, ceiling, drive, release;
     juce::Label frequencyLabel, gainLabel, qualityLabel, ceilingLabel, driveLabel, releaseLabel;
@@ -74,7 +99,7 @@ class Editor final : public juce::AudioProcessorEditor,
     double lastAnalysis=0;
     std::array<juce::Point<float>,1024> scope{};
     int head = 0;
-    const juce::Colour background{0xff10151e}, panel{0xff192330}, muted{0xff94a7b8};
+    const juce::Colour background{0xff0b1017}, panel{0xff151e29}, muted{0xffa7b8c8};
     const juce::Colour accent{0xff58dac5}, curve{0xffe7bb6a};
 
     juce::String parameterId(const char* base, int band) const {
@@ -85,7 +110,7 @@ class Editor final : public juce::AudioProcessorEditor,
     }
     double sampleRate() const { return processor.displayRate.load(); }
     juce::Rectangle<float> plot() const {
-        return {48.f, 174.f, std::max(200.f, getWidth() - 300.f), std::max(100.f, getHeight() - 445.f)};
+        return {48.f, 174.f, std::max(200.f, getWidth() - 300.f), std::max(100.f, getHeight() - 394.f)};
     }
     float xForFrequency(double hz) const {
         auto area = plot();
@@ -146,7 +171,7 @@ class Editor final : public juce::AudioProcessorEditor,
         addAndMakeVisible(slider);addAndMakeVisible(label);
         label.setText(name,juce::dontSendNotification);label.setColour(juce::Label::textColourId,muted);
         slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
-        slider.setTextBoxStyle(juce::Slider::TextBoxBelow,false,100,24);
+        slider.setTextBoxStyle(juce::Slider::TextBoxBelow,false,132,28);
         slider.setComponentID(id);slider.setColour(juce::Slider::rotarySliderFillColourId,accent);
     }
 public:
@@ -187,17 +212,17 @@ public:
         eqView.onClick=[this]{showLimiter(false);};limiterView.onClick=[this]{showLimiter(true);};
         eqView.setClickingTogglesState(false);limiterView.setClickingTogglesState(false);
         selectBand(0);showLimiter(false);
-        setResizable(true,true);setResizeLimits(750,550,2000,1400);setSize(1100,720);startTimerHz(30);
+        setResizable(true,true);setResizeLimits(750,550,2000,1400);setSize(1200,800);startTimerHz(30);
     }
     ~Editor() override {stopTimer();endDrag();setLookAndFeel(nullptr);}
     void resized() override {
         eqView.setBounds(getWidth()-270,48,120,26);limiterView.setBounds(getWidth()-142,48,118,26);
-        const int top=getHeight()-171,width=(getWidth()-64)/4;
-        for(int i=0;i<4;++i){auto* label=std::array<juce::Label*,4>{&frequencyLabel,&gainLabel,&qualityLabel,&ceilingLabel}[i];auto* slider=std::array<juce::Slider*,4>{&frequency,&gain,&quality,&ceiling}[i];label->setBounds(32+i*width,top,width-12,22);slider->setBounds(32+i*width,top+22,width-16,120);}
-        driveLabel.setBounds(32,top,width-12,22);drive.setBounds(32,top+22,width-16,120);
-        releaseLabel.setBounds(32+width,top,width-12,22);release.setBounds(32+width,top+22,width-16,120);
-        bandChoice.setBounds(28,getHeight()-211,150,28);fftChoice.setBounds(338,getHeight()-211,164,28);
-        eqEnabled.setBounds(194,getHeight()-211,125,28);limiterEnabled.setBounds(getWidth()-180,getHeight()-211,160,28);
+        const int top=getHeight()-163,width=(getWidth()-64)/4;
+        for(int i=0;i<4;++i){auto* label=std::array<juce::Label*,4>{&frequencyLabel,&gainLabel,&qualityLabel,&ceilingLabel}[i];auto* slider=std::array<juce::Slider*,4>{&frequency,&gain,&quality,&ceiling}[i];label->setBounds(32+i*width,top,width-12,22);slider->setBounds(32+i*width,top+22,width-16,113);}
+        driveLabel.setBounds(32,top,width-12,22);drive.setBounds(32,top+22,width-16,113);
+        releaseLabel.setBounds(32+width,top,width-12,22);release.setBounds(32+width,top+22,width-16,113);
+        bandChoice.setBounds(28,140,126,26);fftChoice.setBounds(164,140,144,26);
+        eqEnabled.setBounds(320,140,125,26);limiterEnabled.setBounds(getWidth()-210,136,186,26);
     }
     bool isInterestedInDragSource(const SourceDetails& details) override {return details.description=="eq"||details.description=="limiter";}
     void itemDropped(const SourceDetails& details) override {
@@ -223,19 +248,33 @@ public:
         bool right=event.getMouseDownX()>getWidth()/2,first=processor.state.getRawParameterValue("order")->load()>.5f;
         startDragging((right?!first:first)?"limiter":"eq",this);
     }
-    void mouseUp(const juce::MouseEvent&) override {endDrag();}
+    void mouseUp(const juce::MouseEvent& event) override {
+        const bool moved=event.mouseWasDraggedSinceMouseDown();endDrag();
+        if(!moved&&event.position.y>=84&&event.position.y<=132){bool first=processor.state.getRawParameterValue("order")->load()>.5f;showLimiter(event.position.x>getWidth()/2?!first:first);}
+    }
     void mouseWheelMove(const juce::MouseEvent& event,const juce::MouseWheelDetails& wheel) override {
         if(!showingLimiter&&plot().contains(event.position)&&event.position.getDistanceFrom(node(selectedBand))<24){setParameter("q",juce::jlimit(.1f,10.f,value("q",selectedBand)*std::exp(wheel.deltaY*2)),true);repaint();}
         else AudioProcessorEditor::mouseWheelMove(event,wheel);
     }
     void paint(juce::Graphics& g) override {
-        g.fillAll(background);g.setColour(juce::Colours::whitesmoke);g.setFont(24);
-        g.drawText("JERZY MASTERLAB X",24,13,getWidth()-300,30,juce::Justification::left);
-        g.setColour(accent);g.setFont(12);g.drawText(showingLimiter?"LIMITER WORKSPACE / DEVELOPMENT":"SPECTRAL WORKSPACE / DEVELOPMENT",24,44,420,22,juce::Justification::left);
-        g.setColour(muted);g.drawText("OUT "+juce::String(juce::Decibels::gainToDecibels(processor.peak.load()),1)+" dBFS   RMS "+juce::String(juce::Decibels::gainToDecibels(processor.rms.load()),1)+" dBFS",getWidth()-330,22,306,24,juce::Justification::right);
+        g.fillAll(background);
+        g.setGradientFill(juce::ColourGradient(juce::Colour(0xff1c2d3b),0,0,background,static_cast<float>(getWidth()),100,false));g.fillRect(0,0,getWidth(),76);
+        g.setColour(accent);g.fillRoundedRectangle(24.f,19.f,5.f,32.f,2);
+        g.setColour(juce::Colours::whitesmoke);g.setFont(juce::Font(juce::FontOptions(23.f,juce::Font::bold)));g.drawText("MASTERLAB",42,12,190,30,juce::Justification::left);
+        g.setColour(accent);g.drawText("X",190,12,40,30,juce::Justification::left);
+        g.setColour(muted);g.setFont(11);g.drawText("JERZY  /  MODULAR MASTERING",42,43,300,18,juce::Justification::left);
+        g.drawText(juce::String(sampleRate()/1000,1)+" kHz   /   STEREO   /   DEVELOPMENT",getWidth()-335,14,310,22,juce::Justification::right);
+        const int dock=getHeight()-174,cell=(getWidth()-64)/4;
+        for(int i=0;i<4;++i){g.setColour(panel);g.fillRoundedRectangle(static_cast<float>(24+i*cell),static_cast<float>(dock),static_cast<float>(cell-8),146.f,7);g.setColour(juce::Colour(0xff2b3a49));g.drawRoundedRectangle(static_cast<float>(24+i*cell)+.5f,static_cast<float>(dock)+.5f,static_cast<float>(cell-9),145.f,7,1);}
         bool first=processor.state.getRawParameterValue("order")->load()>.5f;
-        for(int i=0;i<2;++i){int x=24+i*(getWidth()/2);g.setColour(panel);g.fillRoundedRectangle(static_cast<float>(x),84.f,getWidth()*.5f-48,48,6);g.setColour(i==0?accent:curve);g.fillRect(x,94,3,28);g.setFont(14);g.drawText((i==0?!first:first)?"SPECTRAL EQ  /  16 BELL BANDS":"LIMITER  /  SAMPLE PEAK",x+16,89,getWidth()/2-70,20,juce::Justification::left);g.setColour(muted);g.setFont(11);g.drawText("DRAG TO REORDER",x+16,109,220,16,juce::Justification::left);}
-        if(showingLimiter){paintLimiter(g);if(first){g.setColour(curve);g.drawText("EQ follows limiter: final output may exceed limiter ceiling",24,getHeight()-25,getWidth()-48,18,juce::Justification::left);}return;}
+        for(int i=0;i<2;++i){int x=24+i*(getWidth()/2);bool isEq=i==0?!first:first,active=isEq?!showingLimiter:showingLimiter;auto colour=isEq?accent:curve;
+            g.setColour(active?juce::Colour(0xff20323c):panel);g.fillRoundedRectangle(static_cast<float>(x),84.f,getWidth()*.5f-48,48,6);
+            g.setColour(active?colour:juce::Colour(0xff354553));g.drawRoundedRectangle(static_cast<float>(x)+.5f,84.5f,getWidth()*.5f-49,47,6,1);
+            g.setColour(colour);g.setFont(12);g.drawText("0"+juce::String(i+1),x+12,92,30,24,juce::Justification::left);
+            g.setColour(juce::Colours::whitesmoke);g.setFont(juce::Font(juce::FontOptions(15.f,juce::Font::bold)));g.drawText(isEq?"SPECTRAL EQ":"LIMITER",x+50,90,getWidth()/2-116,22,juce::Justification::left);
+            g.setColour(muted);g.setFont(11);g.drawText(isEq?"16-band parametric  /  drag to reorder":"Lookahead dynamics  /  drag to reorder",x+50,111,getWidth()/2-116,16,juce::Justification::left);
+        }
+        if(showingLimiter){paintLimiter(g);g.setColour(first?curve:muted);g.setFont(11);g.drawText(first?"EQ follows limiter: final output may exceed limiter ceiling":"SAMPLE PEAK  /  True Peak unavailable",24,getHeight()-25,getWidth()-48,18,juce::Justification::left);return;}
         auto area=plot();g.setColour(juce::Colour(0xff141c26));g.fillRoundedRectangle(area.expanded(24,12),8);
         g.setFont(11);
         for(float db:{-18.f,-12.f,-6.f,0.f,6.f,12.f,18.f}){float y=yForGain(db);g.setColour(db==0?juce::Colour(0xff536374):juce::Colour(0xff273240));g.drawHorizontalLine(static_cast<int>(y),area.getX(),area.getRight());g.setColour(muted);g.drawText(juce::String(db,0),8,static_cast<int>(y)-8,32,16,juce::Justification::right);}
@@ -244,17 +283,25 @@ public:
             for(int i=0;i<512;++i){double hz=20*std::pow(sampleRate()*.5/20,i/511.);float x=area.getX()+area.getWidth()*i/511.f;float binPosition=juce::jlimit(0.f,static_cast<float>((1<<fftOrder)/2-1),static_cast<float>(hz*(1<<fftOrder)/sampleRate()));int bin=static_cast<int>(binPosition);float level=spectrum[bin]+(binPosition-bin)*(spectrum[bin+1]-spectrum[bin]);float db=juce::Decibels::gainToDecibels(level,-100.f);float sy=area.getBottom()-area.getHeight()*juce::jlimit(0.f,1.f,(db+100)/100.f);
                 if(i==0)spectral.startNewSubPath(x,sy);else spectral.lineTo(x,sy);
                 if(haveResponse){std::complex<double> transfer{1,0};for(const auto& band:response.bands)transfer*=band.response(response.rate,hz);transfer=(1.-response.eqMix)+static_cast<double>(response.eqMix)*transfer;float y=yForGain(static_cast<float>(20*std::log10(std::max(1e-12,std::abs(transfer)))));if(i==0)total.startNewSubPath(x,y);else total.lineTo(x,y);}}
-            g.setColour(accent.withAlpha(.48f));g.strokePath(spectral,juce::PathStrokeType(1.3f));
+            auto spectralFill=spectral;spectralFill.lineTo(area.getRight(),area.getBottom());spectralFill.lineTo(area.getX(),area.getBottom());spectralFill.closeSubPath();g.setGradientFill(juce::ColourGradient(accent.withAlpha(.22f),0,area.getY(),accent.withAlpha(.01f),0,area.getBottom(),false));g.fillPath(spectralFill);g.setColour(accent.withAlpha(.8f));g.strokePath(spectral,juce::PathStrokeType(1.5f));
             if(haveResponse){juce::Path individual;for(int i=0;i<512;++i){double hz=20*std::pow(sampleRate()*.5/20,i/511.);float x=area.getX()+area.getWidth()*i/511.f;float y=yForGain(static_cast<float>(20*std::log10(std::max(1e-12,response.bands[selectedBand].magnitude(response.rate,hz)))));if(i==0)individual.startNewSubPath(x,y);else individual.lineTo(x,y);}g.setColour(curve.withAlpha(.3f));g.strokePath(individual,juce::PathStrokeType(1));g.setColour(curve);g.strokePath(total,juce::PathStrokeType(2));}
             for(int i=0;i<16;++i){if(i!=selectedBand&&std::abs(value("gain",i))<.01f)continue;auto position=node(i);g.setColour(i==selectedBand?curve:muted);g.fillEllipse(position.x-5,position.y-5,10,10);if(i==selectedBand){g.drawEllipse(position.x-9,position.y-9,18,18,1.5f);g.setFont(11);g.drawText(juce::String(i+1),static_cast<int>(position.x)+13,static_cast<int>(position.y)-12,26,22,juce::Justification::left);}}
         }
-        int inspectorX=getWidth()-218;g.setColour(panel);g.fillRoundedRectangle(static_cast<float>(inspectorX),162.f,194.f,static_cast<float>(getHeight()-390),8);g.setColour(muted);g.setFont(12);g.drawText("STEREO INSPECTOR",inspectorX+12,174,170,20,juce::Justification::left);
+        int inspectorX=getWidth()-218;g.setColour(panel);g.fillRoundedRectangle(static_cast<float>(inspectorX),162.f,194.f,static_cast<float>(getHeight()-370),8);g.setColour(muted);g.setFont(12);g.drawText("STEREO INSPECTOR",inspectorX+12,174,170,20,juce::Justification::left);
         const float radius=std::min(56.f,(getHeight()-488.f)*.5f),cx=inspectorX+97.f,cy=204.f+radius;g.setColour(juce::Colour(0xff3c4c5c));g.drawEllipse(cx-radius,cy-radius,2*radius,2*radius,1);g.drawLine(cx-radius,cy,cx+radius,cy);g.drawLine(cx,cy-radius,cx,cy+radius);
         {juce::Graphics::ScopedSaveState save(g);g.reduceClipRegion(juce::Rectangle<int>(inspectorX+24,204,146,static_cast<int>(radius*2)));g.setColour(accent.withAlpha(.45f));for(auto point:scope)g.fillEllipse(cx+point.x*radius-1,cy-point.y*radius-1,2,2);}
         g.setColour(juce::Colours::whitesmoke);g.drawText("CORR "+juce::String(processor.correlation.load(),3),inspectorX+12,static_cast<int>(cy+radius+10),170,20,juce::Justification::left);
         g.setColour(muted);g.setFont(11);g.drawText("5 ms lookahead / sample peak",inspectorX+12,static_cast<int>(cy+radius+34),170,20,juce::Justification::left);
-        g.setColour(accent);g.drawText("L/R ENERGY FFT",48,143,130,20,juce::Justification::left);g.setColour(curve);g.drawText(haveResponse?"EQ RESPONSE / AUDIO COEFFICIENTS":"EQ RESPONSE / WAITING FOR AUDIO",190,143,getWidth()-450,20,juce::Justification::left);
-        g.setColour(muted);g.setFont(11);g.drawText("Spectrum: -100 to 0 dBFS   |   EQ: +/-18 dB   |   Drag a node / wheel adjusts Q",48,static_cast<int>(area.getBottom())+25,getWidth()-300,20,juce::Justification::left);
+        const float correlation=juce::jlimit(-1.f,1.f,processor.correlation.load());
+        const float barY=cy+radius+64;
+        g.setColour(juce::Colour(0xff0a1119));g.fillRoundedRectangle(inspectorX+16.f,barY,162,6,3);
+        g.setColour(correlation<0?juce::Colour(0xffe68a79):accent);float correlationX=inspectorX+97.f+correlation*81.f;g.fillRect(std::min(inspectorX+97.f,correlationX),barY,std::max(1.f,std::abs(correlation)*81.f),6.f);
+        if(getHeight()>650){g.setColour(muted);g.setFont(11);g.drawText("OUTPUT PEAK / dBFS",inspectorX+16,static_cast<int>(barY)+22,162,18,juce::Justification::left);
+            g.setColour(juce::Colours::whitesmoke);g.setFont(24);g.drawText(juce::String(juce::Decibels::gainToDecibels(processor.peak.load()),1),inspectorX+16,static_cast<int>(barY)+42,162,30,juce::Justification::left);
+            g.setColour(muted);g.setFont(12);g.drawText("RMS  "+juce::String(juce::Decibels::gainToDecibels(processor.rms.load()),1)+" dBFS",inspectorX+16,static_cast<int>(barY)+80,162,18,juce::Justification::left);
+        }
+        g.setColour(muted);g.setFont(11);g.drawText("FFT: L/R energy  /  gold: EQ response",48,static_cast<int>(area.getBottom())+25,getWidth()-300,18,juce::Justification::left);
+        g.setColour(muted);g.setFont(11);if(!first)g.drawText("Drag nodes to shape tone  /  Mouse wheel adjusts Q",24,getHeight()-25,getWidth()-48,18,juce::Justification::left);
         if(first){g.setColour(curve);g.drawText("EQ follows limiter: final output may exceed limiter ceiling",24,getHeight()-25,getWidth()-48,18,juce::Justification::left);}
     }
 };
