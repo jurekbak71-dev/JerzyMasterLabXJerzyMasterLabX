@@ -1,0 +1,49 @@
+name: Actual Brain and DSP audio demonstration
+on:
+  workflow_dispatch:
+    inputs:
+      build_run:
+        description: Successful Windows build with VST3 and brain_demo tool from the same source
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  render:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: JerzyMasterLabX-v0.1.0-Windows-x64
+          run-id: ${{ inputs.build_run }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: vst3-package
+      - uses: actions/download-artifact@v4
+        with:
+          name: MasterLabX-analysis-tools-Windows-x64
+          run-id: ${{ inputs.build_run }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: analysis-tools
+      - name: Install pinned offline audio host
+        run: python -m pip install -r tools/audio/requirements.txt
+      - name: Extract verified actual Windows VST3
+        shell: pwsh
+        run: Expand-Archive vst3-package/JerzyMasterLabX-v0.1.0-Windows-x64.zip -DestinationPath vst3-package/extracted
+      - name: Demonstrate actual Brain and targeted DSP with matched levels
+        shell: pwsh
+        run: |
+          $bundle = (Get-ChildItem vst3-package/extracted -Directory -Recurse -Filter JerzyMasterLabX.vst3 | Select-Object -First 1).FullName
+          $brain = (Get-ChildItem analysis-tools -Recurse -Filter brain_demo.exe | Select-Object -First 1).FullName
+          if (-not $bundle -or -not $brain) { throw 'Actual VST3 or Brain tool missing' }
+          python tools/audio/render_demonstration.py --plugin "$bundle" --brain-tool "$brain" --output demonstration
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MasterLabX-DEMONSTRACJA-PRZED-BRAIN-RECZNIE
+          path: demonstration/
+          if-no-files-found: error
+          retention-days: 30
