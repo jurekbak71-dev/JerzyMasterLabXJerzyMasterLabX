@@ -1,0 +1,30 @@
+name: Inspect archived test diagnostics
+on:
+  workflow_dispatch:
+    inputs:
+      build_run:
+        required: true
+permissions:
+  contents: read
+  actions: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-logs
+          run-id: ${{ inputs.build_run }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: logs
+      - name: Expose archived CTest diagnostics
+        shell: python
+        run: |
+          from pathlib import Path
+          for path in Path('logs').rglob('*TestsFailed*'):
+              print('::notice::'+path.read_text().replace('%','%25').replace('\n','%0A'))
+          for path in Path('logs').rglob('LastTest.log'):
+              text=path.read_text()
+              for section in text.split('Testing: '):
+                  if 'Test Failed.' in section or 'Exception' in section:
+                      print('::notice::'+section[:20000].replace('%','%25').replace('\r','%0D').replace('\n','%0A'))

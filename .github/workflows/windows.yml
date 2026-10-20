@@ -14,6 +14,15 @@ jobs:
         run: cmake --build build --config Release --parallel 2
       - name: DSP tests
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Report test failure details
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-ChildItem build/Testing/Temporary -Filter '*TestsFailed*' | ForEach-Object { Get-Content $_.FullName | ForEach-Object { Write-Output "::error::Failed CTest: $_" } }
+          if (Test-Path build/Testing/Temporary/LastTest.log) {
+            $report = (Get-Content build/Testing/Temporary/LastTest.log -Raw).Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
+            Write-Output "::notice::CTest details: $report"
+          }
       - name: GUI reopen and resize smoke test
         run: ./build/Release/plugin_tests.exe --gui
       - name: Download pluginval 1.0.3
