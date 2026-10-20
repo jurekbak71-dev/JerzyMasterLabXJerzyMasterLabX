@@ -55,7 +55,12 @@ class GuiSmoke final : private juce::Timer {
         for(const char* id:{"dynamicEqPresent","dynamicsPresent","stereoPresent"})parameter(id)->setValueNotifyingHost(1);
         // Drop the Imager before Dynamic EQ, then verify Undo restores the route.
         auto* target=dynamic_cast<juce::DragAndDropTarget*>(editor.get());if(!target)return false;
-        const float routeBefore=actual("chainOrder");juce::DragAndDropTarget::SourceDetails drop("module:2",editor.get(),{50,104});if(!target->isInterestedInDragSource(drop))return false;target->itemDropped(drop);if(actual("chainOrder")==routeBefore)return false;undo->onClick();if(actual("chainOrder")!=routeBefore)return false;
+        const float routeBefore=actual("chainOrder");
+        juce::Point<float> chainStart(24+(editor->getWidth()-48.f)/5*2.5f,104),chainEnd(70,104);
+        auto chainEvent=[&](juce::Point<float> point,bool dragged){return juce::MouseEvent(source,point,juce::ModifierKeys(juce::ModifierKeys::leftButtonModifier),1,0,0,0,0,editor.get(),editor.get(),now,chainStart,now,1,dragged);};
+        editor->mouseDown(chainEvent(chainStart,false));editor->mouseDrag(chainEvent(chainEnd,true));editor->mouseUp(chainEvent(chainEnd,true));if(actual("chainOrder")==routeBefore)return false;undo->onClick();if(actual("chainOrder")!=routeBefore)return false;
+        auto* routing=dynamic_cast<juce::ComboBox*>(editor->findChildWithID("chain-routing"));if(!routing)return false;routing->setSelectedId(2,juce::sendNotificationSync);if(actual("routingMode")!=1)return false;routing->setSelectedId(1,juce::sendNotificationSync);if(actual("routingMode")!=0)return false;
+
         parameter("upwardAmount")->setValueNotifyingHost(4.f/18);
         auto set=[&](const char* id,float value){auto* p=parameter(id);p->setValueNotifyingHost(p->convertTo0to1(value));};set("stabilizerPresent",1);set("stabilizerAmount",55);set("stabilizerSpeed",25);set("dynThreshold",-36);set("deqFreq1",1000);set("deqThreshold1",-42);set("deqRange1",-4);set("deqFreq2",3333);set("deqThreshold2",-42);set("deqRange2",-6);
 

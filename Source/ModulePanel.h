@@ -8,7 +8,8 @@ class ModulePanel final : public juce::Component {
  std::vector<std::unique_ptr<Control>> controls;
  juce::ToggleButton present{"In chain"},enabled{"Active"},monoBass{"Mono bass"},mono{"Mono preview"},bandOn{"Band active"};
  juce::ComboBox mode,bandChoice,profile;juce::ToggleButton tame{"Tame transients"},stabilizerDelta{"Delta"};std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> tameAttachment,stabilizerDeltaAttachment;std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> profileAttachment;
- std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> presenceAttachment,enabledAttachment,monoBassAttachment,monoAttachment,bandAttachment;
+ std::unique_ptr<juce::ParameterAttachment> presenceAttachment;
+ std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> enabledAttachment,monoBassAttachment,monoAttachment,bandAttachment;
  std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAttachment;
  Processor::ResponseFrame frame;std::array<juce::Point<float>,1024> scope{};
  std::array<std::array<float,2>,240> history{};size_t historyHead=0,historyCount=0;int selectedBand=1;
@@ -23,6 +24,7 @@ class ModulePanel final : public juce::Component {
  void add(const char* name,const juce::String& id,const char* suffix=""){
   auto control=std::make_unique<Control>();controlsContent.addAndMakeVisible(control->label);controlsContent.addAndMakeVisible(control->slider);control->label.setText(name,juce::dontSendNotification);control->label.setColour(juce::Label::textColourId,muted);
   control->slider.setSliderStyle(juce::Slider::LinearHorizontal);control->slider.setTextBoxStyle(juce::Slider::TextBoxRight,false,110,24);control->slider.setTextValueSuffix(suffix);control->slider.setComponentID(id);
+  if(kind==0)control->slider.onDragStart=[this]{auto* p=processor.state.getParameter("deqBandOn"+juce::String(selectedBand));if(p->getValue()<.5f)p->setValueNotifyingHost(1);};
   control->attachment=std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(processor.state,id,control->slider);controls.push_back(std::move(control));
  }
  void bindBand(){
@@ -34,7 +36,9 @@ public:
  ModulePanel(Processor& p,StudioTheme& t,int type):processor(p),theme(t),kind(type){
   setLookAndFeel(&theme);addAndMakeVisible(controlsViewport);controlsViewport.setViewedComponent(&controlsContent,false);controlsViewport.setScrollBarsShown(true,false);const char* presence=kind==3?"stabilizerPresent":kind==0?"dynamicEqPresent":(kind==1?"dynamicsPresent":"stereoPresent");const char* on=kind==3?"stabilizerOn":kind==0?"dynamicEqOn":(kind==1?"dynamicsOn":"stereoOn");
   addAndMakeVisible(present);addAndMakeVisible(enabled);present.setComponentID(juce::String(presence));enabled.setComponentID(on);
-  presenceAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.state,presence,present);enabledAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.state,on,enabled);
+  presenceAttachment=std::make_unique<juce::ParameterAttachment>(*processor.state.getParameter(presence),[this](float v){present.setToggleState(v>.5f,juce::dontSendNotification);},nullptr);presenceAttachment->sendInitialUpdate();enabledAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.state,on,enabled);
+  present.onClick=[this]{processor.setModulePresentUI(kind==3?5:kind,present.getToggleState());};
+  enabled.onClick=[this]{if(enabled.getToggleState()&&!present.getToggleState())processor.setModulePresentUI(kind==3?5:kind,true);};
   present.setTooltip("Add or remove this processor from the signal chain. Settings are retained; changes crossfade.");enabled.setTooltip("Bypass this module independently without removing it. No added latency.");
   if(kind==0){add("Frequency","deqFreq1"," Hz");add("Static gain","deqGain1"," dB");add("Q","deqQ1");add("Threshold","deqThreshold1"," dBFS");add("Dynamic range","deqRange1"," dB");add("Attack","deqAttack1"," ms");add("Release","deqRelease1"," ms");addAndMakeVisible(bandChoice);addAndMakeVisible(bandOn);for(int i=1;i<=3;++i)bandChoice.addItem("Band "+juce::String(i),i);bandChoice.setSelectedId(1);bandChoice.onChange=[this]{selectedBand=bandChoice.getSelectedId();bindBand();};bindBand();}
   if(kind==1){add("Threshold","dynThreshold"," dBFS");add("Ratio","dynRatio",":1");add("Upward maximum","upwardAmount"," dB");add("Upward threshold","upwardThreshold"," dBFS");add("Attack","dynAttack"," ms");add("Release","dynRelease"," ms");add("Knee","dynKnee"," dB");add("Makeup","dynMakeup"," dB");add("Dry / wet","dynMix");addAndMakeVisible(mode);mode.addItem("Digital",1);mode.addItem("Analog",2);modeAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.state,"dynamicsMode",mode);mode.setTooltip("Digital: clean gain processing. Analog: slower detector, wider knee and mild arctangent colour. Original DSP, no hardware emulation or oversampling.");}

@@ -103,7 +103,7 @@ def main():
         input_file=data/'PRZED.wav';write(input_file,damaged);damaged=read_pcm24(input_file)
         result=subprocess.run([str(args.brain_tool.resolve()),str(input_file.resolve()),str(data.resolve())],capture_output=True,text=True)
         if result.returncode:raise RuntimeError('Actual Brain tool failed: '+result.stdout+' '+result.stderr)
-        brain=json.loads((data/'brain-proposal.json').read_text());assert len(brain['parameters'])==161
+        brain=json.loads((data/'brain-proposal.json').read_text());assert len(brain['parameters'])==162
         p=load_plugin(str(plugin_location(args.plugin)))
         for setting in brain['parameters']:
             key=normalize_python_parameter_name(setting['name']);raw(p,key,setting['normalized'])

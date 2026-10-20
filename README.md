@@ -1,5 +1,7 @@
 # Jerzy MasterLab X
 
+[Naprawa aktywacji, przeciągania modułów i trybów Serial/Parallel](CHAIN_ROUTING_FIX.md). Schema 6, 162 parametry; poprzednie wersje stanu są migrowane.
+
 Aktualizacja Master Brain: [analiza szczegółowa i weryfikacja rzeczywistym DSP](BRAIN_IMPROVEMENTS.md).
 
 ## Aktualizacja: routing, Imager i Stabilizer

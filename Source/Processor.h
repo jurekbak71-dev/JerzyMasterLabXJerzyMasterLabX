@@ -75,11 +75,12 @@ public:
   for(int i=1;i<=4;++i){auto suffix=juce::String(i);p.add(std::make_unique<juce::AudioParameterBool>("stereoBandOn"+suffix,"Stereo band "+suffix+" enabled",true));p.add(std::make_unique<juce::AudioParameterBool>("stereoSolo"+suffix,"Stereo band "+suffix+" solo",false));}
   number("stereoAmount","Stereo amount",0,1,1);boolean("stereoDelta","Stereo delta monitor",false);
   boolean("stabilizerPresent","Stabilizer in chain",false);boolean("stabilizerOn","Stabilizer enabled",true);p.add(std::make_unique<juce::AudioParameterChoice>("stabilizerMode","Stabilizer mode",juce::StringArray{"Shape","Cut"},0));p.add(std::make_unique<juce::AudioParameterChoice>("stabilizerProfile","Stabilizer profile",juce::StringArray{"Neutral","Electronic","Acoustic"},0));number("stabilizerAmount","Stabilizer amount",0,100,25);number("stabilizerSpeed","Stabilizer response time",0,100,50);number("stabilizerSmoothing","Stabilizer spectral smoothing",0,100,50);number("stabilizerLow","Stabilizer low amount",0,100,100);number("stabilizerMid","Stabilizer mid amount",0,100,100);number("stabilizerHigh","Stabilizer high amount",0,100,100);boolean("stabilizerTame","Stabilizer tame transients",true);boolean("stabilizerDelta","Stabilizer delta monitor",false);
+  p.add(std::make_unique<juce::AudioParameterChoice>("routingMode","Module routing",juce::StringArray{"Serial","Parallel"},0));
  }
  void updateModules(){
   masterlab::configureModules(engine,[&](size_t i){return parameters[i]->load();});
  }
- Processor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,&undoManager,"MasterLab",layout()){state.state.setProperty("schemaVersion",5,nullptr);state.state.setProperty("eqInstanceId","eq-0001",nullptr);state.state.setProperty("limiterInstanceId","limiter-0001",nullptr);state.state.setProperty("dynamicEqInstanceId","dynamic-eq-0001",nullptr);state.state.setProperty("dynamicsInstanceId","dynamics-0001",nullptr);state.state.setProperty("stereoInstanceId","stereo-0001",nullptr);state.state.setProperty("stabilizerInstanceId","stabilizer-0001",nullptr);const char* ids[]={"frequency","gain","q","ceiling","eq","lim","order"};for(size_t i=0;i<7;++i)parameters[i]=state.getRawParameterValue(ids[i]);for(int k=2;k<=16;++k){int offset=7+(k-2)*3;const auto suffix=juce::String(k);parameters[offset]=state.getRawParameterValue("frequency"+suffix);parameters[offset+1]=state.getRawParameterValue("gain"+suffix);parameters[offset+2]=state.getRawParameterValue("q"+suffix);}
+ Processor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,&undoManager,"MasterLab",layout()){state.state.setProperty("schemaVersion",6,nullptr);state.state.setProperty("eqInstanceId","eq-0001",nullptr);state.state.setProperty("limiterInstanceId","limiter-0001",nullptr);state.state.setProperty("dynamicEqInstanceId","dynamic-eq-0001",nullptr);state.state.setProperty("dynamicsInstanceId","dynamics-0001",nullptr);state.state.setProperty("stereoInstanceId","stereo-0001",nullptr);state.state.setProperty("stabilizerInstanceId","stabilizer-0001",nullptr);const char* ids[]={"frequency","gain","q","ceiling","eq","lim","order"};for(size_t i=0;i<7;++i)parameters[i]=state.getRawParameterValue(ids[i]);for(int k=2;k<=16;++k){int offset=7+(k-2)*3;const auto suffix=juce::String(k);parameters[offset]=state.getRawParameterValue("frequency"+suffix);parameters[offset+1]=state.getRawParameterValue("gain"+suffix);parameters[offset+2]=state.getRawParameterValue("q"+suffix);}
  parameters[52]=state.getRawParameterValue("limiterDrive");parameters[53]=state.getRawParameterValue("limiterRelease");
  for(int k=1;k<=16;++k){parameters[54+(k-1)*2]=state.getRawParameterValue("bandType"+juce::String(k));parameters[55+(k-1)*2]=state.getRawParameterValue("bandEnabled"+juce::String(k));}
  for(size_t i=0;i<masterlab::moduleParameterIds.size();++i)parameters[86+i]=state.getRawParameterValue(masterlab::moduleParameterIds[i]);}
@@ -147,6 +148,17 @@ public:
  bool loadPreset(const juce::File& file){
   juce::FileInputStream input(file);if(!input.openedOk()||input.getTotalLength()>1024*1024)return false;
   juce::MemoryBlock data;input.readIntoMemoryBlock(data,1024*1024+1);return applyPreset(data.getData(),static_cast<int>(data.getSize()));
+ }
+ void setModulePresentUI(int kind,bool included){
+  if(kind<0||kind>5)return;
+  const char* presence=std::array<const char*,6>{"dynamicEqPresent","dynamicsPresent","stereoPresent","eqPresent","limPresent","stabilizerPresent"}[kind];
+  const char* enabled=std::array<const char*,6>{"dynamicEqOn","dynamicsOn","stereoOn","eq","lim","stabilizerOn"}[kind];
+  beginUiTransaction(included?"Add and activate module":"Remove module");
+  auto set=[&](const juce::String& id,float value){auto* p=state.getParameter(id);p->beginChangeGesture();p->setValueNotifyingHost(p->convertTo0to1(value));p->endChangeGesture();};
+  set(presence,included?1.f:0.f);if(included){set(enabled,1);
+   if(kind==3){bool any=false;for(int i=1;i<=16;++i)any|=state.getRawParameterValue("bandEnabled"+juce::String(i))->load()>.5f;if(!any)set("bandEnabled1",1);}
+   if(kind==0){bool any=false;for(int i=1;i<=3;++i)any|=state.getRawParameterValue("deqBandOn"+juce::String(i))->load()>.5f;if(!any)set("deqBandOn1",1);}
+  }finishUiTransaction();
  }
  void startBrainUI(masterlab::BrainConfig config){
   brainBaseline.clear();for(auto* parameter:parameters)brainBaseline.push_back(parameter->load());

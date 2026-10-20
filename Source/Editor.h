@@ -15,7 +15,8 @@ class Editor final : public juce::AudioProcessorEditor,
     StudioTheme theme;
     std::array<std::unique_ptr<ModulePanel>,4> modulePanels;
     juce::TextButton dynamicView{"Dynamic EQ"},dynamicsView{"Dynamics"},stereoView{"Stereo"},stabilizerView{"Stabilizer"},modulesButton{"+ Modules"};
-    int moduleView=-1;
+    int moduleView=-1,chainDragKind=-1,chainHover=-1;bool chainDragging=false;
+    juce::ComboBox routingChoice;std::unique_ptr<ComboAttachment> routingAttachment;
     std::vector<int> chainModules() const {
         std::vector<int> result;
         const auto order=masterlab::decodeOrder(static_cast<int>(processor.state.getRawParameterValue("chainOrder")->load()),processor.state.getRawParameterValue("order")->load()>.5f);
@@ -296,6 +297,7 @@ class Editor final : public juce::AudioProcessorEditor,
         draggingNode=false;processor.finishUiTransaction();
     }
     void timerCallback() override {
+        eqEnabled.setToggleState(processor.state.getRawParameterValue("eq")->load()>.5f&&processor.state.getRawParameterValue("eqPresent")->load()>.5f,juce::dontSendNotification);limiterEnabled.setToggleState(processor.state.getRawParameterValue("lim")->load()>.5f&&processor.state.getRawParameterValue("limPresent")->load()>.5f,juce::dontSendNotification);
         if(showingBrain)refreshBrain();
         undoButton.setEnabled(processor.undoManager.canUndo());redoButton.setEnabled(processor.undoManager.canRedo());
         gain.setEnabled(gainApplies(selectedBand));gainLabel.setText(gainApplies(selectedBand)?"Gain":"GAIN / NOT USED",juce::dontSendNotification);
@@ -345,15 +347,19 @@ public:
         for(auto* button:{&dynamicView,&dynamicsView,&stereoView,&stabilizerView,&modulesButton})addAndMakeVisible(button);
         dynamicView.setComponentID("view-dynamic-eq");dynamicsView.setComponentID("view-dynamics");stereoView.setComponentID("view-stereo");stabilizerView.setComponentID("view-stabilizer");modulesButton.setComponentID("module-menu");
         dynamicView.onClick=[this]{showModule(0);};dynamicsView.onClick=[this]{showModule(1);};stereoView.onClick=[this]{showModule(2);};stabilizerView.onClick=[this]{showModule(3);};
+        addAndMakeVisible(routingChoice);routingChoice.setComponentID("chain-routing");routingChoice.addItem("Serial",1);routingChoice.addItem("Parallel",2);routingAttachment=std::make_unique<ComboAttachment>(processor.state,"routingMode",routingChoice);routingChoice.setTooltip("Serial: modules process in card order. Parallel: each present module receives the input; aligned outputs are averaged. A limiter branch does not limit the whole sum.");
         modulesButton.onClick=[this]{
             juce::PopupMenu menu;const std::array<const char*,6> names{"Dynamic EQ","Smart Dynamics","Stereo Architect","Spectral EQ","Limiter","Stabilizer"};const std::array<const char*,6> ids{"dynamicEqPresent","dynamicsPresent","stereoPresent","eqPresent","limPresent","stabilizerPresent"};
             for(int i=0;i<6;++i){juce::PopupMenu item;bool included=processor.state.getRawParameterValue(ids[i])->load()>.5f;item.addItem(10+i,included?"Remove from chain":"Add to chain");const char* on=std::array<const char*,6>{"dynamicEqOn","dynamicsOn","stereoOn","eq","lim","stabilizerOn"}[i];item.addItem(20+i,"Enabled",included,processor.state.getRawParameterValue(on)->load()>.5f);menu.addSubMenu(names[i],item);}
-            auto safe=juce::Component::SafePointer<Editor>(this);menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(modulesButton),[safe](int id){if(!safe)return;if(id>=10&&id<16)safe->toggleParameter(std::array<const char*,6>{"dynamicEqPresent","dynamicsPresent","stereoPresent","eqPresent","limPresent","stabilizerPresent"}[id-10]);if(id>=20&&id<26)safe->toggleParameter(std::array<const char*,6>{"dynamicEqOn","dynamicsOn","stereoOn","eq","lim","stabilizerOn"}[id-20]);});
+            auto safe=juce::Component::SafePointer<Editor>(this);menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(modulesButton),[safe](int id){if(!safe)return;if(id>=10&&id<16){int kind=id-10;auto* value=safe->processor.state.getRawParameterValue(std::array<const char*,6>{"dynamicEqPresent","dynamicsPresent","stereoPresent","eqPresent","limPresent","stabilizerPresent"}[kind]);bool adding=value->load()<.5f;safe->processor.setModulePresentUI(kind,adding);if(adding){if(kind<3||kind==5)safe->showModule(kind==5?3:kind);else safe->showLimiter(kind==4);}safe->repaint();}if(id>=20&&id<26)safe->toggleParameter(std::array<const char*,6>{"dynamicEqOn","dynamicsOn","stereoOn","eq","lim","stabilizerOn"}[id-20]);});
         };
 
         configureSlider(frequency,frequencyLabel,"Frequency","eq-frequency");frequency.setTextValueSuffix(" Hz");
         configureSlider(gain,gainLabel,"Gain","eq-gain");gain.setTextValueSuffix(" dB");
         configureSlider(quality,qualityLabel,"Bandwidth","eq-q");
+        auto activateEditedBand=[this]{auto* p=processor.state.getParameter("bandEnabled"+juce::String(selectedBand+1));if(p->getValue()<.5f)p->setValueNotifyingHost(1);};
+        frequency.onDragStart=activateEditedBand;gain.onDragStart=activateEditedBand;quality.onDragStart=activateEditedBand;
+
         configureSlider(ceiling,ceilingLabel,"Output ceiling","limiter-ceiling");ceiling.setTextValueSuffix(" dBFS");
         configureSlider(drive,driveLabel,"Drive","limiter-drive");drive.setTextValueSuffix(" dB");
         configureSlider(release,releaseLabel,"Release","limiter-release");release.setTextValueSuffix(" ms");
@@ -380,6 +386,7 @@ public:
         addAndMakeVisible(eqEnabled);addAndMakeVisible(limiterEnabled);
         eqEnabled.setComponentID("eq-active");limiterEnabled.setComponentID("limiter-active");
         eqAttachment=std::make_unique<ButtonAttachment>(processor.state,"eq",eqEnabled);
+        eqEnabled.onClick=[this]{if(eqEnabled.getToggleState())processor.setModulePresentUI(3,true);};limiterEnabled.onClick=[this]{if(limiterEnabled.getToggleState())processor.setModulePresentUI(4,true);};
         limiterAttachment=std::make_unique<ButtonAttachment>(processor.state,"lim",limiterEnabled);
         ceilingAttachment=std::make_unique<SliderAttachment>(processor.state,"ceiling",ceiling);
         addAndMakeVisible(eqView);addAndMakeVisible(limiterView);addAndMakeVisible(inspectorView);inspectorView.setComponentID("view-inspector");inspectorView.onClick=[this]{showInspector();};
@@ -439,7 +446,7 @@ public:
     ~Editor() override {stopTimer();endDrag();setLookAndFeel(nullptr);}
     void resized() override {
         resetMetersButton.setBounds(getWidth()-210,136,186,26);
-        presetButton.setBounds(320,14,106,26);undoButton.setBounds(436,14,62,26);redoButton.setBounds(508,14,62,26);
+        presetButton.setBounds(224,14,94,26);undoButton.setBounds(328,14,50,26);redoButton.setBounds(388,14,50,26);
         eqView.setBounds(getWidth()-432,48,98,26);limiterView.setBounds(getWidth()-326,48,98,26);inspectorView.setBounds(getWidth()-220,48,98,26);brainView.setBounds(getWidth()-114,48,98,26);
         const int brainCell=(getWidth()-80)/4;
         for(int i=0;i<4;++i)brainLabels[static_cast<size_t>(i)].setBounds(40+i*brainCell,166,brainCell-12,20);
@@ -453,7 +460,7 @@ public:
         bandChoice.setBounds(28,140,110,26);typeChoice.setBounds(148,140,155,26);fftChoice.setBounds(313,140,130,26);bandEnabled.setBounds(453,140,74,26);
         eqEnabled.setBounds(537,140,72,26);limiterEnabled.setBounds(getWidth()-114,136,90,26);
         const int navWidth=(getWidth()-48)/8;int nav=0;for(auto* button:{&eqView,&dynamicView,&dynamicsView,&stereoView,&stabilizerView,&limiterView,&inspectorView,&brainView}){button->setBounds(24+nav*navWidth,48,navWidth-5,26);++nav;}
-        modulesButton.setBounds(602,14,120,26);
+        modulesButton.setBounds(602,14,120,26);routingChoice.setBounds(448,14,134,26);
         for(auto& panel:modulePanels)panel->setBounds(0,134,getWidth(),getHeight()-154);
 
     }
@@ -470,11 +477,13 @@ public:
         auto* parameter=processor.state.getParameter("chainOrder");processor.beginUiTransaction("Move module");parameter->beginChangeGesture();parameter->setValueNotifyingHost(parameter->convertTo0to1(static_cast<float>(masterlab::encodeOrder(order,legacy))));parameter->endChangeGesture();processor.finishUiTransaction();repaint();
     }
     void mouseDown(const juce::MouseEvent& event) override {
+        chainDragKind=-1;chainDragging=false;chainHover=-1;
+        if(event.position.y>=84&&event.position.y<=132){chainDragKind=chainAt(event.position.x);return;}
         if(moduleView>=0||showingBrain||showingInspector||showingLimiter||!plot().expanded(12).contains(event.position))return;
         int nearest=selectedBand;float distance=event.position.getDistanceFrom(node(nearest));
         for(int i=0;i<16;++i){if(i!=selectedBand&&bandType(i)==0&&std::abs(value("gain",i))<.01f)continue;float d=event.position.getDistanceFrom(node(i));if(d<distance){distance=d;nearest=i;}}
         if(distance>14)return;
-        selectBand(nearest);draggingNode=true;
+        selectBand(nearest);auto* active=processor.state.getParameter("bandEnabled"+juce::String(selectedBand+1));active->setValueNotifyingHost(1);draggingNode=true;
         processor.beginUiTransaction("EQ node");
         processor.state.getParameter(parameterId("frequency",selectedBand))->beginChangeGesture();
         processor.state.getParameter(parameterId("gain",selectedBand))->beginChangeGesture();
@@ -483,12 +492,14 @@ public:
         if(draggingNode){auto area=plot();float normal=juce::jlimit(0.f,1.f,(event.position.x-area.getX())/area.getWidth());
             setParameter("frequency",static_cast<float>(20*std::pow(sampleRate()*.5/20,normal)));
             if(gainApplies(selectedBand))setParameter("gain",juce::jlimit(-18.f,18.f,(area.getCentreY()-event.position.y)*36/area.getHeight()));repaint();return;}
-        if(event.getMouseDownY()<82||event.getMouseDownY()>132||isDragAndDropActive())return;
-        const int kind=chainAt(static_cast<float>(event.getMouseDownX()));if(kind<0)return;
-        startDragging("module:"+juce::String(kind),this);
+        if(chainDragKind<0)return;
+        chainDragging=event.getDistanceFromDragStart()>4;chainHover=chainAt(event.position.x);repaint();
     }
     void mouseUp(const juce::MouseEvent& event) override {
         const bool moved=event.mouseWasDraggedSinceMouseDown();endDrag();
+        if(chainDragging&&chainDragKind>=0){itemDropped(SourceDetails("module:"+juce::String(chainDragKind),this,event.position.toInt()));chainDragKind=-1;chainDragging=false;chainHover=-1;repaint();return;}
+        chainDragKind=-1;chainHover=-1;
+        if(event.mods.isPopupMenu()&&event.position.y>=84&&event.position.y<=132){const int kind=chainAt(event.position.x);if(kind<0)return;auto list=chainModules();auto position=std::find(list.begin(),list.end(),kind);int index=static_cast<int>(position-list.begin());juce::PopupMenu menu;menu.addItem(1,"Move earlier",index>0);menu.addItem(2,"Move later",index+1<static_cast<int>(list.size()));menu.addItem(3,"Remove from chain");auto safe=juce::Component::SafePointer<Editor>(this);menu.showMenuAsync({},[safe,kind,list,index](int action){if(!safe)return;if(action==3)safe->processor.setModulePresentUI(kind,false);if(action==1||action==2){int target=index+(action==1?-1:1);if(target<0||target>=static_cast<int>(list.size()))return;float x=24+(safe->getWidth()-48.f)/list.size()*(target+.5f);safe->itemDropped(SourceDetails("module:"+juce::String(kind),safe.getComponent(),{static_cast<int>(x),104}));}safe->repaint();});return;}
         if(!moved&&event.position.y>=84&&event.position.y<=132){const int kind=chainAt(event.position.x);if(kind<0)return;
             const auto modules=chainModules();const float width=(getWidth()-48.f)/modules.size();const float local=std::fmod(event.position.x-24,width);
             if(local<30){toggleParameter(std::array<const char*,6>{"dynamicEqOn","dynamicsOn","stereoOn","eq","lim","stabilizerOn"}[kind]);return;}
@@ -496,13 +507,13 @@ public:
         }
     }
     void mouseWheelMove(const juce::MouseEvent& event,const juce::MouseWheelDetails& wheel) override {
-        if(moduleView<0&&!showingBrain&&!showingInspector&&!showingLimiter&&plot().contains(event.position)&&event.position.getDistanceFrom(node(selectedBand))<24){setParameter("q",juce::jlimit(.1f,10.f,value("q",selectedBand)*std::exp(wheel.deltaY*2)),true);repaint();}
+        if(moduleView<0&&!showingBrain&&!showingInspector&&!showingLimiter&&plot().contains(event.position)&&event.position.getDistanceFrom(node(selectedBand))<24){auto* active=processor.state.getParameter("bandEnabled"+juce::String(selectedBand+1));if(active->getValue()<.5f)active->setValueNotifyingHost(1);setParameter("q",juce::jlimit(.1f,10.f,value("q",selectedBand)*std::exp(wheel.deltaY*2)),true);repaint();}
         else AudioProcessorEditor::mouseWheelMove(event,wheel);
     }
     void paint(juce::Graphics& g) override {
         g.fillAll(background);
         g.setGradientFill(juce::ColourGradient(juce::Colour(0xff232b34),0,0,background,static_cast<float>(getWidth()),100,false));g.fillRect(0,0,getWidth(),76);
-        g.setColour(juce::Colours::whitesmoke);g.setFont(juce::Font(juce::FontOptions(26.f)));g.drawText("Masterlab X",24,11,254,34,juce::Justification::left);
+        g.setColour(juce::Colours::whitesmoke);g.setFont(juce::Font(juce::FontOptions(26.f)));g.drawText("Masterlab X",24,11,194,34,juce::Justification::left);
         if(getWidth()>=1000){g.setColour(muted);g.setFont(theme.font(12));g.drawText(juce::String(sampleRate()/1000,1)+" kHz   /   Stereo",getWidth()-230,14,206,22,juce::Justification::right);}
         const int dock=getHeight()-174,cell=(getWidth()-64)/4;
         g.setColour(panel);g.fillRoundedRectangle(24.f,static_cast<float>(dock),getWidth()-48.f,146.f,20.f);
@@ -510,14 +521,14 @@ public:
         bool first=std::find(modules.begin(),modules.end(),4)<std::find(modules.begin(),modules.end(),3);
         if(modules.empty()){g.setColour(muted);g.setFont(theme.font(12));g.drawText("Empty chain / use + Modules to add processors",24,84,getWidth()-48,48,juce::Justification::centred);}
         for(size_t i=0;i<modules.size();++i){int kind=modules[i];const float width=(getWidth()-48.f)/modules.size(),x=24+i*width;const bool active=(kind<3||kind==5)?moduleView==(kind==5?3:kind):(!showingBrain&&!showingInspector&&moduleView<0&&(kind==3?!showingLimiter:showingLimiter));const bool on=processor.state.getRawParameterValue(std::array<const char*,6>{"dynamicEqOn","dynamicsOn","stereoOn","eq","lim","stabilizerOn"}[kind])->load()>.5f;
-            const auto colour=kind==4?curve:accent;g.setColour(active?juce::Colour(0xff20323c):panel);g.fillRoundedRectangle(x,84,width-8,48,24);g.setColour(on?colour:muted.withAlpha(.35f));g.fillEllipse(x+16,104,7,7);
+            const auto colour=kind==4?curve:accent;g.setColour(active?juce::Colour(0xff20323c):panel);g.fillRoundedRectangle(x,84,width-8,48,24);if(chainDragging&&chainHover==kind){g.setColour(accent);g.drawRoundedRectangle(x,84,width-8,48,24,2);}g.setColour(on?colour:muted.withAlpha(.35f));g.fillEllipse(x+16,104,7,7);
             g.setColour(juce::Colours::whitesmoke);g.setFont(theme.font(modules.size()>3?12.f:16.f));g.drawText(std::array<const char*,6>{"Dynamic EQ","Dynamics","Stereo","Spectral EQ","Limiter","Stabilizer"}[kind],static_cast<int>(x)+34,90,static_cast<int>(width)-48,22,juce::Justification::left);
             g.setColour(muted);g.setFont(theme.font(10));g.drawText(on?std::array<const char*,6>{"3 detectors","Down / upward","4-band M/S","16 bands","5 ms lookahead","Adaptive tone"}[kind]:"Bypassed",static_cast<int>(x)+34,111,static_cast<int>(width)-48,16,juce::Justification::left);
         }
         if(moduleView>=0){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
         if(showingBrain){paintBrain(g);return;}
         if(showingInspector){paintInspector(g);return;}
-        if(showingLimiter){paintLimiter(g);g.setColour(first?curve:muted);g.setFont(theme.font(11));g.drawText(first?"Processors after limiter may exceed its ceiling":"SAMPLE PEAK  /  True Peak unavailable",24,getHeight()-25,getWidth()-48,18,juce::Justification::left);return;}
+        if(showingLimiter){paintLimiter(g);g.setColour(first?curve:muted);g.setFont(theme.font(11));g.drawText(processor.state.getRawParameterValue("routingMode")->load()>.5f?"PARALLEL: limiter ceiling applies to its branch, not the full sum":(first?"Processors after limiter may exceed its ceiling":"SAMPLE PEAK  /  True Peak unavailable"),24,getHeight()-25,getWidth()-48,18,juce::Justification::left);return;}
         auto area=plot();g.setColour(juce::Colour(0xff151920));g.fillRoundedRectangle(area.expanded(24,12),18);
         g.setFont(theme.font(11));
         for(float db:{-18.f,-12.f,-6.f,0.f,6.f,12.f,18.f}){float y=yForGain(db);g.setColour(db==0?juce::Colour(0xff536374):juce::Colour(0xff242a33));g.drawHorizontalLine(static_cast<int>(y),area.getX(),area.getRight());g.setColour(muted);g.drawText(juce::String(db,0),8,static_cast<int>(y)-8,32,16,juce::Justification::right);}
