@@ -1,0 +1,17 @@
+#pragma once
+#include "SerialGraph.h"
+namespace masterlab {
+template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexcept {
+  masterlab::StereoSettings s{v(88)>.5f&&v(89)>.5f,v(95)>.5f,v(96)>.5f,v(90),v(91),v(92),v(93),v(94),v(97),v(136),v(137)};for(size_t i=0;i<4;++i){s.bandEnabled[i]=v(139+i*2)>.5f;s.solo[i]=v(140+i*2)>.5f;}s.amount=v(147);s.delta=v(148)>.5f;engine.stereoSettings(s);
+  engine.dynamicsSettings({v(98)>.5f&&v(99)>.5f,v(100)>.5f,v(101),v(102),v(103),v(104),v(105),v(106),v(107),v(108),v(109)});
+  masterlab::DynamicEqSettings c;c.enabled=v(110)>.5f&&v(111)>.5f;for(size_t i=0;i<3;++i){size_t k=112+i*8;c.bands[i]={v(k),v(k+1),v(k+2),v(k+3),v(k+4),v(k+5),v(k+6),v(k+7)>.5f};}engine.dynamicEqSettings(c);
+  engine.stabilizerSettings({v(149)>.5f&&v(150)>.5f,v(151)>.5f,v(159)>.5f,v(160)>.5f,static_cast<int>(v(152)),v(153),v(154),v(155),v(156),v(157),v(158)});
+  engine.routing(static_cast<int>(v(138)),v(6)>.5f);
+}
+template<class Getter> void configureGraph(SerialGraph& engine,Getter v) noexcept {
+ configureModules(engine,v);engine.limiterParameters(v(52),v(53));
+ engine.parameters(v(0),v(1),v(2),v(3),v(4)>.5f&&v(86)>.5f,v(5)>.5f&&v(87)>.5f);
+ for(size_t k=1;k<16;++k){size_t i=7+(k-1)*3;engine.setBand(k,v(i),v(i+1),v(i+2));}
+ for(size_t k=0;k<16;++k)engine.setBandMode(k,static_cast<FilterType>(static_cast<int>(v(54+k*2))),v(55+k*2)>.5f);
+}
+}

@@ -1,5 +1,7 @@
 # Architektura
 
+Aktualizacja Master Brain: [analiza szczegółowa i weryfikacja rzeczywistym DSP](BRAIN_IMPROVEMENTS.md).
+
 > Aktualizacja bieżącej implementacji: [MODULAR_WORKFLOW.md](MODULAR_WORKFLOW.md). Dodano Stabilizer, dowolną kolejność sześciu rodzin, nowe sterowanie Imagera i automatyczny wybór modułów przez Brain. Poniższe starsze opisy ustalonej kolejności, pięciu rodzin i schema 4 opisują poprzedni etap. Nadal jedna instancja na rodzinę i brak True Peak.
 
 

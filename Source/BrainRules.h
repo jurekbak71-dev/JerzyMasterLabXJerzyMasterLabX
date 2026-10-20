@@ -1,5 +1,7 @@
 #pragma once
 #include "Dsp.h"
+#include "BrainDetail.h"
+#include "ModuleParameters.h"
 #include <string>
 #include <cstdint>
 #include <utility>
@@ -11,12 +13,14 @@ struct BrainConfig {
  bool useStabilizer=true;
  bool useEq=true,useLimiter=true,existingEqEnabled=true,useStereo=true,useDynamics=true,useDynamicEq=true;int dynamicsMode=0;
  std::array<BrainBand,16> existingEq{};
+ bool hasBaseline=false;std::array<float,parameterCount> baseline{};
 };
 struct BrainFeatures {
- double rate=48000,seconds=0;float integrated=-120,peak=0,rms=0,correlation=0;
+ BrainDetail detail;double rate=48000,seconds=0;float integrated=-120,peak=0,rms=0,correlation=0;
  std::array<double,5> energy{};std::array<float,4> bandCorrelation{},bandWidth{};bool stereoAnalysed=false;std::uint64_t clips=0;
 };
 struct BrainProposal {
+ bool previewVerified=false;float previewLufs=-120,previewPeak=0,previewSectionSpread=0,previewGr95=0;int previewPasses=0;
  bool valid=false;std::vector<std::pair<std::string,float>> changes;
  std::array<float,5> gains{},shares{},targetShares{},estimatedShares{};float drive=0,eqEstimate=0;
  std::vector<std::string> reasons,warnings;
@@ -27,9 +31,14 @@ inline BrainConfig cleanBrainConfig(BrainConfig c){
  c.genre=std::clamp(c.genre,0,8);c.style=std::clamp(c.style,0,3);if(c.seconds!=8&&c.seconds!=16&&c.seconds!=30&&c.seconds!=60)c.seconds=8;
  c.targetLufs=std::clamp(clean(c.targetLufs),-24.f,-8.f);c.ceiling=std::clamp(clean(c.ceiling),-6.f,-.1f);c.intensity=std::clamp(clean(c.intensity),.25f,1.5f);return c;
 }
+inline void refineDetailedProposal(BrainProposal&,const BrainFeatures&,const BrainConfig&);
 inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config){
  const auto c=cleanBrainConfig(config);BrainProposal p;
  if(!std::isfinite(f.seconds)||!std::isfinite(f.rms)||!std::isfinite(f.correlation)||!std::isfinite(f.integrated)||f.integrated<=-70||!std::isfinite(f.peak)||f.peak<1e-5f||f.seconds<c.seconds-.01||!std::isfinite(f.rate)||f.rate<8000){p.warnings.push_back("Insufficient audible material. Play a full analysis interval.");return p;}
+ if(f.detail.analysed){const auto& d=f.detail;bool valid=std::isfinite(d.coverage)&&d.coverage>=0&&d.coverage<=60&&std::isfinite(d.sectionLowDb)&&std::isfinite(d.sectionHighDb)&&std::isfinite(d.sectionSpreadDb)&&d.sectionSpreadDb>=0&&std::isfinite(d.sectionJumpDb)&&d.sectionJumpDb>=0;
+  for(size_t i=0;i<brainSpectrumBins;++i)valid=valid&&std::isfinite(d.power[i])&&d.power[i]>=0&&std::isfinite(d.prominence[i])&&std::isfinite(d.persistence[i])&&d.persistence[i]>=0&&d.persistence[i]<=1;
+  if(!valid){p.warnings.push_back("Invalid detailed analysis. No proposal generated.");return p;}
+ }
  double sum=0;for(double e:f.energy){if(!std::isfinite(e)||e<0){p.warnings.push_back("Invalid spectral analysis.");return p;}sum+=e;}
  if(sum<1e-20){p.warnings.push_back("No reliable spectrum. No proposal generated.");return p;}
  if(f.stereoAnalysed)for(float correlation:f.bandCorrelation)if(!std::isfinite(correlation)||std::abs(correlation)>1){p.warnings.push_back("Invalid stereo analysis.");return p;}
@@ -115,6 +124,9 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
  }
  // Only change the full topology when all families are under Brain control.
  if(c.useEq&&c.useLimiter&&c.useStereo&&c.useDynamics&&c.useDynamicEq&&c.useStabilizer){add("chainOrder",0);p.reasons.push_back("Proposed order: Stabilizer, Dynamic EQ, Dynamics, Imager, EQ, Limiter; absent modules are skipped. Limiter is last. One instance per family is currently supported.");}
+ refineDetailedProposal(p,f,c);
  p.valid=(c.useEq||c.useLimiter||c.useStereo||c.useDynamics||c.useDynamicEq||c.useStabilizer);return p;
 }
 }
+
+#include "BrainRefinement.h"

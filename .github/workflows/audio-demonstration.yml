@@ -41,6 +41,13 @@ jobs:
           if (-not $bundle -or -not $brain) { throw 'Actual VST3 or Brain tool missing' }
           python tools/audio/render_demonstration.py --plugin "$bundle" --brain-tool "$brain" --output demonstration
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Check untouched audio and held-out resonance frequencies
+        shell: pwsh
+        run: |
+          $bundle = (Get-ChildItem vst3-package/extracted -Directory -Recurse -Filter JerzyMasterLabX.vst3 | Select-Object -First 1).FullName
+          $brain = (Get-ChildItem analysis-tools -Recurse -Filter brain_demo.exe | Select-Object -First 1).FullName
+          python tools/audio/validate_brain.py --plugin "$bundle" --brain-tool "$brain" --output demonstration/TESTY_DODATKOWE
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
           name: MasterLabX-DEMONSTRACJA-PRZED-BRAIN-RECZNIE

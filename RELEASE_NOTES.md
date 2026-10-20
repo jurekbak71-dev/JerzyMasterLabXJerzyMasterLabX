@@ -1,5 +1,9 @@
 # 0.1.0 — prace rozwojowe, nie wydanie produkcyjne
 
+## Master Brain: analiza i sprawdzanie wyniku DSP
+
+60 komórek widma, trwałość rezonansów, adaptacyjne EQ/Dynamic EQ, pomiar poziomów sekcji, lepszy dobór kompresji/upward oraz Stereo. Brain wykonuje do sześciu próbnych renderów poza audio callback, mierzy pełny tor i koryguje głośność w granicach budżetu redukcji. Brak zmian parametrów przed Apply; zachowane Undo i ochrona ręcznych nastaw. [Opis, wyniki i ograniczenia](BRAIN_IMPROVEMENTS.md).
+
 ## W przygotowaniu — routing, Imager, Stabilizer
 
 - Dowolna kolejność sześciu działających rodzin, 20 ms crossfade dwóch przygotowanych banków, stałe PDC, zapis/presety/Undo/automatyka.

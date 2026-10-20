@@ -1,5 +1,7 @@
 # Jerzy MasterLab X
 
+Aktualizacja Master Brain: [analiza szczegółowa i weryfikacja rzeczywistym DSP](BRAIN_IMPROVEMENTS.md).
+
 ## Aktualizacja: routing, Imager i Stabilizer
 
 Sześć działających rodzin DSP, przeciąganie całego łańcucha (720 kolejności), rozbudowany czteropasmowy Imager z solo/Delta, nowy adaptacyjny Stabilizer i Brain dobierający potrzebne moduły. Szczegółowe zasady i ograniczenia: [MODULAR_WORKFLOW.md](MODULAR_WORKFLOW.md). Jedna instancja na rodzinę; pełna lista Ozone pozostaje planem, limiter nie ma jeszcze True Peak.

@@ -4,7 +4,7 @@
 class GuiSmoke final : private juce::Timer {
     juce::AudioProcessor& processor;
     std::unique_ptr<juce::AudioProcessorEditor> editor;
-    int iteration=0,phase=0,sample=0;
+    int iteration=0,phase=0,sample=0,brainWait=0;
     bool success=true;std::vector<float> brainBefore;
     void fail(const char* message){std::cerr<<message<<'\n';success=false;stopTimer();editor.reset();juce::MessageManager::getInstance()->stopDispatchLoop();}
     juce::RangedAudioParameter* parameter(const char* id){for(auto* p:processor.getParameters())if(auto* ranged=dynamic_cast<juce::RangedAudioParameter*>(p))if(ranged->paramID==id)return ranged;return nullptr;}
@@ -136,8 +136,8 @@ class GuiSmoke final : private juce::Timer {
         return true;
     }
     void timerCallback()override{
-        if(phase==0){if(!gestures()){fail("EQ controls, drag, wheel or host gestures failed");return;}feed(2250);phase=1;return;}
-        if(phase==1){feed(64);phase=2;return;}
+        if(phase==0){if(!gestures()){fail("EQ controls, drag, wheel or host gestures failed");return;}feed(16);brainWait=0;phase=1;return;}
+        if(phase==1){feed(16);if(auto* view=dynamic_cast<juce::Button*>(editor->findChildWithID("view-brain")))view->onClick();auto* apply=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-apply"));if(apply&&apply->isEnabled()){if(auto* eq=dynamic_cast<juce::Button*>(editor->findChildWithID("view-eq")))eq->onClick();phase=2;return;}if(++brainWait>500){if(auto* report=dynamic_cast<juce::TextEditor*>(editor->findChildWithID("brain-report")))std::cerr<<report->getText();fail("Brain verification timed out");}return;}
         if(!capture()){fail("GUI resize or measured EQ response rendering failed");return;}
         editor->setVisible(false);editor->removeFromDesktop();editor.reset();
         if(++iteration<3){open();return;}

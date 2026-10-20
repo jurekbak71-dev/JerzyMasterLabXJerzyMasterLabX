@@ -44,5 +44,16 @@ int main(){
   for(size_t i=0;i<5;++i)check(std::abs(energies[i]/renderedSum-proposal.estimatedShares[i])<.0002,"EQ tonal estimate differs from rendered filter energy");
   c.useEq=false;c.existingEqEnabled=false;const auto unchanged=masterlab::proposeMastering(f,c);for(size_t i=0;i<5;++i)check(std::abs(unchanged.shares[i]-unchanged.estimatedShares[i])<1e-6,"excluded flat EQ changes predicted balance");
  }
+ // Detailed rules must distinguish persistent resonances from transient timbre.
+ c={};f.rate=48000;f.detail.analysed=true;f.detail.coverage=45;f.detail.power.fill(.001);f.detail.sectionLowDb=-24;f.detail.sectionHighDb=-23;
+ auto detailed=masterlab::proposeMastering(f,c);check(value(detailed,"eqPresent")==0&&value(detailed,"dynamicEqPresent")==0&&value(detailed,"dynamicsPresent")==0,"healthy detailed input gets unnecessary processors");
+ f.detail.prominence[42]=10;f.detail.persistence[42]=.9f;
+ auto resonance=masterlab::proposeMastering(f,c);check(value(resonance,"eqPresent")==1&&value(resonance,"gain")<-3&&std::abs(value(resonance,"frequency")-3200)<1,"persistent harsh resonance not targeted");
+ f.detail.persistence[42]=.2f;check(value(masterlab::proposeMastering(f,c),"eqPresent")==0,"short transient mistaken for persistent resonance");
+ f.detail.sectionLowDb=-38;f.detail.sectionHighDb=-22;f.detail.sectionSpreadDb=16;f.detail.sectionJumpDb=15;
+ auto uneven=masterlab::proposeMastering(f,c);check(value(uneven,"dynamicsPresent")==1&&value(uneven,"dynRatio")>=3&&value(uneven,"upwardAmount")>0,"sustained level changes not treated");
+ auto bad=f;bad.detail.power[0]=std::numeric_limits<double>::quiet_NaN();check(!masterlab::proposeMastering(bad,c).valid,"invalid detailed spectrum creates proposal");
+ masterlab::BrainDetailAnalyzer temporal;temporal.prepare(8000,9);for(int i=0;i<72000;++i){float signal=(i>=24000&&i<48000)?.016f:.1f;temporal.push(signal,signal);}auto levels=temporal.finish();check(levels.sectionSpreadDb>12&&levels.sectionJumpDb>15,"section-level measurement misses a sustained step");temporal.prepare(8000,9);for(int i=0;i<72000;++i)temporal.push(.1f,.1f);check(temporal.finish().sectionSpreadDb<.001,"analyser reset or healthy dynamics incorrect");
+ std::set<std::string> parameterIds;for(size_t i=0;i<masterlab::parameterCount;++i)check(parameterIds.insert(masterlab::parameterId(i)).second,"preview parameter mapping duplicates IDs");
  std::cout<<"Passed: 108 profile/style/intensity cases, finite unique settings, caps, excluded modules, silence/short/NaN rejection, existing EQ, clipping and phase warnings\n";
 }

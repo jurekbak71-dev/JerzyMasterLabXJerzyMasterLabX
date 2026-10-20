@@ -1,0 +1,88 @@
+{
+  "method": "Actual unchanged Brain proposal; no reference provided to Brain; new defect frequencies plus untouched inputs. Same recording is not an independent music corpus.",
+  "source": "https://raw.githubusercontent.com/faroit/stempeg/a41eaabb6761c9cdc3a079c45a1a2ccd575afea6/stempeg/data/The%20Easton%20Ellises%20-%20Falcon%2069.stem.mp4",
+  "license": "https://creativecommons.org/licenses/by-nc-sa/3.0/",
+  "cases": [
+    {
+      "name": "healthy_mix",
+      "preview_lufs": -16.0,
+      "preview_passes": 1,
+      "eq_present": 0.0,
+      "dynamics_present": 0.0,
+      "render_tests": {
+        "repeat_max_error": 0.0,
+        "buffer_256_vs_1024_max_error": 0.0
+      },
+      "max_eq_correction_db": 0
+    },
+    {
+      "name": "healthy_drums",
+      "preview_lufs": -16.021486282348633,
+      "preview_passes": 1,
+      "eq_present": 0.0,
+      "dynamics_present": 0.0,
+      "render_tests": {
+        "repeat_max_error": 0.0,
+        "buffer_256_vs_1024_max_error": 0.0
+      },
+      "max_eq_correction_db": 0
+    },
+    {
+      "name": "healthy_synthesis",
+      "preview_lufs": -16.34790802001953,
+      "preview_passes": 1,
+      "eq_present": 0.0,
+      "dynamics_present": 0.0,
+      "render_tests": {
+        "repeat_max_error": 0.0,
+        "buffer_256_vs_1024_max_error": 0.0
+      },
+      "max_eq_correction_db": 0
+    },
+    {
+      "name": "held_out_2200Hz",
+      "preview_lufs": -16.0,
+      "preview_passes": 2,
+      "eq_present": 1.0,
+      "dynamics_present": 0.0,
+      "render_tests": {
+        "repeat_max_error": 0.0,
+        "buffer_256_vs_1024_max_error": 0.0
+      },
+      "target_ratio": -12.376846469579625,
+      "before_ratio": -6.2450989230123835,
+      "after_ratio": -13.185673675776313,
+      "reduction_of_error_db": 5.322920340370555
+    },
+    {
+      "name": "held_out_4800Hz",
+      "preview_lufs": -16.22501564025879,
+      "preview_passes": 1,
+      "eq_present": 1.0,
+      "dynamics_present": 0.0,
+      "render_tests": {
+        "repeat_max_error": 0.0,
+        "buffer_256_vs_1024_max_error": 0.0
+      },
+      "target_ratio": -21.424104326740125,
+      "before_ratio": -13.612709626203692,
+      "after_ratio": -17.95918911797138,
+      "reduction_of_error_db": 4.346479491767688
+    },
+    {
+      "name": "held_out_6500Hz",
+      "preview_lufs": -16.173051834106445,
+      "preview_passes": 1,
+      "eq_present": 1.0,
+      "dynamics_present": 0.0,
+      "render_tests": {
+        "repeat_max_error": 0.0,
+        "buffer_256_vs_1024_max_error": 0.0
+      },
+      "target_ratio": -21.303815564943594,
+      "before_ratio": -14.467987593211074,
+      "after_ratio": -18.487162429110555,
+      "reduction_of_error_db": 4.019174835899481
+    }
+  ]
+}

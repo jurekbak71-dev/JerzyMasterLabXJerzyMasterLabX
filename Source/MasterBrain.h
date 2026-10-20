@@ -1,11 +1,12 @@
 #pragma once
 #include <juce_dsp/juce_dsp.h>
 #include "BrainRules.h"
+#include "BrainPreview.h"
 #include "LoudnessMeter.h"
 #include "ModularDsp.h"
 #include <mutex>
 namespace masterlab {
-enum class BrainPhase { Idle, Pending, Analysing, Ready, Failed, Cancelled, Applied };
+enum class BrainPhase { Idle, Pending, Analysing, Validating, Ready, Failed, Cancelled, Applied };
 struct BrainSnapshot {BrainPhase phase=BrainPhase::Idle;BrainConfig config;BrainFeatures features;BrainProposal proposal;double progress=0;std::string message="Play the loudest section, then analyse. No parameters change until Apply.";};
 class MasterBrain final : private juce::Thread {
  struct Packet {std::array<float,128> left{},right{};std::uint64_t generation=0,firstSample=0;int length=0;};
@@ -13,7 +14,7 @@ class MasterBrain final : private juce::Thread {
   std::uint64_t generation=0,count=0,target=0;int order=13,size=8192,head=0,hop=0,fftFrames=0;
   Split bandLeft,bandRight;std::array<float,3> splitCoefficients{};std::array<double,4> bandLL{},bandRR{},bandLR{};
   double ll=0,rr=0,lr=0;float peak=0;std::uint64_t clips=0;
-  BrainConfig config;BrainFeatures features;LoudnessMeter loudness;
+  BrainConfig config;BrainFeatures features;LoudnessMeter loudness;BrainDetailAnalyzer detail;std::vector<float> previewLeft,previewRight;
   std::unique_ptr<juce::dsp::FFT> fft;
   std::array<std::array<float,32768>,2> samples{};
   std::array<float,65536> left{},right{};
@@ -21,26 +22,26 @@ class MasterBrain final : private juce::Thread {
   Job(double rate,BrainConfig cfg,std::uint64_t gen):generation(gen),config(cfg){
    splitCoefficients={static_cast<float>(1-std::exp(-6.283185307179586*140/rate)),static_cast<float>(1-std::exp(-6.283185307179586*2500/rate)),static_cast<float>(1-std::exp(-6.283185307179586*8000/rate))};
    features.rate=rate;target=static_cast<std::uint64_t>(std::ceil(rate*cfg.seconds));order=std::clamp(static_cast<int>(std::ceil(std::log2(rate/6))),12,15);size=1<<order;
-   fft=std::make_unique<juce::dsp::FFT>(order);loudness.prepare(rate);
+   fft=std::make_unique<juce::dsp::FFT>(order);loudness.prepare(rate);detail.prepare(rate,cfg.seconds);const size_t previewCount=static_cast<size_t>(std::ceil(rate*std::min(16,cfg.seconds)));previewLeft.resize(previewCount);previewRight.resize(previewCount);
   }
   void spectrum(){
    for(int i=0;i<size;++i){const float window=.5f-.5f*std::cos(juce::MathConstants<float>::twoPi*i/(size-1));const int index=(head+size+i)%size;left[i]=samples[0][index]*window;right[i]=samples[1][index]*window;}
    std::fill(left.begin()+size,left.begin()+size*2,0);std::fill(right.begin()+size,right.begin()+size*2,0);
-   fft->performFrequencyOnlyForwardTransform(left.data());fft->performFrequencyOnlyForwardTransform(right.data());
+   fft->performFrequencyOnlyForwardTransform(left.data());fft->performFrequencyOnlyForwardTransform(right.data());detail.spectrum(left.data(),right.data(),size);
    constexpr std::array<double,6> edges{20,80,250,2000,6000,20000};const double binWidth=features.rate/size;
    for(int i=1;i<size/2;++i){double low=(i-.5)*binWidth,high=(i+.5)*binWidth,power=static_cast<double>(left[i])*left[i]+static_cast<double>(right[i])*right[i];
     for(size_t band=0;band<5;++band){double overlap=std::max(0.,std::min(high,edges[band+1])-std::max(low,edges[band]));energy[band]+=power*overlap/binWidth;}
    }++fftFrames;
   }
   void process(const Packet& packet){
-   for(int i=0;i<packet.length&&count<target;++i){float l=packet.left[i],r=packet.right[i];
+   for(int i=0;i<packet.length&&count<target;++i){float l=packet.left[i],r=packet.right[i];detail.push(l,r);if(count<previewLeft.size()){previewLeft[static_cast<size_t>(count)]=l;previewRight[static_cast<size_t>(count)]=r;}
     const float a=splitCoefficients[0],b=splitCoefficients[1],c=splitCoefficients[2];
     auto leftBands=bandLeft.tick(l,a,b,c),rightBands=bandRight.tick(r,a,b,c);for(size_t k=0;k<4;++k){bandLL[k]+=static_cast<double>(leftBands[k])*leftBands[k];bandRR[k]+=static_cast<double>(rightBands[k])*rightBands[k];bandLR[k]+=static_cast<double>(leftBands[k])*rightBands[k];}
     loudness.push(l,r);ll+=static_cast<double>(l)*l;rr+=static_cast<double>(r)*r;lr+=static_cast<double>(l)*r;peak=std::max(peak,std::max(std::abs(l),std::abs(r)));clips+=std::max(std::abs(l),std::abs(r))>1?1:0;
     samples[0][head]=l;samples[1][head]=r;head=(head+1)%size;++count;++hop;if(count>=static_cast<std::uint64_t>(size)&&hop>=size/2){spectrum();hop=0;}
    }
   }
-  BrainFeatures finish(){for(size_t k=0;k<4;++k){features.bandCorrelation[k]=bandLL[k]*bandRR[k]>1e-24?static_cast<float>(std::clamp(bandLR[k]/std::sqrt(bandLL[k]*bandRR[k]),-1.,1.)):0;features.bandWidth[k]=static_cast<float>(std::sqrt(std::max(0.,bandLL[k]+bandRR[k]-2*bandLR[k])/std::max(1e-20,bandLL[k]+bandRR[k]+2*bandLR[k])));}features.stereoAnalysed=true;features.seconds=count/features.rate;features.integrated=loudness.read().integrated;features.peak=peak;features.rms=count?static_cast<float>(std::sqrt((ll+rr)/(2*count))):0;features.correlation=ll*rr>1e-24?static_cast<float>(std::clamp(lr/std::sqrt(ll*rr),-1.,1.)):0;features.clips=clips;features.energy=energy;return features;}
+  BrainFeatures finish(){for(size_t k=0;k<4;++k){features.bandCorrelation[k]=bandLL[k]*bandRR[k]>1e-24?static_cast<float>(std::clamp(bandLR[k]/std::sqrt(bandLL[k]*bandRR[k]),-1.,1.)):0;features.bandWidth[k]=static_cast<float>(std::sqrt(std::max(0.,bandLL[k]+bandRR[k]-2*bandLR[k])/std::max(1e-20,bandLL[k]+bandRR[k]+2*bandLR[k])));}features.detail=detail.finish();features.stereoAnalysed=true;features.seconds=count/features.rate;features.integrated=loudness.read().integrated;features.peak=peak;features.rms=count?static_cast<float>(std::sqrt((ll+rr)/(2*count))):0;features.correlation=ll*rr>1e-24?static_cast<float>(std::clamp(lr/std::sqrt(ll*rr),-1.,1.)):0;features.clips=clips;features.energy=energy;return features;}
  };
  juce::AbstractFifo fifo;std::vector<Packet> packets;
  std::mutex mutex;std::unique_ptr<Job> job;BrainSnapshot snapshot;
@@ -49,6 +50,7 @@ class MasterBrain final : private juce::Thread {
  void fail(const std::string& message){snapshot.phase=BrainPhase::Failed;snapshot.message=message;snapshot.proposal={};if(job){auto expected=job->generation;active.compare_exchange_strong(expected,0);}}
  void run()override{
   while(!threadShouldExit()){
+   std::unique_ptr<Job> verification;
    {
     std::scoped_lock lock(mutex);
     if(job&&cancelled.load()==job->generation&&(snapshot.phase==BrainPhase::Pending||snapshot.phase==BrainPhase::Analysing)){snapshot.phase=BrainPhase::Cancelled;snapshot.message="Analysis cancelled. No parameters changed.";auto expected=job->generation;active.compare_exchange_strong(expected,0);}
@@ -58,9 +60,20 @@ class MasterBrain final : private juce::Thread {
      if(!job||snapshot.phase!=BrainPhase::Analysing||packet.generation!=job->generation)continue;
      if(packet.firstSample!=job->count){fail("Audio continuity was lost. Reanalyse the fragment.");continue;}
      job->process(packet);snapshot.progress=static_cast<double>(job->count)/job->target;
-     if(job->count==job->target){snapshot.features=job->finish();snapshot.proposal=proposeMastering(snapshot.features,snapshot.config);snapshot.phase=BrainPhase::Ready;snapshot.message=snapshot.proposal.valid?"Analysis complete. Review every proposed change before applying.":((!snapshot.config.useEq&&!snapshot.config.useLimiter&&!snapshot.config.useStereo&&!snapshot.config.useDynamics&&!snapshot.config.useDynamicEq)?"No processing modules selected. Analysis is available; Apply is disabled.":"Insufficient material. No proposal can be applied.");}
+     if(job->count==job->target){snapshot.features=job->finish();snapshot.proposal=proposeMastering(snapshot.features,snapshot.config);snapshot.phase=snapshot.proposal.valid?BrainPhase::Validating:BrainPhase::Ready;snapshot.message=snapshot.proposal.valid?"Verifying the proposal through the actual DSP chain.":"Insufficient material or no modules selected. Apply is disabled.";}
     }};consume(start,n);consume(start2,n2);fifo.finishedRead(n+n2);
     if(job&&snapshot.phase==BrainPhase::Pending){snapshot.phase=BrainPhase::Analysing;snapshot.message="Listening to input before processing. Play audio in the DAW.";active.store(job->generation);}
+    if(job&&snapshot.phase==BrainPhase::Validating)verification=std::move(job);
+   }
+   if(verification){
+    auto proposal=proposeMastering(verification->features,verification->config);
+    const auto generation=verification->generation;
+    auto abort=[&]{return threadShouldExit()||nextGeneration.load()!=generation||cancelled.load()==generation;};
+    try{verifyBrainProposal(proposal,verification->features,verification->config,verification->previewLeft,verification->previewRight,abort);}
+    catch(const std::exception&){proposal.valid=false;proposal.previewVerified=false;proposal.warnings.push_back("DSP verification failed. No parameters changed; Apply disabled.");}
+    std::scoped_lock lock(mutex);
+    if(cancelled.load()==generation&&nextGeneration.load()==generation&&snapshot.phase==BrainPhase::Validating){snapshot.phase=BrainPhase::Cancelled;snapshot.proposal={};snapshot.message="Verification cancelled. No parameters changed.";}
+    if(!abort()&&snapshot.phase==BrainPhase::Validating){snapshot.proposal=std::move(proposal);snapshot.phase=BrainPhase::Ready;snapshot.message=snapshot.proposal.previewVerified?"DSP verification complete. Review measured results before Apply.":"Analysis complete. Review before Apply.";job=std::move(verification);}
    }
    wait(10);
   }
@@ -69,7 +82,7 @@ public:
  explicit MasterBrain(int packetCapacity=1024):Thread("MasterLab analysis"),fifo(std::max(2,packetCapacity)),capacity(std::max(2,packetCapacity)){}
  ~MasterBrain()override{active.store(0);stopThread(3000);}
  void prepare(double sampleRate){
-  active.store(0);{
+  active.store(0);nextGeneration.fetch_add(1);{
    std::scoped_lock lock(mutex);rate=std::isfinite(sampleRate)&&sampleRate>=8000&&sampleRate<=384000?sampleRate:48000;
    packets.resize(static_cast<size_t>(capacity));fifo.reset();job.reset();snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Play the loudest section, then analyse. No parameters change until Apply.";audioGeneration=audioCount=0;
   }if(!isThreadRunning())startThread();
@@ -79,12 +92,12 @@ public:
   job=std::make_unique<Job>(rate,config,gen);snapshot={};snapshot.phase=BrainPhase::Pending;snapshot.config=config;snapshot.message="Waiting for the analysis worker and DAW audio.";targetSamples.store(job->target);
  }
  void cancelRT()noexcept {active.store(0);cancelled.store(nextGeneration.load());}
- void cancelUI(){std::scoped_lock lock(mutex);active.store(0);snapshot.phase=BrainPhase::Cancelled;snapshot.proposal={};snapshot.message="Analysis cancelled. No parameters changed.";}
+ void cancelUI(){cancelRT();std::scoped_lock lock(mutex);active.store(0);snapshot.phase=BrainPhase::Cancelled;snapshot.proposal={};snapshot.message="Analysis cancelled. No parameters changed.";}
  void reviseUI(BrainConfig config){
-  std::scoped_lock lock(mutex);if(snapshot.phase==BrainPhase::Pending||snapshot.phase==BrainPhase::Analysing)return;
-  config=cleanBrainConfig(config);config.dynamicsMode=snapshot.config.dynamicsMode;config.existingEq=snapshot.config.existingEq;config.existingEqEnabled=snapshot.config.existingEqEnabled;
+  std::scoped_lock lock(mutex);if(snapshot.phase==BrainPhase::Pending||snapshot.phase==BrainPhase::Analysing||snapshot.phase==BrainPhase::Validating)return;
+  config=cleanBrainConfig(config);config.dynamicsMode=snapshot.config.dynamicsMode;config.existingEq=snapshot.config.existingEq;config.existingEqEnabled=snapshot.config.existingEqEnabled;config.hasBaseline=snapshot.config.hasBaseline;config.baseline=snapshot.config.baseline;
   const bool durationChanged=config.seconds!=snapshot.config.seconds;snapshot.config=config;
-  if(job&&snapshot.phase==BrainPhase::Ready&&!durationChanged){snapshot.proposal=proposeMastering(snapshot.features,config);snapshot.message="Proposal recalculated from the captured fragment. Review before Apply.";}
+  if(job&&snapshot.phase==BrainPhase::Ready&&!durationChanged){job->config=config;snapshot.proposal={};snapshot.phase=BrainPhase::Validating;snapshot.message="Rechecking the captured fragment through DSP.";}
   else {snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Settings changed. Analyse a new fragment.";}
  }
  BrainSnapshot readUI(){std::scoped_lock lock(mutex);return snapshot;}
