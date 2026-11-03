@@ -10,7 +10,7 @@ int main(){
  for(int code=0;code<720;++code)for(bool legacy:{false,true}){auto order=masterlab::decodeOrder(code,legacy);auto sorted=order;std::sort(sorted.begin(),sorted.end());check(sorted==masterlab::ModuleOrder{0,1,2,3,4,5},"routing is not a permutation");check(masterlab::encodeOrder(order,legacy)==code,"permutation encoding lost information");}
  for(double rate:{44100.,48000.,96000.,192000.}){
   masterlab::SerialGraph graph;masterlab::RoutedEngine legacy;
-  masterlab::StereoSettings stereo;stereo.enabled=true;stereo.low=.25f;stereo.high=1.5f;
+  masterlab::StereoSettings stereo;stereo.enabled=true;stereo.stereoize=.7f;stereo.low=.25f;stereo.high=1.5f;
   masterlab::DynamicsSettings dynamics;dynamics.enabled=true;dynamics.threshold=-24;dynamics.ratio=4;
   graph.parameters(2000,6,1,-1,true,true);graph.limiterParameters(4,120);graph.prepare(rate);legacy.parameters(2000,6,1,-1,true,true);legacy.limiterParameters(4,120);legacy.prepare(rate);
   std::array<float,257> l{},r{},trace{},ll{},rr{};

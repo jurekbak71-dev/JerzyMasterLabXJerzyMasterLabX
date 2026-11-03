@@ -1,6 +1,6 @@
 # Jerzy MasterLab X
 
-[Naprawa aktywacji, przeciągania modułów i trybów Serial/Parallel](CHAIN_ROUTING_FIX.md). Schema 6, 162 parametry; poprzednie wersje stanu są migrowane.
+[Naprawa aktywacji, przeciągania modułów i trybów Serial/Parallel](CHAIN_ROUTING_FIX.md). Schema 7, 163 parametry; wersje stanu 1–6 są migrowane z wyłączonym Stereoize. [Audyt i pierwszy etap Stereo Architect](docs/stereo-architect/PHASE1.md).
 
 Aktualizacja Master Brain: [analiza szczegółowa i weryfikacja rzeczywistym DSP](BRAIN_IMPROVEMENTS.md).
 
