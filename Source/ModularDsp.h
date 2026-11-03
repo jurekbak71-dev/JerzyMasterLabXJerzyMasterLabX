@@ -22,14 +22,19 @@ struct Split {
  float low=0,highLow=0,topLow=0;
  std::array<float,4> tick(float x,float a,float b,float c)noexcept {low+=a*(x-low);highLow+=b*(x-highLow);topLow+=c*(x-topLow);return {low,highLow-low,topLow-highLow,x-topLow};}
 };
-struct StereoSettings {bool enabled=false,monoBass=false,mono=false;float low=1,mid=1,high=1,lowSplit=140,highSplit=2500,balance=0,air=1,topSplit=8000;std::array<bool,4> bandEnabled{true,true,true,true},solo{};float amount=1;bool delta=false;};
+struct StereoSettings {bool enabled=false,monoBass=false,mono=false;float low=1,mid=1,high=1,lowSplit=140,highSplit=2500,balance=0,air=1,topSplit=8000;std::array<bool,4> bandEnabled{true,true,true,true},solo{};float amount=1;bool delta=false;float stereoize=0;};
 struct StereoReading {std::array<float,4> correlation{},width{};};
 class StereoImager {
- double rate=48000;Split splitMid,splitSide;Slew mix,low,mid,high,air,splitA,splitB,splitC,balance,mono,amount,delta;std::array<Slew,4> bandBlend{},audition{};
+ double rate=48000;Split splitMid,splitSide,splitGenerated;
+ // Two high-pass poles protect bass; first-order all-pass rotates generated Side.
+ // Added Side cancels algebraically in mono; the dry Mid is never delayed.
+ float bassLow1=0,bassLow2=0,allpassState=0,hpCoefficient=0,apCoefficient=0;
+ Slew stereoize;
+ Slew mix,low,mid,high,air,splitA,splitB,splitC,balance,mono,amount,delta;std::array<Slew,4> bandBlend{},audition{};
  std::array<double,4> ll{},rr{},lr{};StereoSettings config;
 public:
- void prepare(double sr){rate=sr;reset();}
- void reset()noexcept {splitMid={};splitSide={};ll={};rr={};lr={};mix.prepare(rate,config.enabled?1.f:0.f);low.prepare(rate,config.monoBass?0.f:config.low);mid.prepare(rate,config.mid);high.prepare(rate,config.high);air.prepare(rate,config.air);splitC.prepare(rate,config.topSplit);splitA.prepare(rate,config.lowSplit);splitB.prepare(rate,config.highSplit);balance.prepare(rate,config.balance);mono.prepare(rate,config.mono?1.f:0.f);amount.prepare(rate,config.amount);delta.prepare(rate,config.delta?1.f:0.f);const bool soloing=std::any_of(config.solo.begin(),config.solo.end(),[](bool s){return s;});for(size_t i=0;i<4;++i){bandBlend[i].prepare(rate,config.bandEnabled[i]?1.f:0.f);audition[i].prepare(rate,!soloing||config.solo[i]?1.f:0.f);}}
+ void prepare(double sr){rate=std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000;hpCoefficient=static_cast<float>(1-std::exp(-6.283185307179586*300/rate));const float t=static_cast<float>(std::tan(3.141592653589793*700/rate));apCoefficient=(t-1)/(t+1);reset();}
+ void reset()noexcept {splitMid={};splitSide={};splitGenerated={};bassLow1=bassLow2=allpassState=0;stereoize.prepare(rate,config.stereoize);ll={};rr={};lr={};mix.prepare(rate,config.enabled?1.f:0.f);low.prepare(rate,config.monoBass?0.f:config.low);mid.prepare(rate,config.mid);high.prepare(rate,config.high);air.prepare(rate,config.air);splitC.prepare(rate,config.topSplit);splitA.prepare(rate,config.lowSplit);splitB.prepare(rate,config.highSplit);balance.prepare(rate,config.balance);mono.prepare(rate,config.mono?1.f:0.f);amount.prepare(rate,config.amount);delta.prepare(rate,config.delta?1.f:0.f);const bool soloing=std::any_of(config.solo.begin(),config.solo.end(),[](bool s){return s;});for(size_t i=0;i<4;++i){bandBlend[i].prepare(rate,config.bandEnabled[i]?1.f:0.f);audition[i].prepare(rate,!soloing||config.solo[i]?1.f:0.f);}}
  void settings(StereoSettings c)noexcept {config=c;}
  void process(float* left,float* right,int n)noexcept {
   if(!config.enabled&&mix.value<1e-6f){mix.value=0;ll={};rr={};lr={};return;}
@@ -40,9 +45,14 @@ public:
    const float a=static_cast<float>(1-std::exp(-6.283185307179586*lo/rate)),b=static_cast<float>(1-std::exp(-6.283185307179586*hi/rate));
    const float top=std::clamp(splitC.tick(config.topSplit),hi+100,static_cast<float>(rate*.45)),c=static_cast<float>(1-std::exp(-6.283185307179586*top/rate));
    auto mids=splitMid.tick(m,a,b,c),sides=splitSide.tick(s,a,b,c);
+   bassLow1+=hpCoefficient*(m-bassLow1);const float hp1=m-bassLow1;
+   bassLow2+=hpCoefficient*(hp1-bassLow2);const float hp2=hp1-bassLow2;
+   const float rotated=apCoefficient*hp2+allpassState;allpassState=hp2-apCoefficient*rotated;
+   const auto generated=splitGenerated.tick(rotated,a,b,c);
+   const float creation=.5f*stereoize.tick(std::clamp(clean(config.stereoize),0.f,1.f));
    const std::array<float,4> widths{low.tick(config.monoBass?0.f:config.low),mid.tick(config.mid),high.tick(config.high),air.tick(config.air)};
    const float monoMix=mono.tick(config.mono?1.f:0.f);float outSide=0,outMid=0;const float intensity=amount.tick(config.amount);
-   for(size_t band=0;band<4;++band){const float width=1+intensity*bandBlend[band].tick(config.bandEnabled[band]?1.f:0.f)*(widths[band]-1),listen=audition[band].tick(!soloing||config.solo[band]?1.f:0.f);float side=sides[band]*width*(1-monoMix);outSide+=side*listen;outMid+=mids[band]*listen;
+   for(size_t band=0;band<4;++band){const float width=1+intensity*bandBlend[band].tick(config.bandEnabled[band]?1.f:0.f)*(widths[band]-1),listen=audition[band].tick(!soloing||config.solo[band]?1.f:0.f);float side=(sides[band]*width+(band==0?0.f:generated[band]*creation*intensity*bandBlend[band].value*width))*(1-monoMix);outSide+=side*listen;outMid+=mids[band]*listen;
     const double bl=mids[band]+side,br=mids[band]-side;ll[band]=meter*ll[band]+(1-meter)*bl*bl;rr[band]=meter*rr[band]+(1-meter)*br*br;lr[band]=meter*lr[band]+(1-meter)*bl*br;}
    const float pan=balance.tick(config.balance),blend=mix.tick(config.enabled?1.f:0.f);float wetL=(outMid+outSide)*(1-std::max(0.f,pan)),wetR=(outMid-outSide)*(1+std::min(0.f,pan));const float monoSignal=(wetL+wetR)*.5f;wetL+=monoMix*(monoSignal-wetL);wetR+=monoMix*(monoSignal-wetR);
    const float difference=delta.tick(config.delta?1.f:0.f);wetL+=difference*(l-2*wetL);wetR+=difference*(r-2*wetR);left[i]=clean(l+blend*(wetL-l));right[i]=clean(r+blend*(wetR-r));

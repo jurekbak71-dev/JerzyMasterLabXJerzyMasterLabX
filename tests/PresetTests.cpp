@@ -7,7 +7,7 @@ void set(Processor& p,const char* id,float value){auto* parameter=p.state.getPar
 int main(){
  struct Temp {juce::File directory=juce::File::getSpecialLocation(juce::File::tempDirectory).getChildFile("MasterLabPresetTest-"+juce::Uuid{}.toString());~Temp(){directory.deleteRecursively();}} temp;
  check(temp.directory.createDirectory().wasOk(),"temporary directory failed");
- Processor source,target;set(source,"frequency16",3333);set(source,"gain16",6);set(source,"bandType16",2);set(source,"bandEnabled15",0);set(source,"limiterDrive",9);set(source,"limiterRelease",180);
+ Processor source,target;set(source,"stereoizeAmount",.65f);set(source,"frequency16",3333);set(source,"gain16",6);set(source,"bandType16",2);set(source,"bandEnabled15",0);set(source,"limiterDrive",9);set(source,"limiterRelease",180);
  set(target,"limiterDrive",17);set(target,"gain",-7);target.state.copyState();target.undoManager.clearUndoHistory();
  auto before=values(target),expected=values(source);auto file=temp.directory.getChildFile("test.jmlx");
  check(source.savePreset(file)&&file.getSize()>0,"preset save failed");
