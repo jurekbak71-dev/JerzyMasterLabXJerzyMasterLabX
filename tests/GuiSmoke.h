@@ -117,7 +117,7 @@ class GuiSmoke final : private juce::Timer {
         }
         dynamic_cast<juce::Button*>(editor->findChildWithID("view-stereo"))->onClick();editor->setSize(1000,700);
         auto* stereo=editor->findChildWithID("module-panel-2");if(!stereo)return false;
-        auto* stereoize=dynamic_cast<juce::Slider*>(editor->findChildWithID("stereoizeAmount"));if(!stereoize||!stereoize->isVisible())return false;
+        auto* stereoize=dynamic_cast<juce::Slider*>(stereo->findChildWithID("stereoizeAmount"));if(!stereoize||!stereoize->isVisible())return false;
         const float oldStereoize=actual("stereoizeAmount");stereoize->setValue(.7,juce::sendNotificationSync);if(std::abs(actual("stereoizeAmount")-.7f)>.001f)return false;stereoize->setValue(oldStereoize,juce::sendNotificationSync);
 
         const float originalSplit=actual("stereoLowSplit");auto coordinate=[](float hz){return 24+952*std::log(hz/20)/std::log(24000.f/20);};auto begin=juce::Point<float>(coordinate(originalSplit),100),finish=juce::Point<float>(coordinate(200),100);auto when=juce::Time::getCurrentTime();
