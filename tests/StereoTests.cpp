@@ -41,6 +41,7 @@ void wav(const std::filesystem::path& path,const Audio& x,int rate,double gain=1
 }
 int main(int argc,char** argv){
  std::filesystem::path dir;if(argc>1){dir=argv[1];std::filesystem::create_directories(dir);}
+ std::ofstream bandCsv;if(!dir.empty()){bandCsv.open(dir/"bands.csv");bandCsv<<"rate,input,band,width,correlation\n";}
  std::cout<<"rate,input,legacy_width,new_width,correlation,LUFS_in,LUFS_out,peak_out,matched_delta_ratio\n";
  for(int rate:{44100,48000,96000})for(int kind=0;kind<4;++kind){
   auto dry=stimulus(rate,kind);masterlab::StereoSettings c;c.enabled=true;
@@ -56,6 +57,7 @@ int main(int argc,char** argv){
   if(kind==3)check(wet==neutral,"Stereoize changes pure opposite-phase bass");
   std::cout<<rate<<','<<kind<<','<<measure(legacy,rate).width<<','<<b.width<<','<<b.corr<<','<<a.lufs<<','<<b.lufs<<','<<b.peak<<','<<delta<<'\n';
   for(int band=0;band<4;++band)check(std::isfinite(reading.width[band])&&std::isfinite(reading.correlation[band]),"invalid band telemetry");
+  if(bandCsv)for(int band=0;band<4;++band)bandCsv<<rate<<','<<kind<<','<<band<<','<<reading.width[band]<<','<<reading.correlation[band]<<'\n';
   if(kind==0){check(reading.width[0]==0&&reading.width[1]>.05f,"per-band telemetry misses generated Side");}
   if(!dir.empty()&&rate==48000&&kind<3){wav(dir/("input-"+std::to_string(kind)+".wav"),dry,rate);wav(dir/("stereoize-matched-"+std::to_string(kind)+".wav"),wet,rate,std::pow(10.,(a.lufs-b.lufs)/20));}
   if(kind==0){
