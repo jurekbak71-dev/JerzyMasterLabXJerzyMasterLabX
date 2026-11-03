@@ -1,0 +1,49 @@
+Test project /workspace/JerzyMasterLabXJerzyMasterLabX/build-plugin
+      Start  2: routing
+      Start  1: dsp
+ 1/22 Test  #1: dsp ..............................   Passed    0.22 sec
+      Start 14: plugin_state
+ 2/22 Test #14: plugin_state .....................   Passed    0.09 sec
+      Start  3: response
+ 3/22 Test  #3: response .........................   Passed    0.06 sec
+      Start 21: state_validation
+ 4/22 Test  #2: routing ..........................   Passed    0.38 sec
+      Start 22: analysis
+ 5/22 Test #22: analysis .........................   Passed    0.01 sec
+      Start  4: limiter_meter
+ 6/22 Test #21: state_validation .................   Passed    0.10 sec
+      Start  5: filters
+ 7/22 Test  #4: limiter_meter ....................   Passed    0.16 sec
+      Start  6: meters
+ 8/22 Test  #6: meters ...........................   Passed    0.06 sec
+      Start  7: loudness
+ 9/22 Test  #5: filters ..........................   Passed    1.90 sec
+      Start  8: realtime_allocations
+10/22 Test  #7: loudness .........................   Passed    1.82 sec
+      Start  9: brain_rules
+11/22 Test  #8: realtime_allocations .............   Passed    0.31 sec
+      Start 10: modules
+12/22 Test  #9: brain_rules ......................   Passed    0.78 sec
+      Start 11: stabilizer
+13/22 Test #10: modules ..........................   Passed    0.77 sec
+      Start 12: serial_graph
+14/22 Test #11: stabilizer .......................   Passed    0.36 sec
+      Start 13: stereo_architect
+15/22 Test #13: stereo_architect .................   Passed    4.92 sec
+      Start 15: stereo_integration
+16/22 Test #15: stereo_integration ...............   Passed    3.21 sec
+      Start 16: module_integration
+17/22 Test #12: serial_graph .....................   Passed    9.48 sec
+      Start 17: chain_functional
+18/22 Test #16: module_integration ...............   Passed    7.89 sec
+      Start 18: brain_analysis
+19/22 Test #18: brain_analysis ...................   Passed    4.06 sec
+      Start 19: inspector
+20/22 Test #19: inspector ........................   Passed    0.18 sec
+      Start 20: presets
+21/22 Test #20: presets ..........................   Passed    0.05 sec
+22/22 Test #17: chain_functional .................   Passed   27.79 sec
+
+100% tests passed out of 22
+
+Total Test time (real) =  40.76 sec

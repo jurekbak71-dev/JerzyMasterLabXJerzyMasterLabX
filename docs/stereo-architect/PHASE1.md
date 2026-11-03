@@ -32,6 +32,10 @@ Implemented: attached Stereoize control beside Amount, explicit routing/bypass s
 
 Next panel iteration: top chain/presence/bypass strip; left four colored bands with W/C and separate input-Side/output-Side telemetry; right output vectorscope and named mono comparison; bottom Width / Stereoize / gain-match controls. Add signal-valid flags so silence is displayed as unavailable, not correlation zero. Add explicit branch count/dilution and input scarcity hints. Continue dark high-contrast theme and bounded FIFO snapshots; do not move audio analysis into the paint callback. Clean/Strong/Extreme maps, depth/microdelay modes, full HiDPI/accessibility work and GUI design system remain pending.
 
+## Verification evidence
+
+See [local results](evidence/VALIDATION.md), [matched WAV and measurement notes](evidence/README.md) and the [actual GUI screenshot](evidence/hybrid-stereo-linux.png). Windows CI status remains in the PR checks; FL Studio is pending.
+
 ## Reproduce
 
 ```sh
