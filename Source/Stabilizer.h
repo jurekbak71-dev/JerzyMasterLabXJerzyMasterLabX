@@ -3,7 +3,7 @@
 namespace masterlab {
 struct StabilizerSettings {
  bool enabled=false,cut=false,tame=true,delta=false;int profile=0;
- float amount=25,speed=50,smoothing=50,low=100,mid=100,high=100;
+ float amount=25,speed=50,smoothing=50,low=100,mid=100,high=100;int intensity=0;
 };
 // Original octave-band adaptive equalizer. Profiles describe relative band
 // energies, not a learned reference or a proprietary competitor algorithm.
@@ -24,16 +24,18 @@ public:
    fullEnergy=average*fullEnergy+(1-average)*power;peak=std::max(std::max(std::abs(left),std::abs(right)),static_cast<float>(peak*peakRelease));
    for(size_t i=0;i<12;++i){const float dl=left-detectors[0][i].tick(left),dr=right-detectors[1][i].tick(right);energy[i]=average*energy[i]+(1-average)*(dl*dl+dr*dr)*.5;}
    if(counter++%64==0){
-    double sum=0;size_t valid=0;for(size_t i=0;i<12;++i)if(frequencies[i]<rate*.42){sum+=energy[i];++valid;}
+    double sum=0,maxEnergy=0;size_t valid=0;for(size_t i=0;i<12;++i)if(frequencies[i]<rate*.42){sum+=energy[i];maxEnergy=std::max(maxEnergy,energy[i]);++valid;}
     const double mean=sum/std::max<size_t>(1,valid);std::array<float,12> raw{};
+    const int intensity=std::clamp(config.intensity,0,3);const float limit=std::array<float,4>{6.f,4.f,9.f,12.f}[intensity],authority=std::array<float,4>{1.f,.75f,1.35f,1.8f}[intensity];
+    const float support=intensity==0?1.f:(sum>1e-12?std::clamp(static_cast<float>((1-maxEnergy/sum)*1.35),.35f,1.f):0.f);
     for(size_t i=0;i<12;++i){
      // Neutral, bass-forward Electronic, and relaxed high-frequency Acoustic.
      float tilt=config.profile==1?(i<4?1.6f:(i>8?.85f:1.f)):(config.profile==2?(i>7?.65f:1.f):1.f);
-     if(mean>1e-12&&energy[i]>mean*1e-4&&frequencies[i]<rate*.42){float correction=static_cast<float>(5*std::log10(std::max(1e-18,mean*tilt)/energy[i]));raw[i]=std::clamp(correction,-6.f,config.cut?0.f:6.f);}
+     if(mean>1e-12&&energy[i]>mean*1e-4&&frequencies[i]<rate*.42){float correction=static_cast<float>(5*std::log10(std::max(1e-18,mean*tilt)/energy[i]));raw[i]=intensity==0?std::clamp(correction,-6.f,config.cut?0.f:6.f):std::clamp(correction*authority,-limit,config.cut?0.f:limit);}
     }
     for(size_t i=0;i<12;++i){float sumGain=raw[i],weights=1;for(int distance=1;distance<=2;++distance){const float weight=config.smoothing*.01f/(distance+1);if(i>=static_cast<size_t>(distance)){sumGain+=raw[i-distance]*weight;weights+=weight;}if(i+distance<12){sumGain+=raw[i+distance]*weight;weights+=weight;}}
-     const float region=i<4?config.low:(i<8?config.mid:config.high),protection=config.tame&&peak>3*std::sqrt(std::max(1e-18,fullEnergy))?.25f:1.f;
-     targets[i]=sumGain/weights*config.amount*.01f*region*.01f*protection;gains[i]+=static_cast<float>(gainSlew)*(targets[i]-gains[i]);
+     const float region=i<4?config.low:(i<8?config.mid:config.high),crest=peak/static_cast<float>(std::sqrt(std::max(1e-18,fullEnergy))),protection=intensity==0?(config.tame&&crest>3?.25f:1.f):(config.tame?std::clamp(1.25f-.25f*crest,.25f,1.f):1.f);
+     targets[i]=sumGain/weights*config.amount*.01f*region*.01f*protection*support;gains[i]+=static_cast<float>(gainSlew)*(targets[i]-gains[i]);if(intensity>0)gains[i]=std::clamp(gains[i],-limit,config.cut?0.f:limit);
      for(auto& channel:filters)channel[i].configure(rate,frequencies[i],gains[i],1.4,FilterType::Bell);
     }
    }

@@ -1,0 +1,61 @@
+Test project /workspace/JerzyMasterLabXJerzyMasterLabX/build-plugin
+      Start  1: dsp
+ 1/28 Test  #1: dsp ..............................   Passed    0.22 sec
+      Start  2: routing
+ 2/28 Test  #2: routing ..........................   Passed    0.35 sec
+      Start  3: response
+ 3/28 Test  #3: response .........................   Passed    0.06 sec
+      Start  4: limiter_meter
+ 4/28 Test  #4: limiter_meter ....................   Passed    0.14 sec
+      Start  5: filters
+ 5/28 Test  #5: filters ..........................   Passed    1.83 sec
+      Start  6: meters
+ 6/28 Test  #6: meters ...........................   Passed    0.07 sec
+      Start  7: loudness
+ 7/28 Test  #7: loudness .........................   Passed    1.93 sec
+      Start  8: realtime_allocations
+ 8/28 Test  #8: realtime_allocations .............   Passed    0.30 sec
+      Start  9: brain_rules
+ 9/28 Test  #9: brain_rules ......................   Passed    1.05 sec
+      Start 10: modules
+10/28 Test #10: modules ..........................   Passed    0.78 sec
+      Start 11: dynamics_phase2
+11/28 Test #11: dynamics_phase2 ..................   Passed    0.36 sec
+      Start 12: stabilizer
+12/28 Test #12: stabilizer .......................   Passed    0.32 sec
+      Start 13: stabilizer_phase2
+13/28 Test #13: stabilizer_phase2 ................   Passed    3.67 sec
+      Start 14: serial_graph
+14/28 Test #14: serial_graph .....................   Passed    5.81 sec
+      Start 15: parallel_routing
+15/28 Test #15: parallel_routing .................   Passed    2.80 sec
+      Start 16: stereo_architect
+16/28 Test #16: stereo_architect .................   Passed    4.04 sec
+      Start 17: plugin_state
+17/28 Test #17: plugin_state .....................   Passed    0.10 sec
+      Start 18: stereo_integration
+18/28 Test #18: stereo_integration ...............   Passed    1.06 sec
+      Start 19: module_integration
+19/28 Test #19: module_integration ...............   Passed    1.18 sec
+      Start 20: parallel_integration
+20/28 Test #20: parallel_integration .............   Passed    1.39 sec
+      Start 21: dynamics_phase2_integration
+21/28 Test #21: dynamics_phase2_integration ......   Passed    0.71 sec
+      Start 22: stabilizer_phase2_integration
+22/28 Test #22: stabilizer_phase2_integration ....   Passed    2.35 sec
+      Start 23: chain_functional
+23/28 Test #23: chain_functional .................   Passed   15.81 sec
+      Start 24: brain_analysis
+24/28 Test #24: brain_analysis ...................   Passed    6.43 sec
+      Start 25: inspector
+25/28 Test #25: inspector ........................   Passed    0.17 sec
+      Start 26: presets
+26/28 Test #26: presets ..........................   Passed    0.02 sec
+      Start 27: state_validation
+27/28 Test #27: state_validation .................   Passed    0.11 sec
+      Start 28: analysis
+28/28 Test #28: analysis .........................   Passed    0.01 sec
+
+100% tests passed out of 28
+
+Total Test time (real) =  53.09 sec
