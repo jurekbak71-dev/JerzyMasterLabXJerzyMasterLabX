@@ -50,6 +50,19 @@ class GuiSmoke final : private juce::Timer {
         redo->onClick();if(std::abs(actual("frequency16")-2000)>1||std::abs(actual("gain16")-6)>.02f)return false;
         float oldQ=actual("q16");juce::MouseWheelDetails wheel{};wheel.deltaY=.2f;editor->mouseWheelMove(event(end,false),wheel);
         if(!(actual("q16")>oldQ&&actual("gain")==firstGain))return false;
+        // Hybrid Studio: actual Exiter component bindings through APVTS.
+        auto* exciter=editor->findChildWithID("harmonic-exciter-panel");
+        if(!exciter)return false;
+        auto* exciterDrive=dynamic_cast<juce::Slider*>(exciter->findChildWithID("exciterDrive"));
+        auto* exciterPresent=dynamic_cast<juce::Button*>(exciter->findChildWithID("exciter-present"));
+        if(!exciterDrive||!exciterPresent)return false;
+        exciter->setVisible(true);
+        exciterDrive->setValue(9.f,juce::sendNotificationSync);
+        exciterPresent->setToggleState(true,juce::sendNotificationSync);
+        if(std::abs(actual("exciterDrive")-9.f)>.02f||actual("exciterPresent")!=1.f)return false;
+        exciterPresent->setToggleState(false,juce::sendNotificationSync);
+        if(actual("exciterPresent")!=0.f)return false;
+        exciter->setVisible(false);
         auto* brain=dynamic_cast<juce::Button*>(editor->findChildWithID("view-brain"));auto* analyse=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-analyse"));
         if(!brain||!analyse)return false;brain->onClick();
         auto* genre=dynamic_cast<juce::ComboBox*>(editor->findChildWithID("brain-genre"));if(!genre)return false;genre->setSelectedId(5,juce::sendNotificationSync);
