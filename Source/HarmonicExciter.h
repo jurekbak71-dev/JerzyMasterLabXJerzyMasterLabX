@@ -32,7 +32,7 @@ class HarmonicExciter {
         }
         float tick(float target) noexcept {value+=coefficient*(target-value);return value;}
     };
-    ParameterSmoother driveSmoother_,evenSmoother_,oddSmoother_,mixSmoother_,outputSmoother_;
+    ParameterSmoother driveSmoother_,evenSmoother_,oddSmoother_,mixSmoother_,outputSmoother_,bypassSmoother_;
     std::array<ParameterSmoother,4> bandSmoothers_{};
     HarmonicExciterSettings settings_{};
     HarmonicExciterReading reading_{};
@@ -61,6 +61,7 @@ public:
         for(auto& s:state_)s={};
         for(auto& channel:oversamplers_)for(auto& filter:channel)filter.reset();
         dryDelay_={};dryPosition_=0;
+        bypassSmoother_.prepare(sampleRate_,settings_.enabled?1.f:0.f);
         driveSmoother_.prepare(sampleRate_,finiteClamp(settings_.driveDb,0.f,24.f));
         evenSmoother_.prepare(sampleRate_,finiteClamp(settings_.even,0.f,1.f));
         oddSmoother_.prepare(sampleRate_,finiteClamp(settings_.odd,0.f,1.f));
@@ -78,7 +79,7 @@ public:
     int latencySamples()const noexcept {return settings_.enabled&&settings_.oversample2x?HarmonicOversampler2x::latencySamples:0;}
     void process(float* left,float* right,int count,bool delta=false) noexcept {
         if(!left||!right||count<=0)return;
-        if(!settings_.enabled){
+        if(!settings_.enabled && bypassSmoother_.value<1e-6f){
             reading_={};
             if(delta)for(int i=0;i<count;++i)left[i]=right[i]=0.f;
             return;
@@ -88,6 +89,7 @@ public:
         std::array<double,4> generatedSquare{};
         double inSquare=0.,outSquare=0.;
         for(int i=0;i<count;++i){
+            const float bypass=bypassSmoother_.tick(settings_.enabled?1.f:0.f);
             const float drive=std::pow(10.f,driveSmoother_.tick(finiteClamp(settings_.driveDb,0.f,24.f))/20.f);
             const float even=evenSmoother_.tick(finiteClamp(settings_.even,0.f,1.f));
             const float odd=oddSmoother_.tick(finiteClamp(settings_.odd,0.f,1.f));
@@ -125,7 +127,8 @@ public:
                     dry=dryDelay_[channel][dryPosition_];
                     dryDelay_[channel][dryPosition_]=input;
                 }
-                const float normal=std::clamp((dry+wet*addition)*output,-16.f,16.f);
+                const float processed=std::clamp((dry+wet*addition)*output,-16.f,16.f);
+                const float normal=dry+bypass*(processed-dry);
                 const float result=delta?normal-dry:normal;
                 io=std::isfinite(result)?result:0.f;
                 inSquare+=static_cast<double>(input)*input;
