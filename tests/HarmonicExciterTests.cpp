@@ -100,6 +100,28 @@ int main() {
         const auto blocks=renderTone(48000,10000,48000,cfg,1);
         for(size_t i=0;i<blocks.size();++i)require(std::abs(blocks[i]-filtered[i])<1e-6f,"2x block independence");
     }
+    // Automated enable/bypass and drive changes should be bounded and converge.
+    {
+        HarmonicExciter e;HarmonicExciterSettings cfg;cfg.enabled=false;
+        cfg.amount={1,1,1,1};cfg.even=1;cfg.odd=1;cfg.driveDb=18;
+        e.settings(cfg);e.prepare(48000);
+        std::array<float,4096> left{},right{};
+        for(size_t i=0;i<left.size();++i)left[i]=right[i]=.3f*std::sin(2*pi*1000*i/48000);
+        e.process(left.data(),right.data(),static_cast<int>(left.size()));
+        cfg.enabled=true;e.settings(cfg);
+        std::array<float,4096> wetLeft{},wetRight{};
+        for(size_t i=0;i<wetLeft.size();++i)wetLeft[i]=wetRight[i]=.3f*std::sin(2*pi*1000*i/48000);
+        const float original=wetLeft[0];e.process(wetLeft.data(),wetRight.data(),4096);
+        require(std::abs(wetLeft[0]-original)<.0002f,"enable ramp begins near dry");
+        for(float v:wetLeft)require(std::isfinite(v),"automated enable finite");
+        cfg.driveDb=0;cfg.enabled=false;e.settings(cfg);
+        std::array<float,4096> bypassLeft{},bypassRight{};
+        for(size_t i=0;i<bypassLeft.size();++i)bypassLeft[i]=bypassRight[i]=.3f*std::sin(2*pi*1000*i/48000);
+        const float previous=wetLeft.back();
+        e.process(bypassLeft.data(),bypassRight.data(),4096);
+        require(std::abs(bypassLeft[0]-previous)<.2f,"disable ramp bounded");
+        for(float v:bypassLeft)require(std::isfinite(v),"automated disable finite");
+    }
     HarmonicExciter effect;HarmonicExciterSettings on;on.enabled=true;on.amount={1,1,1,1};
     effect.settings(on);effect.prepare(48000);
     std::array<float,128> l{},r{};effect.process(l.data(),r.data(),128);
