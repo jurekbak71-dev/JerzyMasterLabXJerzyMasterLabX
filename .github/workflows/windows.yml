@@ -34,6 +34,17 @@ jobs:
           name: Stereo-Architect-matched-WAV-and-metrics
           path: build/stereo-evidence/
           if-no-files-found: error
+      - name: Render Parallel routing evidence from actual DSP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build/parallel-evidence | Out-Null
+          & ./build/Release/parallel_evidence.exe build/parallel-evidence
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Parallel-routing-matched-WAV-and-metrics
+          path: build/parallel-evidence/
+          if-no-files-found: error
       - name: GUI reopen and resize smoke test
         run: ./build/Release/plugin_tests.exe --gui
       - name: Download pluginval 1.0.3
@@ -83,4 +94,5 @@ jobs:
             build-plugin/dynamic-eq-smoke.png
             build-plugin/dynamics-smoke.png
             build-plugin/stereo-smoke.png
+            build-plugin/parallel-smoke.png
             build-plugin/stabilizer-smoke.png

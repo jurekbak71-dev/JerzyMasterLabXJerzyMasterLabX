@@ -1,0 +1,53 @@
+Test project /workspace/JerzyMasterLabXJerzyMasterLabX/build-plugin
+      Start  1: dsp
+ 1/24 Test  #1: dsp ..............................   Passed    0.22 sec
+      Start  2: routing
+ 2/24 Test  #2: routing ..........................   Passed    0.38 sec
+      Start  3: response
+ 3/24 Test  #3: response .........................   Passed    0.05 sec
+      Start  4: limiter_meter
+ 4/24 Test  #4: limiter_meter ....................   Passed    0.19 sec
+      Start  5: filters
+ 5/24 Test  #5: filters ..........................   Passed    2.11 sec
+      Start  6: meters
+ 6/24 Test  #6: meters ...........................   Passed    0.08 sec
+      Start  7: loudness
+ 7/24 Test  #7: loudness .........................   Passed    1.84 sec
+      Start  8: realtime_allocations
+ 8/24 Test  #8: realtime_allocations .............   Passed    0.29 sec
+      Start  9: brain_rules
+ 9/24 Test  #9: brain_rules ......................   Passed    0.91 sec
+      Start 10: modules
+10/24 Test #10: modules ..........................   Passed    0.86 sec
+      Start 11: stabilizer
+11/24 Test #11: stabilizer .......................   Passed    0.48 sec
+      Start 12: serial_graph
+12/24 Test #12: serial_graph .....................   Passed    6.39 sec
+      Start 13: parallel_routing
+13/24 Test #13: parallel_routing .................   Passed    3.87 sec
+      Start 14: stereo_architect
+14/24 Test #14: stereo_architect .................   Passed    5.78 sec
+      Start 15: plugin_state
+15/24 Test #15: plugin_state .....................   Passed    0.12 sec
+      Start 16: stereo_integration
+16/24 Test #16: stereo_integration ...............   Passed    1.47 sec
+      Start 17: module_integration
+17/24 Test #17: module_integration ...............   Passed    1.37 sec
+      Start 18: parallel_integration
+18/24 Test #18: parallel_integration .............   Passed    2.33 sec
+      Start 19: chain_functional
+19/24 Test #19: chain_functional .................   Passed   19.85 sec
+      Start 20: brain_analysis
+20/24 Test #20: brain_analysis ...................   Passed    2.36 sec
+      Start 21: inspector
+21/24 Test #21: inspector ........................   Passed    0.54 sec
+      Start 22: presets
+22/24 Test #22: presets ..........................   Passed    0.02 sec
+      Start 23: state_validation
+23/24 Test #23: state_validation .................   Passed    0.15 sec
+      Start 24: analysis
+24/24 Test #24: analysis .........................   Passed    0.01 sec
+
+100% tests passed out of 24
+
+Total Test time (real) =  51.94 sec
