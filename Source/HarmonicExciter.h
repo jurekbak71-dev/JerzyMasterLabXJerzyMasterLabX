@@ -24,6 +24,16 @@ class HarmonicExciter {
         float a=0.f,b=0.f,c=0.f;
         std::array<float,4> dc{};
     } state_[2]{};
+    struct ParameterSmoother {
+        float value=0.f,coefficient=.001f;
+        void prepare(double sampleRate,float initial) noexcept {
+            coefficient=static_cast<float>(1.-std::exp(-1./(sampleRate*.02)));
+            value=initial;
+        }
+        float tick(float target) noexcept {value+=coefficient*(target-value);return value;}
+    };
+    ParameterSmoother driveSmoother_,evenSmoother_,oddSmoother_,mixSmoother_,outputSmoother_;
+    std::array<ParameterSmoother,4> bandSmoothers_{};
     HarmonicExciterSettings settings_{};
     HarmonicExciterReading reading_{};
     std::array<std::array<HarmonicOversampler2x,4>,2> oversamplers_{};
@@ -51,6 +61,12 @@ public:
         for(auto& s:state_)s={};
         for(auto& channel:oversamplers_)for(auto& filter:channel)filter.reset();
         dryDelay_={};dryPosition_=0;
+        driveSmoother_.prepare(sampleRate_,finiteClamp(settings_.driveDb,0.f,24.f));
+        evenSmoother_.prepare(sampleRate_,finiteClamp(settings_.even,0.f,1.f));
+        oddSmoother_.prepare(sampleRate_,finiteClamp(settings_.odd,0.f,1.f));
+        mixSmoother_.prepare(sampleRate_,finiteClamp(settings_.mix,0.f,1.f));
+        outputSmoother_.prepare(sampleRate_,finiteClamp(settings_.outputDb,-18.f,6.f));
+        for(size_t k=0;k<4;++k)bandSmoothers_[k].prepare(sampleRate_,finiteClamp(settings_.amount[k],0.f,1.f));
         reading_={};
     }
     // Call settings() from control thread / before rendering; not per sample.
@@ -67,16 +83,18 @@ public:
             if(delta)for(int i=0;i<count;++i)left[i]=right[i]=0.f;
             return;
         }
-        const float drive=std::pow(10.f,finiteClamp(settings_.driveDb,0.f,24.f)/20.f);
-        const float even=finiteClamp(settings_.even,0.f,1.f);
-        const float odd=finiteClamp(settings_.odd,0.f,1.f);
-        const float wet=finiteClamp(settings_.mix,0.f,1.f);
-        const float output=std::pow(10.f,finiteClamp(settings_.outputDb,-18.f,6.f)/20.f);
         const bool oversampled=settings_.oversample2x;
         const float dcAlpha=static_cast<float>(1.-std::exp(-6.283185307179586*12./(sampleRate_*(oversampled?2.:1.))));
         std::array<double,4> generatedSquare{};
         double inSquare=0.,outSquare=0.;
         for(int i=0;i<count;++i){
+            const float drive=std::pow(10.f,driveSmoother_.tick(finiteClamp(settings_.driveDb,0.f,24.f))/20.f);
+            const float even=evenSmoother_.tick(finiteClamp(settings_.even,0.f,1.f));
+            const float odd=oddSmoother_.tick(finiteClamp(settings_.odd,0.f,1.f));
+            const float wet=mixSmoother_.tick(finiteClamp(settings_.mix,0.f,1.f));
+            const float output=std::pow(10.f,outputSmoother_.tick(finiteClamp(settings_.outputDb,-18.f,6.f))/20.f);
+            std::array<float,4> intensities{};
+            for(size_t k=0;k<4;++k)intensities[k]=bandSmoothers_[k].tick(finiteClamp(settings_.amount[k],0.f,1.f));
             for(int channel=0;channel<2;++channel){
                 float& io=channel==0?left[i]:right[i];
                 const float input=std::isfinite(io)?std::clamp(io,-8.f,8.f):0.f;
@@ -87,7 +105,7 @@ public:
                 const std::array<float,4> band{s.a,s.b-s.a,s.c-s.b,input-s.c};
                 float addition=0.f;
                 for(size_t k=0;k<4;++k){
-                    const float intensity=finiteClamp(settings_.amount[k],0.f,1.f);
+                    const float intensity=intensities[k];
                     const auto nonlinear=[&](float v) noexcept -> float {
                         const float x=std::tanh(v*drive);
                         const float evenRaw=x*x;
