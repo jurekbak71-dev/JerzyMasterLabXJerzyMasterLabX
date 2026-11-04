@@ -1,6 +1,6 @@
 # Jerzy MasterLab X
 
-[Naprawa aktywacji, przeciągania modułów i trybów Serial/Parallel](CHAIN_ROUTING_FIX.md). Schema 9, 179 parametrów; starsze wersje stanu są migrowane z zachowaniem domyślnego miksu Parallel 1/N i dynamiki Legacy. [Audyt i pierwszy etap Stereo Architect](docs/stereo-architect/PHASE1.md). [Parallel routing Phase 2A](docs/parallel-routing/PHASE2A.md). [Smart Dynamics Phase 2B](docs/smart-dynamics/PHASE2B.md).
+[Naprawa aktywacji, przeciągania modułów i trybów Serial/Parallel](CHAIN_ROUTING_FIX.md). Schema 10, 180 parametrów; starsze wersje stanu są migrowane z zachowaniem domyślnego miksu Parallel 1/N oraz trybów Dynamics i Stabilizer Legacy. [Audyt i pierwszy etap Stereo Architect](docs/stereo-architect/PHASE1.md). [Parallel routing Phase 2A](docs/parallel-routing/PHASE2A.md). [Smart Dynamics Phase 2B](docs/smart-dynamics/PHASE2B.md). [Stabilizer Phase 2C](docs/stabilizer/PHASE2C.md).
 
 Aktualizacja Master Brain: [analiza szczegółowa i weryfikacja rzeczywistym DSP](BRAIN_IMPROVEMENTS.md).
 

@@ -56,6 +56,17 @@ jobs:
           name: Smart-Dynamics-matched-WAV-and-metrics
           path: build/dynamics-evidence/
           if-no-files-found: error
+      - name: Render Stabilizer evidence from actual DSP
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build/stabilizer-evidence | Out-Null
+          & ./build/Release/stabilizer_evidence.exe build/stabilizer-evidence
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Stabilizer-matched-WAV-and-metrics
+          path: build/stabilizer-evidence/
+          if-no-files-found: error
       - name: GUI reopen and resize smoke test
         run: ./build/Release/plugin_tests.exe --gui
       - name: Download pluginval 1.0.3

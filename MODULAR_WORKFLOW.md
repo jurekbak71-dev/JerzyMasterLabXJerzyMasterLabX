@@ -30,6 +30,8 @@ Własny adaptacyjny korektor z 12 detektorami pasmowymi i 12 filtrami Bell. Co 6
 
 GUI rysuje charakterystykę rzeczywistych współczynników filtrów i bypassu. Przy przełączaniu kolejności pokazuje aktywny bank; nie jest analizą sumy dwóch banków podczas crossfade. Adaptacja jest taktowana próbkami i daje identyczny wynik przy różnych podziałach bufora. Brak dodatkowej latencji, brak alokacji w process.
 
+Phase 2C dodaje jawne tryby Legacy/Clean/Strong/Extreme. Legacy zachowuje dokładnie poprzedni algorytm i limit ±6 dB. Nowe tryby mają odpowiednio limity ±4/±9/±12 dB, ocenę wsparcia widmowego i ciągłą ochronę transientów. W trybie Cut górny limit nadal wynosi 0 dB. Szczegóły i pomiary: [Stabilizer Phase 2C](docs/stabilizer/PHASE2C.md).
+
 ## Dynamics i Dynamic EQ
 
 Dynamics: stereo-linked threshold/ratio/attack/release/knee/makeup/mix, ograniczona upward compression z ochroną ciszy, Digital lub Analog. Analog wydłuża detektor, poszerza knee i dodaje łagodną kolorystykę arctangent. Nie ma oversamplingu ani deklaracji emulacji sprzętu. Historia jest serią snapshotów GUI.
@@ -53,6 +55,6 @@ Analiza nie zmienia audio. **Apply changes** stosuje propozycję po akceptacji, 
 
 ## Stan i granice wydania
 
-**Schema 5, 161 parametrów**; pierwsze 138 ID i indeksów zachowane. Schema 1/2/3/4 migrują z nowymi opcjami Imagera w ustawieniu neutralnym, domyślną kolejnością i Stabilizerem poza łańcuchem. Cały kandydat jest walidowany przed zastosowaniem; niepełne stany, złe identyfikatory, NaN/Inf, wartości poza zakresem oraz ułamkowe bool/choice/int są odrzucane.
+**Schema 10, 180 parametrów**; wszystkie wcześniejsze ID i indeksy zachowane, a nowe parametry dopisywane na końcu. Schema 1–9 migrują z fabrycznymi wartościami nowych pól. Cały kandydat jest walidowany przed zastosowaniem; niepełne stany, złe identyfikatory, NaN/Inf, wartości poza zakresem oraz ułamkowe bool/choice/int są odrzucane.
 
 Limiter nadal jest sample-peak, bez True Peak. Pełny Maximizer ze zrzutu, druga instancja EQ, Exciter, Master Rebalance, Match EQ i cztery moduły Vintage pozostają do wykonania. Nie przeprowadzono testu FL Studio ani odsłuchowego porównania z Ozone.
