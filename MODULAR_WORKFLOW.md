@@ -6,6 +6,8 @@ Działa sześć rodzin: **Stabilizer, Dynamic EQ, Smart Dynamics, Stereo Archite
 
 **Przeciąganie dowolnej karty zmienia rzeczywistą kolejność DSP.** Dostępne są wszystkie 720 kolejności sześciu modułów. Kolejność zapisuje się w FLP przez stan wtyczki i w presetach `.jmlx`; ma automatykę i Undo/Redo. Sam test zachowania FL Studio wymaga jeszcze wykonania w tym DAW.
 
+W trybie Parallel każda obecna rodzina jest osobną, wyrównaną czasowo gałęzią. Panel Parallel Branch Mixer udostępnia trim -24…+12 dB oraz wet 0…100% dla każdej gałęzi. Domyślny tryb Legacy 1/N zachowuje wcześniejsze brzmienie i dzieli sumę przez liczbę obecnych gałęzi; opcjonalne Normalize branch weights dzieli przez sumę ich liniowych gainów. Wyłączony, lecz obecny moduł wnosi wyrównany sygnał dry, a usunięty moduł nie tworzy gałęzi. Limiter w Parallel ogranicza tylko własną gałąź, o czym informuje panel.
+
 Obecnie istnieje **jedna instancja każdej rodziny**. Drugi EQ i dowolna liczba instancji nadal wymagają implementacji. Domyślny porządek to Stabilizer → Dynamic EQ → Dynamics → Stereo → EQ → Limiter, z pominięciem nieobecnych procesorów. Procesory za limiterem mogą przekroczyć jego ceiling.
 
 Przy zmianie kolejności dwa przygotowane banki DSP wykonują 20 ms crossfade. Stan filtrów i detektorów jest kopiowany do przygotowanej pamięci. Szybkie kolejne żądania czekają na koniec aktualnego crossfade; ostatnia kolejność wygrywa. Nie ma mutexów, tworzenia obiektów ani alokacji w callback, co sprawdza test. PDC pozostaje równy lookahead 5 ms także przy pustym łańcuchu. Crossfade ogranicza skoki; nie gwarantuje niesłyszalności zmiany topologii dla każdego materiału.

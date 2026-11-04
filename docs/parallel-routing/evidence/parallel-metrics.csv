@@ -1,0 +1,4 @@
+render,lufs_raw,peak_raw,correlation,match_gain_db,matched_delta_ratio
+dry,-17.2809,0.292137,0.887218,0,0
+legacy_1_over_n,-15.6233,0.359095,0.693433,-1.65762,0.278939
+focused_compensated,-13.7883,0.438046,0.530247,-3.49265,0.466625
