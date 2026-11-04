@@ -64,6 +64,19 @@ int main() {
         for(int i=0;i<n;++i)require(std::abs(small[i]-large[i])<1e-6,"block independence");
         std::printf("%.0f Hz: H2 %.7f H3 %.7f blocks null OK\n",sr,h2,h3);
     }
+    // Multirate 2x stability and reported fixed internal latency.
+    for(double sr:{44100.,48000.,96000.,192000.}){
+        HarmonicExciterSettings settings;
+        settings.enabled=true;settings.oversample2x=true;
+        settings.amount={1,1,1,1};settings.even=.75f;settings.odd=1.f;settings.driveDb=12.f;
+        HarmonicExciter effect;effect.settings(settings);effect.prepare(sr);
+        require(effect.latencySamples()==32,"2x multirate latency");
+        const int frames=static_cast<int>(sr/2);
+        std::vector<float> left(frames),right(frames);
+        for(int i=0;i<frames;++i)left[i]=right[i]=.2f*static_cast<float>(std::sin(2*pi*1000*i/sr));
+        for(int i=0;i<frames;i+=257)effect.process(left.data()+i,right.data()+i,std::min(257,frames-i));
+        for(int i=0;i<frames;++i)require(std::isfinite(left[i])&&std::isfinite(right[i]),"2x multirate finite");
+    }
     // Full-core 2x mode: verified latency alignment and reduced folded H3 at 10 kHz.
     {
         HarmonicExciterSettings cfg;cfg.enabled=true;cfg.oversample2x=true;
