@@ -34,3 +34,11 @@ Actual isolated source built with GCC C++20 `-O2 -Wall -Wextra -Werror` and ran 
 **Not integrated yet:** no wiring of this primitive into `HarmonicExciter::process`; no 4x mode, latency compensated wet/dry, parameter smoothing, APVTS, routing, GUI, Brain preview or Windows VST3. Existing 180 parameters and legacy sound remain unchanged. GitHub CI test results must be read separately and must not be inferred from local tests.
 
 Next required step: integrate 2x per nonlinear band with 32-sample aligned dry/wet, measure H2/H3 and alias suppression on the full HarmonicExciter, then ensure a fixed PDC strategy compatible with existing plugin before any VST3 release.
+
+## Follow-up: full-core optional 2x path integrated and locally tested (2026-11-04)
+
+The `HarmonicExciter` now has a non-host-exposed `oversample2x` configuration switch (default **false**, preserving the original 1x prototype path). Each channel and frequency band runs a separate 2x reconstruction / nonlinear / anti-alias decimation chain. An input-side 32-sample dry delay matches the 32-base-sample latency of the FIR; `latencySamples()` reports 32 while enabled in 2x mode and 0 otherwise. Existing off/default processing is unaffected.
+
+Full-core C++20 build from an equivalent local source replica using GCC `-O2 -Wall -Wextra -Werror`: pass. Targeted ASan/UBSan: pass. A 48 kHz, 10 kHz, 0.5 amplitude input with odd harmonics and 12 dB drive gave 18 kHz aliased amplitude **0.02531838** in 1x and **0.00000177** in 2x. The exact delayed-dry null test gave maximum error 0; processing the same 48 kHz test using 1-sample and 257-sample blocks also differed by 0 in the tested scenario. These are **local DSP probes**, not CI, whole-plugin or musical-listening certification. A mixed two-render local smoke executable reported 0.17 s wall time and ~2.3 MB max RSS, not a reliable per-plugin CPU benchmark.
+
+Remaining risks: mode switching can cause clicks, runtime host PDC not integrated, oversampling is not in the VST3 graph, 4x missing, higher sample rate and broader alias spectra unverified, UI and APVTS unimplemented. CPU budget needs realistic host assessment; 65-tap per-stage FIR multiplied across four bands and stereo channels is potentially expensive. No claim of complete Windows VST3 availability. Keep PR as draft.
