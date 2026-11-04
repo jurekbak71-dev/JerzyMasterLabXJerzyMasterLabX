@@ -60,10 +60,10 @@ public:
  }
  StereoReading read()const noexcept {StereoReading out;for(size_t i=0;i<4;++i){out.correlation[i]=ll[i]*rr[i]>1e-24?static_cast<float>(std::clamp(lr[i]/std::sqrt(ll[i]*rr[i]),-1.,1.)):0;out.width[i]=static_cast<float>(std::sqrt(std::max(0.,ll[i]+rr[i]-2*lr[i])/std::max(1e-20,ll[i]+rr[i]+2*lr[i])));}return out;}
 };
-struct DynamicsSettings {bool enabled=false,analog=false;float threshold=-18,ratio=2,attack=15,release=150,knee=6,makeup=0,mix=1,upward=0,upwardThreshold=-36;};
-struct DynamicsReading {float reduction=0,upward=0,inputDb=-180;};
+struct DynamicsSettings {bool enabled=false,analog=false;float threshold=-18,ratio=2,attack=15,release=150,knee=6,makeup=0,mix=1,upward=0,upwardThreshold=-36;int intensity=0;float punch=0;bool delta=false;};
+struct DynamicsReading {float reduction=0,upward=0,inputDb=-180,punch=0;};
 class SmartCompressor {
- double rate=48000;Envelope detector;Slew bypass,gain,mode,wetMix;DynamicsSettings config;DynamicsReading reading;
+ double rate=48000;Envelope detector,transientDetector;Slew bypass,gain,mode,wetMix,delta;DynamicsSettings config;DynamicsReading reading;
 public:
  static float reduction(float db,float threshold,float ratio,float knee)noexcept {
   const float x=db-threshold,k=std::max(0.f,knee),slope=1-1/std::max(1.f,ratio);
@@ -76,21 +76,22 @@ public:
  }
  void settings(DynamicsSettings c)noexcept{config=c;}
  void prepare(double sr){rate=sr;reset();}
- void reset()noexcept{detector={};reading={};bypass.prepare(rate,config.enabled?1.f:0.f);gain.prepare(rate,0);mode.prepare(rate,config.analog?1.f:0.f);wetMix.prepare(rate,config.mix);}
+ void reset()noexcept{detector={};transientDetector={};reading={};bypass.prepare(rate,config.enabled?1.f:0.f);gain.prepare(rate,0);mode.prepare(rate,config.analog?1.f:0.f);wetMix.prepare(rate,config.mix);delta.prepare(rate,config.delta?1.f:0.f);}
  void process(float* left,float* right,int n)noexcept {
   if(!config.enabled&&bypass.value<1e-6f){bypass.value=0;reading={};return;}
   const float coefficient=static_cast<float>(1-std::exp(-1/(rate*.001)));
   for(int i=0;i<n;++i){float l=clean(left[i]),r=clean(right[i]);const float analog=mode.tick(config.analog?1.f:0.f);
    const float amplitude=std::max(std::abs(l),std::abs(r));const float envelope=detector.tick(amplitude,rate,config.attack*(1+.5f*analog),config.release*(1+.5f*analog));
-   const float db=levelDb(envelope),gr=reduction(db,config.threshold,config.ratio,config.knee+analog*3),up=upward(db,config.upwardThreshold,config.upward);
-   const float target=std::clamp(config.makeup+up-gr,-60.f,30.f);gain.value+=coefficient*(target-gain.value);
+   const float db=levelDb(envelope),gr=reduction(db,config.threshold,config.ratio,config.knee+analog*3),up=upward(db,config.upwardThreshold,config.upward);const int intensity=std::clamp(config.intensity,0,3);
+   const float grScale=std::array<float,4>{1.f,.8f,1.4f,1.9f}[intensity],upScale=std::array<float,4>{1.f,.85f,1.2f,1.45f}[intensity];const float transient=transientDetector.tick(amplitude,rate,.1f,std::max(10.f,config.attack*.25f));const float punchGain=std::clamp(levelDb(transient)-db,0.f,12.f)*std::clamp(config.punch,0.f,100.f)*.01f*std::array<float,4>{1.f,.7f,1.f,1.25f}[intensity];
+   const float target=std::clamp(config.makeup+up*upScale-gr*grScale+punchGain,-60.f,30.f);gain.value+=coefficient*(target-gain.value);
    const float multiplier=dbGain(gain.value),blend=bypass.tick(config.enabled?1.f:0.f)*wetMix.tick(config.mix);
    auto colour=[&](float x){const float v=x*multiplier;if(analog<1e-6f)return v; // Paired biased arctangents: odd, DC-neutral colour.
     const float positive=std::atan(1.15f*v+.08f),negative=std::atan(-1.15f*v+.08f);
     const float shaped=(positive-negative)/(2.f*(1.15f/(1+.08f*.08f)));
     return v+analog*.15f*(shaped-v);};
-   left[i]=clean(l+blend*(colour(l)-l));right[i]=clean(r+blend*(colour(r)-r));
-   reading={gr*blend,up*blend,db};
+   const float wetL=colour(l),wetR=colour(r),normalL=clean(l+blend*(wetL-l)),normalR=clean(r+blend*(wetR-r)),monitor=delta.tick(config.delta?1.f:0.f);left[i]=clean(normalL+monitor*(blend*(wetL-l)-normalL));right[i]=clean(normalR+monitor*(blend*(wetR-r)-normalR));
+   reading={gr*grScale*blend,up*upScale*blend,db,punchGain*blend};
   }
  }
  DynamicsReading read()const noexcept{return reading;}
