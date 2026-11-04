@@ -32,6 +32,7 @@ public:
         setComponentID("harmonic-exciter-panel");
         setLookAndFeel(&theme);
         addAndMakeVisible(inChain);addAndMakeVisible(active);
+        inChain.setComponentID("exciter-present");active.setComponentID("exciter-active");
         presenceAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.state,"exciterPresent",inChain);
         activeAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.state,"exciterOn",active);
         inChain.setTooltip("Adds a dedicated Harmonic Exciter after the legacy 6-module chain. It is not an adjustable parallel branch.");
