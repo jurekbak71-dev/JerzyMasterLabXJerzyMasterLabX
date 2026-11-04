@@ -5,12 +5,14 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include "HarmonicOversampler.h"
 
 namespace masterlab {
 struct HarmonicExciterSettings {
     bool enabled = false;
     std::array<float,4> amount{0.f,0.f,0.f,0.f};
     float even=0.5f,odd=0.5f,driveDb=0.f,mix=1.f,outputDb=0.f;
+    bool oversample2x=false; // experimental non-automatable mode; adds 32 samples of latency
     std::array<float,3> crossovers{180.f,2400.f,8000.f};
 };
 struct HarmonicExciterReading {
@@ -24,6 +26,9 @@ class HarmonicExciter {
     } state_[2]{};
     HarmonicExciterSettings settings_{};
     HarmonicExciterReading reading_{};
+    std::array<std::array<HarmonicOversampler2x,4>,2> oversamplers_{};
+    std::array<std::array<float,33>,2> dryDelay_{};
+    size_t dryPosition_=0;
     double sampleRate_=48000.;
     std::array<float,3> coefficient_{};
     static float finiteClamp(float x,float lo,float hi) noexcept {
@@ -44,6 +49,8 @@ public:
     }
     void reset() noexcept {
         for(auto& s:state_)s={};
+        for(auto& channel:oversamplers_)for(auto& filter:channel)filter.reset();
+        dryDelay_={};dryPosition_=0;
         reading_={};
     }
     // Call settings() from control thread / before rendering; not per sample.
@@ -51,6 +58,7 @@ public:
         settings_=value;updateCoefficients();
     }
     HarmonicExciterReading reading()const noexcept {return reading_;}
+    int latencySamples()const noexcept {return settings_.enabled&&settings_.oversample2x?HarmonicOversampler2x::latencySamples:0;}
     void process(float* left,float* right,int count,bool delta=false) noexcept {
         if(!left||!right||count<=0)return;
         if(!settings_.enabled){
@@ -63,7 +71,8 @@ public:
         const float odd=finiteClamp(settings_.odd,0.f,1.f);
         const float wet=finiteClamp(settings_.mix,0.f,1.f);
         const float output=std::pow(10.f,finiteClamp(settings_.outputDb,-18.f,6.f)/20.f);
-        const float dcAlpha=static_cast<float>(1.-std::exp(-6.283185307179586*12./sampleRate_));
+        const bool oversampled=settings_.oversample2x;
+        const float dcAlpha=static_cast<float>(1.-std::exp(-6.283185307179586*12./(sampleRate_*(oversampled?2.:1.))));
         std::array<double,4> generatedSquare{};
         double inSquare=0.,outSquare=0.;
         for(int i=0;i<count;++i){
@@ -77,22 +86,33 @@ public:
                 const std::array<float,4> band{s.a,s.b-s.a,s.c-s.b,input-s.c};
                 float addition=0.f;
                 for(size_t k=0;k<4;++k){
-                    const float x=std::tanh(band[k]*drive);
-                    const float evenRaw=x*x;
-                    s.dc[k]+=dcAlpha*(evenRaw-s.dc[k]);
-                    const float second=evenRaw-s.dc[k];
-                    const float third=x*x*x;
                     const float intensity=finiteClamp(settings_.amount[k],0.f,1.f);
-                    const float generated=intensity*(0.5f*even*second+0.5f*odd*third);
+                    const auto nonlinear=[&](float v) noexcept -> float {
+                        const float x=std::tanh(v*drive);
+                        const float evenRaw=x*x;
+                        s.dc[k]+=dcAlpha*(evenRaw-s.dc[k]);
+                        const float second=evenRaw-s.dc[k];
+                        const float third=x*x*x;
+                        return intensity*(0.5f*even*second+0.5f*odd*third);
+                    };
+                    const float generated=oversampled?
+                        oversamplers_[channel][k].tick(band[k],nonlinear):
+                        nonlinear(band[k]);
                     addition+=generated;
                     generatedSquare[k]+=static_cast<double>(generated)*generated;
                 }
-                const float normal=std::clamp((input+wet*addition)*output,-16.f,16.f);
-                const float result=delta?normal-input:normal;
+                float dry=input;
+                if(oversampled){
+                    dry=dryDelay_[channel][dryPosition_];
+                    dryDelay_[channel][dryPosition_]=input;
+                }
+                const float normal=std::clamp((dry+wet*addition)*output,-16.f,16.f);
+                const float result=delta?normal-dry:normal;
                 io=std::isfinite(result)?result:0.f;
                 inSquare+=static_cast<double>(input)*input;
                 outSquare+=static_cast<double>(normal)*normal;
             }
+            if(oversampled)dryPosition_=(dryPosition_+1)%dryDelay_[0].size();
         }
         const double denominator=static_cast<double>(count)*2.;
         reading_.inputRms=static_cast<float>(std::sqrt(inSquare/denominator));
