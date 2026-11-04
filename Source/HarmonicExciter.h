@@ -1,6 +1,6 @@
 #pragma once
 // Phase 3A experimental DSP core; not yet connected to VST3.
-// Realtime processing allocates nothing; oversampling/anti-aliasing pending.
+// Realtime processing allocates nothing; optional experimental FIR 2x oversampling.
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -27,7 +27,7 @@ class HarmonicExciter {
     HarmonicExciterSettings settings_{};
     HarmonicExciterReading reading_{};
     std::array<std::array<HarmonicOversampler2x,4>,2> oversamplers_{};
-    std::array<std::array<float,33>,2> dryDelay_{};
+    std::array<std::array<float,HarmonicOversampler2x::latencySamples>,2> dryDelay_{};
     size_t dryPosition_=0;
     double sampleRate_=48000.;
     std::array<float,3> coefficient_{};
@@ -54,6 +54,7 @@ public:
         reading_={};
     }
     // Call settings() from control thread / before rendering; not per sample.
+    // Changing oversample2x mid-stream is not click-free; not yet host exposed.
     void settings(HarmonicExciterSettings value) noexcept {
         settings_=value;updateCoefficients();
     }
