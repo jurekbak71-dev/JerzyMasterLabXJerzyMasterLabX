@@ -1,5 +1,6 @@
 #pragma once
 #include "../Source/ParallelPanel.h"
+#include "../Source/ModulePanel.h"
 
 // Runs the actual JUCE message loop: timer-driven DSP analysis must reach the editor.
 class GuiSmoke final : private juce::Timer {
@@ -69,7 +70,7 @@ class GuiSmoke final : private juce::Timer {
         routing->setSelectedId(1,juce::sendNotificationSync);if(actual("routingMode")!=0||parallel->isVisible())return false;
 
         parameter("upwardAmount")->setValueNotifyingHost(4.f/18);
-        auto set=[&](const char* id,float value){auto* p=parameter(id);p->setValueNotifyingHost(p->convertTo0to1(value));};set("stabilizerPresent",1);set("stabilizerAmount",55);set("stabilizerSpeed",25);set("dynThreshold",-36);set("deqFreq1",1000);set("deqThreshold1",-42);set("deqRange1",-4);set("deqFreq2",3333);set("deqThreshold2",-42);set("deqRange2",-6);
+        auto set=[&](const char* id,float value){auto* p=parameter(id);p->setValueNotifyingHost(p->convertTo0to1(value));};set("stabilizerPresent",1);set("stabilizerAmount",55);set("stabilizerSpeed",25);set("dynThreshold",-36);set("dynamicsIntensity",2);set("dynPunch",70);set("deqFreq1",1000);set("deqThreshold1",-42);set("deqRange1",-4);set("deqFreq2",3333);set("deqThreshold2",-42);set("deqRange2",-6);
 
         brainBefore.clear();for(auto* parameter:processor.getParameters())brainBefore.push_back(parameter->getValue());analyse->onClick();
         for(int i=0;i<processor.getParameters().size();++i)if(processor.getParameters()[i]->getValue()!=brainBefore[static_cast<size_t>(i)])return false;
@@ -119,6 +120,7 @@ class GuiSmoke final : private juce::Timer {
         }
         for(const auto& entry:std::array<std::pair<const char*,const char*>,4>{{{"view-dynamic-eq","dynamic-eq"},{"view-dynamics","dynamics"},{"view-stereo","stereo"},{"view-stabilizer","stabilizer"}}}){
             auto* tab=dynamic_cast<juce::Button*>(editor->findChildWithID(entry.first));if(!tab)return false;tab->onClick();
+            if(juce::String(entry.second)=="dynamics"){auto* panel=dynamic_cast<ModulePanel*>(editor->findChildWithID("module-panel-1"));auto* intensity=panel?dynamic_cast<juce::ComboBox*>(panel->findChildWithID("dynamics-intensity")):nullptr;auto* punch=panel?panel->controlForParameter("dynPunch"):nullptr;auto* delta=panel?dynamic_cast<juce::Button*>(panel->findChildWithID("dynamics-delta")):nullptr;if(!intensity||!punch||!delta){std::cerr<<"Dynamics Hybrid Studio controls missing: panel="<<(panel!=nullptr)<<" intensity="<<(intensity!=nullptr)<<" punch="<<(punch!=nullptr)<<" delta="<<(delta!=nullptr)<<'\n';return false;}if(intensity->getSelectedId()!=3||std::abs(punch->getValue()-70)>.01f||actual("dynamicsIntensity")!=2||std::abs(actual("dynPunch")-70)>.01f||actual("dynDelta")!=0){std::cerr<<"Dynamics Hybrid Studio attachment mismatch: intensity="<<actual("dynamicsIntensity")<<" punch="<<actual("dynPunch")<<" delta="<<actual("dynDelta")<<'\n';return false;}feed(24);}
             for(auto size:{juce::Point<int>(750,550),juce::Point<int>(1000,700),juce::Point<int>(2000,1400)}){editor->setSize(size.x,size.y);if(!controlsFit())return false;auto image=editor->createComponentSnapshot(editor->getLocalBounds());if(!image.isValid())return false;
                 if(iteration==0&&size.x==1000){auto output=juce::File::getCurrentWorkingDirectory().getChildFile(juce::String("build-plugin/")+entry.second+"-smoke.png");juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return false;}}
         }

@@ -1,0 +1,7 @@
+render,lufs_raw,peak_raw,crest_db,max_gr_db,max_punch_db,match_gain_db,matched_delta_ratio
+dry,-15.8141,0.68,13.9874,0,0,0,0
+legacy,-26.1911,0.20707,14.0861,11.2739,0,10.377,0.020011
+strong,-30.2971,0.128695,14.1238,15.7834,0,14.483,0.0294603
+strong_punch,-28.5716,0.164306,14.6916,15.7834,9.6,12.7575,0.0852477
+digital_thd_db,-156.524
+analog_thd_db,-49.6918
