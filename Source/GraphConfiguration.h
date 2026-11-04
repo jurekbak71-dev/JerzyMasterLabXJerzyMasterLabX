@@ -6,7 +6,8 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
   engine.dynamicsSettings({v(98)>.5f&&v(99)>.5f,v(100)>.5f,v(101),v(102),v(103),v(104),v(105),v(106),v(107),v(108),v(109)});
   masterlab::DynamicEqSettings c;c.enabled=v(110)>.5f&&v(111)>.5f;for(size_t i=0;i<3;++i){size_t k=112+i*8;c.bands[i]={v(k),v(k+1),v(k+2),v(k+3),v(k+4),v(k+5),v(k+6),v(k+7)>.5f};}engine.dynamicEqSettings(c);
   engine.stabilizerSettings({v(149)>.5f&&v(150)>.5f,v(151)>.5f,v(159)>.5f,v(160)>.5f,static_cast<int>(v(152)),v(153),v(154),v(155),v(156),v(157),v(158)});
-  engine.topology(v(161)>.5f,{v(110)>.5f,v(98)>.5f,v(88)>.5f,v(86)>.5f,v(87)>.5f,v(149)>.5f});
+  engine.topology(v(161)>.5f,{v(110)>.5f,v(98)>.5f,v(88)>.5f,v(86)>.5f,v(87)>.5f,v(149)>.5f},{v(111)>.5f,v(99)>.5f,v(89)>.5f,v(4)>.5f,v(5)>.5f,v(150)>.5f});
+  std::array<float,6> trims{},mixes{};for(size_t i=0;i<6;++i){trims[i]=v(164+i*2);mixes[i]=v(165+i*2);}engine.parallelSettings(v(163)>.5f,trims,mixes);
   engine.routing(static_cast<int>(v(138)),v(6)>.5f);
 }
 template<class Getter> void configureGraph(SerialGraph& engine,Getter v) noexcept {
