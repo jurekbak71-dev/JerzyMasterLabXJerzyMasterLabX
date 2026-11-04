@@ -4,6 +4,7 @@
 #include <array>
 #include <memory>
 #include <vector>
+#include <utility>
 class ExciterPanel final : public juce::Component {
     Processor& processor;
     StudioTheme& theme;
