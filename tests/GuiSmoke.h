@@ -66,6 +66,21 @@ class GuiSmoke final : private juce::Timer {
         exciterPresent->setToggleState(false,juce::sendNotificationSync);
         if(actual("exciterPresent")!=0.f)return false;
         exciter->setVisible(false);
+        // Bass Architect must expose working APVTS-bound controls, not painted-only widgets.
+        auto* bassPanel=editor->findChildWithID("bass-architect-panel");
+        if(!bassPanel)return false;
+        auto* bassSub=dynamic_cast<juce::Slider*>(bassPanel->findChildWithID("bassSub"));
+        auto* bassMono=dynamic_cast<juce::Slider*>(bassPanel->findChildWithID("bassMono"));
+        auto* bassPresent=dynamic_cast<juce::Button*>(bassPanel->findChildWithID("bass-present"));
+        if(!bassSub||!bassMono||!bassPresent)return false;
+        bassPanel->setVisible(true);
+        bassSub->setValue(.7,juce::sendNotificationSync);
+        bassMono->setValue(.5,juce::sendNotificationSync);
+        if(std::abs(actual("bassSub")-.7f)>.02f||std::abs(actual("bassMono")-.5f)>.02f)return false;
+        bassPresent->setToggleState(true,juce::sendNotificationSync);
+        if(actual("bassPresent")!=1.f)return false;
+        bassPresent->setToggleState(false,juce::sendNotificationSync);
+        bassPanel->setVisible(false);
         // Analog Color Hybrid panel exposes genuine APVTS-bound mode and drive.
         auto* analogPanel=editor->findChildWithID("analog-color-panel");
         if(!analogPanel)return false;
