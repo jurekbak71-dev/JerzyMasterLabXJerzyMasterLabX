@@ -19,6 +19,29 @@ static double amplitude(const std::vector<float>& a,double rate,double hz){
  }
  return 2.*std::hypot(re,im)/(a.size()-offset);
 }
+// Independent 8x output reconstruction: 41-tap Blackman-windowed sinc FIR,
+// explicitly distinct from the production 25-tap 4x input detector.
+static double outputTruePeak8x(const std::vector<float>& a){
+ constexpr int taps=41;
+ double peak=0.;
+ for(int phase=0;phase<8;++phase){
+  double weights[taps]{},sum=0.;
+  for(int j=0;j<taps;++j){
+   const double t=j-(taps-1)/2.+phase/8.;
+   const double sinc=std::abs(t)<1e-12?1.:std::sin(pi*t)/(pi*t);
+   const double w=.42-.5*std::cos(2*pi*j/(taps-1))+.08*std::cos(4*pi*j/(taps-1));
+   weights[j]=sinc*w;sum+=weights[j];
+  }
+  for(int j=0;j<taps;++j)weights[j]/=sum;
+  // Exclude initial delay transient and final incomplete reconstruction.
+  for(size_t i=256;i+256<a.size();++i){
+   double v=0.;
+   for(int j=0;j<taps;++j)v+=weights[j]*a[i-j+taps/2];
+   peak=std::max(peak,std::abs(v));
+  }
+ }
+ return peak;
+}
 static std::vector<float> render(double sr,FinalTruePeakSettings settings,int block,bool stress=false){
  const int count=static_cast<int>(sr*.4);
  FinalTruePeak limiter;limiter.settings(settings);limiter.prepare(sr);
@@ -53,6 +76,10 @@ int main(){
   const auto max=*std::max_element(strong.begin(),strong.end(),
     [](float a,float b){return std::abs(a)<std::abs(b);});
   check(std::abs(max)>.1f,"nonzero signal not muted");
+  // Verify inter-sample peaks independently, not just sample ceiling.
+  const double outputTP=outputTruePeak8x(strong);
+  std::printf("%.0f measured 8x output TP %.6f (sample ceiling %.6f)\\n",sr,outputTP,ceiling);
+  check(outputTP<=ceiling*1.012,"reconstructed output true peak near ceiling");
   s.driveDb=0.f;
   const auto quiet=render(sr,s,257);
   check(amplitude(quiet,sr,991.)>.2,"quiet signal passes");
