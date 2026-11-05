@@ -11,7 +11,7 @@ namespace masterlab {
 struct HarmonicExciterSettings {
     bool enabled = false;
     std::array<float,4> amount{0.f,0.f,0.f,0.f};
-    float even=0.5f,odd=0.5f,driveDb=0.f,mix=1.f,outputDb=0.f;
+    float even=0.5f,odd=0.5f,driveDb=0.f,mix=1.f,outputDb=0.f,impact=0.f;
     bool oversample2x=false; // experimental non-automatable mode; adds 32 samples of latency
     std::array<float,3> crossovers{180.f,2400.f,8000.f};
 };
@@ -32,7 +32,7 @@ class HarmonicExciter {
         }
         float tick(float target) noexcept {value+=coefficient*(target-value);return value;}
     };
-    ParameterSmoother driveSmoother_,evenSmoother_,oddSmoother_,mixSmoother_,outputSmoother_,bypassSmoother_;
+    ParameterSmoother driveSmoother_,evenSmoother_,oddSmoother_,mixSmoother_,outputSmoother_,bypassSmoother_,impactSmoother_;
     std::array<ParameterSmoother,4> bandSmoothers_{};
     HarmonicExciterSettings settings_{};
     HarmonicExciterReading reading_{};
@@ -62,6 +62,7 @@ public:
         for(auto& channel:oversamplers_)for(auto& filter:channel)filter.reset();
         dryDelay_={};dryPosition_=0;
         bypassSmoother_.prepare(sampleRate_,settings_.enabled?1.f:0.f);
+        impactSmoother_.prepare(sampleRate_,finiteClamp(settings_.impact,0.f,1.f));
         driveSmoother_.prepare(sampleRate_,finiteClamp(settings_.driveDb,0.f,24.f));
         evenSmoother_.prepare(sampleRate_,finiteClamp(settings_.even,0.f,1.f));
         oddSmoother_.prepare(sampleRate_,finiteClamp(settings_.odd,0.f,1.f));
@@ -94,6 +95,7 @@ public:
             const float even=evenSmoother_.tick(finiteClamp(settings_.even,0.f,1.f));
             const float odd=oddSmoother_.tick(finiteClamp(settings_.odd,0.f,1.f));
             const float wet=mixSmoother_.tick(finiteClamp(settings_.mix,0.f,1.f));
+            const float authority=1.f+5.f*impactSmoother_.tick(finiteClamp(settings_.impact,0.f,1.f));
             const float output=std::pow(10.f,outputSmoother_.tick(finiteClamp(settings_.outputDb,-18.f,6.f))/20.f);
             std::array<float,4> intensities{};
             for(size_t k=0;k<4;++k)intensities[k]=bandSmoothers_[k].tick(finiteClamp(settings_.amount[k],0.f,1.f));
@@ -127,7 +129,7 @@ public:
                     dry=dryDelay_[channel][dryPosition_];
                     dryDelay_[channel][dryPosition_]=input;
                 }
-                const float processed=std::clamp((dry+wet*addition)*output,-16.f,16.f);
+                const float processed=std::clamp((dry+wet*authority*addition)*output,-16.f,16.f);
                 const float normal=dry+bypass*(processed-dry);
                 const float result=delta?normal-dry:normal;
                 io=std::isfinite(result)?result:0.f;
