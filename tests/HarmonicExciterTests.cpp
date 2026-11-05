@@ -119,6 +119,8 @@ int main() {
         for(size_t i=0;i<bypassLeft.size();++i)bypassLeft[i]=bypassRight[i]=.3f*std::sin(2*pi*1000*i/48000);
         // Time-aligned continuous wet reference is essential for a valid click test.
         HarmonicExciter held=e;
+        cfg.enabled=true;
+        held.settings(cfg);
         std::array<float,4096> heldLeft=bypassLeft,heldRight=bypassRight;
         held.process(heldLeft.data(),heldRight.data(),4096);
         e.process(bypassLeft.data(),bypassRight.data(),4096);
