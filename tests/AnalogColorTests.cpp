@@ -48,6 +48,20 @@ int main(){
    require(std::abs(bypass[i]-.3f*std::sin(2*pi*997*i/sr))<1e-6f,"disabled exact pass");
   std::printf("%.0f Hz: four models distinct, bypass and block tests PASS\n",sr);
  }
+ // Switching colour models at a fixed input must not introduce a sharp jump.
+ {
+  AnalogColor e;AnalogColorSettings settings;settings.enabled=true;
+  settings.mode=AnalogColorMode::Tube;settings.driveDb=18.f;settings.bias=.3f;
+  settings.mix=1.f;e.settings(settings);e.prepare(48000);
+  std::array<float,4096> l{},r{};
+  l.fill(.2f);r.fill(.2f);e.process(l.data(),r.data(),4096);
+  const float before=l.back();
+  settings.mode=AnalogColorMode::SolidState;e.settings(settings);
+  l.fill(.2f);r.fill(.2f);e.process(l.data(),r.data(),4096);
+  if(std::abs(l.front()-before)>.02f){std::fprintf(stderr,"FAIL model switch discontinuity %f\n",std::abs(l.front()-before));return 5;}
+  const float after=l.back();
+  if(std::abs(after-before)<.001f)return 6;
+ }
  // Silence, invalid input and midstream automation.
  AnalogColor e;AnalogColorSettings s;s.enabled=true;s.driveDb=24;s.bias=.8f;s.mix=1;
  e.settings(s);e.prepare(48000);
