@@ -14,6 +14,7 @@ struct AnalogColorSettings {
     bool enabled=false;
     AnalogColorMode mode=AnalogColorMode::Tube;
     float driveDb=0.f, bias=0.f, tone=0.f, dynamics=0.f, mix=1.f, outputDb=0.f;
+    bool autoGain=true;
 };
 struct AnalogColorReading {
     float inputRms=0.f, outputRms=0.f, deltaRms=0.f, dcEstimate=0.f;
@@ -123,7 +124,7 @@ public:
                 // High pass/DC blocker removes any asymmetry-produced DC.
                 s.dc+=dcStep*(shaped-s.dc);
                 const float colored=clamp(shaped-s.dc,-12.f,12.f);
-                const float gainComp=1.f/std::sqrt(std::max(1.f,drive));
+                const float gainComp=settings_.autoGain?1.f/std::sqrt(std::max(1.f,drive)):1.f;
                 const float processed=clamp(colored*gainComp*output,-16.f,16.f);
                 const float blend=clamp(bypass*mix,0.f,1.f);
                 const float y=clamp(input+blend*(processed-input),-16.f,16.f);
