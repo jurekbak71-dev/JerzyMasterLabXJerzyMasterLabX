@@ -58,6 +58,9 @@ class GuiSmoke final : private juce::Timer {
         if(!exciterDrive||!exciterPresent)return false;
         exciter->setVisible(true);
         exciterDrive->setValue(9.f,juce::sendNotificationSync);
+        auto* exciterImpact=dynamic_cast<juce::Slider*>(exciter->findChildWithID("exciterImpact"));if(!exciterImpact)return false;
+        exciterImpact->setValue(.7,juce::sendNotificationSync);
+        if(std::abs(actual("exciterImpact")-.7f)>.02f)return false;
         exciterPresent->setToggleState(true,juce::sendNotificationSync);
         if(std::abs(actual("exciterDrive")-9.f)>.02f||actual("exciterPresent")!=1.f)return false;
         exciterPresent->setToggleState(false,juce::sendNotificationSync);
@@ -72,6 +75,9 @@ class GuiSmoke final : private juce::Timer {
         if(!colorDrive||!colorMode||!colorPresent)return false;
         analogPanel->setVisible(true);
         colorDrive->setValue(13.f,juce::sendNotificationSync);
+        auto* analogImpact=dynamic_cast<juce::Slider*>(analogPanel->findChildWithID("analogImpact"));if(!analogImpact)return false;
+        analogImpact->setValue(.65,juce::sendNotificationSync);
+        if(std::abs(actual("analogImpact")-.65f)>.02f)return false;
         colorMode->setSelectedId(3,juce::sendNotificationSync);
         colorPresent->setToggleState(true,juce::sendNotificationSync);
         if(std::abs(actual("analogDrive")-13.f)>.02f||actual("analogMode")!=2.f||actual("analogPresent")!=1.f)return false;
