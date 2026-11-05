@@ -127,6 +127,27 @@ int main() {
         require(std::abs(bypassLeft[0]-heldLeft[0])<.002f,"disable starts near continuous wet reference");
         for(float v:bypassLeft)require(std::isfinite(v),"automated disable finite");
     }
+    // Standalone 4x mode: fixed 48-sample dry latency and folded H3 alias.
+    // This mode is NOT exposed to the VST host until graph PDC is implemented.
+    {
+        HarmonicExciterSettings cfg;cfg.enabled=true;cfg.oversample4x=true;
+        cfg.amount={0,0,0,0};cfg.even=0;cfg.odd=0;
+        HarmonicExciter processor;processor.settings(cfg);processor.prepare(48000);
+        require(processor.latencySamples()==48,"4x fixed latency declaration");
+        std::array<float,512> left{},right{},reference{};
+        for(int i=0;i<512;++i)reference[i]=left[i]=right[i]=.25f*std::sin(2*pi*1000*i/48000);
+        processor.process(left.data(),right.data(),512);
+        for(int i=48;i<512;++i)require(std::abs(left[i]-reference[i-48])<1e-6f,"4x dry path aligned");
+        cfg.amount={1,1,1,1};cfg.odd=1.f;cfg.driveDb=12.f;
+        cfg.oversample4x=false;
+        const auto raw=renderTone(48000,10000,48000,cfg,257);
+        cfg.oversample4x=true;
+        const auto filtered=renderTone(48000,10000,48000,cfg,257);
+        const double aliasRaw=amplitude(raw,18,1000,48000,24000);
+        const double alias4x=amplitude(filtered,18,1000,48000,24000);
+        std::printf("Full 4x exciter 18k alias: raw %.8f, 4x %.8f\n",aliasRaw,alias4x);
+        require(aliasRaw>1e-4&&alias4x<aliasRaw*.25,"4x reduces measured alias");
+    }
     HarmonicExciter effect;HarmonicExciterSettings on;on.enabled=true;on.amount={1,1,1,1};
     effect.settings(on);effect.prepare(48000);
     std::array<float,128> l{},r{};effect.process(l.data(),r.data(),128);
