@@ -4,6 +4,7 @@
 #include "ModulePanel.h"
 #include "ParallelPanel.h"
 #include "ExciterPanel.h"
+#include "AnalogColorPanel.h"
 
 // Included after Processor. GUI work and FFT never run in the audio callback.
 class Editor final : public juce::AudioProcessorEditor,
@@ -17,9 +18,10 @@ class Editor final : public juce::AudioProcessorEditor,
     StudioTheme theme;
     std::array<std::unique_ptr<ModulePanel>,4> modulePanels;
     ExciterPanel exciterPanel;
+    AnalogColorPanel analogPanel;
     ParallelPanel parallelPanel;
     juce::TextButton dynamicView{"Dynamic EQ"},dynamicsView{"Dynamics"},stereoView{"Stereo"},stabilizerView{"Stabilizer"},modulesButton{"+ Modules"};
-    int moduleView=-1,chainDragKind=-1,chainHover=-1;bool chainDragging=false,showingParallel=false,showingExciter=false;
+    int moduleView=-1,chainDragKind=-1,chainHover=-1;bool chainDragging=false,showingParallel=false,showingExciter=false,showingAnalog=false;
     juce::ComboBox routingChoice;std::unique_ptr<ComboAttachment> routingAttachment;
     std::vector<int> chainModules() const {
         std::vector<int> result;
@@ -28,7 +30,7 @@ class Editor final : public juce::AudioProcessorEditor,
         return result;
     }
     int chainAt(float x)const {auto list=chainModules();if(list.empty()||x<24||x>getWidth()-24)return -1;size_t i=static_cast<size_t>((x-24)/((getWidth()-48.f)/list.size()));return i<list.size()?list[i]:-1;}
-    void hideModules(){showingExciter=false;exciterPanel.setVisible(false);moduleView=-1;for(auto& panel:modulePanels)if(panel)panel->setVisible(false);dynamicView.setToggleState(false,juce::dontSendNotification);dynamicsView.setToggleState(false,juce::dontSendNotification);stereoView.setToggleState(false,juce::dontSendNotification);stabilizerView.setToggleState(false,juce::dontSendNotification);}
+    void hideModules(){showingAnalog=false;analogPanel.setVisible(false);showingExciter=false;exciterPanel.setVisible(false);moduleView=-1;for(auto& panel:modulePanels)if(panel)panel->setVisible(false);dynamicView.setToggleState(false,juce::dontSendNotification);dynamicsView.setToggleState(false,juce::dontSendNotification);stereoView.setToggleState(false,juce::dontSendNotification);stabilizerView.setToggleState(false,juce::dontSendNotification);}
     void showModule(int kind){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);moduleView=kind;modulePanels[static_cast<size_t>(kind)]->setVisible(true);std::array<juce::TextButton*,4>{&dynamicView,&dynamicsView,&stereoView,&stabilizerView}[static_cast<size_t>(kind)]->setToggleState(true,juce::dontSendNotification);repaint();}
     void toggleParameter(const char* id){auto* parameter=processor.state.getParameter(id);processor.beginUiTransaction("Module chain");parameter->beginChangeGesture();parameter->setValueNotifyingHost(parameter->getValue()>.5f?0.f:1.f);parameter->endChangeGesture();processor.finishUiTransaction();repaint();}
 
@@ -67,6 +69,7 @@ class Editor final : public juce::AudioProcessorEditor,
         for(auto* component:std::initializer_list<juce::Component*>{&frequency,&gain,&quality,&ceiling,&drive,&release,&frequencyLabel,&gainLabel,&qualityLabel,&ceilingLabel,&driveLabel,&releaseLabel,&bandChoice,&fftChoice,&typeChoice,&bandEnabled,&eqEnabled,&limiterEnabled})component->setVisible(false);
         eqView.setToggleState(false,juce::dontSendNotification);limiterView.setToggleState(false,juce::dontSendNotification);inspectorView.setToggleState(true,juce::dontSendNotification);repaint();
     }
+    void showAnalog(){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);showingAnalog=true;analogPanel.setVisible(true);repaint();}
     void showExciter(){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);showingExciter=true;exciterPanel.setVisible(true);repaint();}
     void showParallel(){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);showingParallel=true;parallelPanel.setVisible(true);repaint();}
     void setBrainVisible(bool visible){
@@ -319,7 +322,7 @@ class Editor final : public juce::AudioProcessorEditor,
         for(int i=0;i<count;++i){response=processor.responses[start+i];haveResponse=true;}
         for(int i=0;i<count2;++i){response=processor.responses[start2+i];haveResponse=true;}
         processor.responseFifo.finishedRead(count+count2);
-        if(count+count2){for(auto& panel:modulePanels)if(panel)panel->update(response);parallelPanel.update(response);exciterPanel.update(response);}
+        if(count+count2){for(auto& panel:modulePanels)if(panel)panel->update(response);parallelPanel.update(response);exciterPanel.update(response);analogPanel.update(response);}
         processor.fifo.prepareToRead(processor.fifo.getNumReady(),start,count,start2,count2);
         auto consume=[&](int first,int size){for(int i=0;i<size;++i){float l=processor.traceL[first+i],r=processor.traceR[first+i];samples[0][head]=l;samples[1][head]=r;scope[head%1024]={r-l,r+l};head=(head+1)%32768;}};
         consume(start,count);consume(start2,count2);processor.fifo.finishedRead(count+count2);
@@ -344,7 +347,7 @@ class Editor final : public juce::AudioProcessorEditor,
         slider.setComponentID(id);slider.setColour(juce::Slider::rotarySliderFillColourId,accent);
     }
 public:
-    explicit Editor(Processor& p) : AudioProcessorEditor(p),processor(p),exciterPanel(processor,theme),parallelPanel(processor,theme) {
+    explicit Editor(Processor& p) : AudioProcessorEditor(p),processor(p),exciterPanel(processor,theme),analogPanel(processor,theme),parallelPanel(processor,theme) {
         theme.setColour(juce::ResizableWindow::backgroundColourId,background);
         theme.setColour(juce::Slider::textBoxOutlineColourId,juce::Colours::transparentBlack);
         theme.setColour(juce::Slider::textBoxBackgroundColourId,panel);
@@ -352,14 +355,15 @@ public:
         for(int i=0;i<4;++i){modulePanels[i]=std::make_unique<ModulePanel>(processor,theme,i);modulePanels[i]->setComponentID("module-panel-"+juce::String(i));addChildComponent(*modulePanels[i]);}
         addChildComponent(parallelPanel);
         addChildComponent(exciterPanel);
+        addChildComponent(analogPanel);
         for(auto* button:{&dynamicView,&dynamicsView,&stereoView,&stabilizerView,&modulesButton})addAndMakeVisible(button);
         dynamicView.setComponentID("view-dynamic-eq");dynamicsView.setComponentID("view-dynamics");stereoView.setComponentID("view-stereo");stabilizerView.setComponentID("view-stabilizer");modulesButton.setComponentID("module-menu");
         dynamicView.onClick=[this]{showModule(0);};dynamicsView.onClick=[this]{showModule(1);};stereoView.onClick=[this]{showModule(2);};stabilizerView.onClick=[this]{showModule(3);};
         addAndMakeVisible(routingChoice);routingChoice.setComponentID("chain-routing");routingChoice.addItem("Serial",1);routingChoice.addItem("Parallel",2);routingAttachment=std::make_unique<ComboAttachment>(processor.state,"routingMode",routingChoice);routingChoice.setTooltip("Serial: modules process in card order. Parallel: each present module receives aligned input and uses explicit trim/wet controls. A limiter branch does not limit the whole sum.");routingChoice.onChange=[this]{if(routingChoice.getSelectedId()==2)showParallel();else showLimiter(false);};
         modulesButton.onClick=[this]{
             juce::PopupMenu menu;const std::array<const char*,6> names{"Dynamic EQ","Smart Dynamics","Stereo Architect","Spectral EQ","Limiter","Stabilizer"};const std::array<const char*,6> ids{"dynamicEqPresent","dynamicsPresent","stereoPresent","eqPresent","limPresent","stabilizerPresent"};
-            for(int i=0;i<6;++i){juce::PopupMenu item;bool included=processor.state.getRawParameterValue(ids[i])->load()>.5f;item.addItem(10+i,included?"Remove from chain":"Add to chain");const char* on=std::array<const char*,6>{"dynamicEqOn","dynamicsOn","stereoOn","eq","lim","stabilizerOn"}[i];item.addItem(20+i,"Enabled",included,processor.state.getRawParameterValue(on)->load()>.5f);menu.addSubMenu(names[i],item);}menu.addSeparator();menu.addItem(30,"Open Harmonic Exciter (post chain)");
-            auto safe=juce::Component::SafePointer<Editor>(this);menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(modulesButton),[safe](int id){if(!safe)return;if(id==30){safe->showExciter();return;}if(id>=10&&id<16){int kind=id-10;auto* value=safe->processor.state.getRawParameterValue(std::array<const char*,6>{"dynamicEqPresent","dynamicsPresent","stereoPresent","eqPresent","limPresent","stabilizerPresent"}[kind]);bool adding=value->load()<.5f;safe->processor.setModulePresentUI(kind,adding);if(adding){if(kind<3||kind==5)safe->showModule(kind==5?3:kind);else safe->showLimiter(kind==4);}safe->repaint();}if(id>=20&&id<26)safe->toggleParameter(std::array<const char*,6>{"dynamicEqOn","dynamicsOn","stereoOn","eq","lim","stabilizerOn"}[id-20]);});
+            for(int i=0;i<6;++i){juce::PopupMenu item;bool included=processor.state.getRawParameterValue(ids[i])->load()>.5f;item.addItem(10+i,included?"Remove from chain":"Add to chain");const char* on=std::array<const char*,6>{"dynamicEqOn","dynamicsOn","stereoOn","eq","lim","stabilizerOn"}[i];item.addItem(20+i,"Enabled",included,processor.state.getRawParameterValue(on)->load()>.5f);menu.addSubMenu(names[i],item);}menu.addSeparator();menu.addItem(30,"Open Harmonic Exciter (post chain)");menu.addItem(31,"Open Analog Color (post chain)");
+            auto safe=juce::Component::SafePointer<Editor>(this);menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(modulesButton),[safe](int id){if(!safe)return;if(id==30){safe->showExciter();return;}if(id==31){safe->showAnalog();return;}if(id>=10&&id<16){int kind=id-10;auto* value=safe->processor.state.getRawParameterValue(std::array<const char*,6>{"dynamicEqPresent","dynamicsPresent","stereoPresent","eqPresent","limPresent","stabilizerPresent"}[kind]);bool adding=value->load()<.5f;safe->processor.setModulePresentUI(kind,adding);if(adding){if(kind<3||kind==5)safe->showModule(kind==5?3:kind);else safe->showLimiter(kind==4);}safe->repaint();}if(id>=20&&id<26)safe->toggleParameter(std::array<const char*,6>{"dynamicEqOn","dynamicsOn","stereoOn","eq","lim","stabilizerOn"}[id-20]);});
         };
 
         configureSlider(frequency,frequencyLabel,"Frequency","eq-frequency");frequency.setTextValueSuffix(" Hz");
@@ -472,6 +476,7 @@ public:
         for(auto& panel:modulePanels)panel->setBounds(0,134,getWidth(),getHeight()-154);
         parallelPanel.setBounds(0,134,getWidth(),getHeight()-154);
         exciterPanel.setBounds(0,134,getWidth(),getHeight()-154);
+        analogPanel.setBounds(0,134,getWidth(),getHeight()-154);
 
     }
     bool isInterestedInDragSource(const SourceDetails& details) override {return details.description.toString().startsWith("module:");}
@@ -489,7 +494,7 @@ public:
     void mouseDown(const juce::MouseEvent& event) override {
         chainDragKind=-1;chainDragging=false;chainHover=-1;
         if(event.position.y>=84&&event.position.y<=132){chainDragKind=chainAt(event.position.x);return;}
-        if(moduleView>=0||showingParallel||showingExciter||showingBrain||showingInspector||showingLimiter||!plot().expanded(12).contains(event.position))return;
+        if(moduleView>=0||showingParallel||showingExciter||showingAnalog||showingBrain||showingInspector||showingLimiter||!plot().expanded(12).contains(event.position))return;
         int nearest=selectedBand;float distance=event.position.getDistanceFrom(node(nearest));
         for(int i=0;i<16;++i){if(i!=selectedBand&&bandType(i)==0&&std::abs(value("gain",i))<.01f)continue;float d=event.position.getDistanceFrom(node(i));if(d<distance){distance=d;nearest=i;}}
         if(distance>14)return;
@@ -536,7 +541,7 @@ public:
             g.setColour(muted);g.setFont(theme.font(10));g.drawText(on?std::array<const char*,6>{"3 detectors","Down / upward","4-band M/S","16 bands","5 ms lookahead","Adaptive tone"}[kind]:"Bypassed",static_cast<int>(x)+34,111,static_cast<int>(width)-48,16,juce::Justification::left);
         }
         if(moduleView>=0){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
-        if(showingParallel||showingExciter){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
+        if(showingParallel||showingExciter||showingAnalog){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
         if(showingBrain){paintBrain(g);return;}
         if(showingInspector){paintInspector(g);return;}
         if(showingLimiter){paintLimiter(g);g.setColour(first?curve:muted);g.setFont(theme.font(11));g.drawText(processor.state.getRawParameterValue("routingMode")->load()>.5f?"PARALLEL: limiter ceiling applies to its branch, not the full sum":(first?"Processors after limiter may exceed its ceiling":"SAMPLE PEAK  /  True Peak unavailable"),24,getHeight()-25,getWidth()-48,18,juce::Justification::left);return;}

@@ -63,6 +63,21 @@ class GuiSmoke final : private juce::Timer {
         exciterPresent->setToggleState(false,juce::sendNotificationSync);
         if(actual("exciterPresent")!=0.f)return false;
         exciter->setVisible(false);
+        // Analog Color Hybrid panel exposes genuine APVTS-bound mode and drive.
+        auto* analogPanel=editor->findChildWithID("analog-color-panel");
+        if(!analogPanel)return false;
+        auto* colorDrive=dynamic_cast<juce::Slider*>(analogPanel->findChildWithID("analogDrive"));
+        auto* colorMode=dynamic_cast<juce::ComboBox*>(analogPanel->findChildWithID("analog-model"));
+        auto* colorPresent=dynamic_cast<juce::Button*>(analogPanel->findChildWithID("analog-present"));
+        if(!colorDrive||!colorMode||!colorPresent)return false;
+        analogPanel->setVisible(true);
+        colorDrive->setValue(13.f,juce::sendNotificationSync);
+        colorMode->setSelectedId(3,juce::sendNotificationSync);
+        colorPresent->setToggleState(true,juce::sendNotificationSync);
+        if(std::abs(actual("analogDrive")-13.f)>.02f||actual("analogMode")!=2.f||actual("analogPresent")!=1.f)return false;
+        colorPresent->setToggleState(false,juce::sendNotificationSync);
+        if(actual("analogPresent")!=0.f)return false;
+        analogPanel->setVisible(false);
         auto* brain=dynamic_cast<juce::Button*>(editor->findChildWithID("view-brain"));auto* analyse=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-analyse"));
         if(!brain||!analyse)return false;brain->onClick();
         auto* genre=dynamic_cast<juce::ComboBox*>(editor->findChildWithID("brain-genre"));if(!genre)return false;genre->setSelectedId(5,juce::sendNotificationSync);
