@@ -41,7 +41,7 @@ public:
         gainAttach_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor.state,"analogAutoGain",autoGain_);
         modeAttach_=std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor.state,"analogMode",mode_);
         addControl("Drive","analogDrive");addControl("Bias","analogBias");addControl("Tone","analogTone");
-        addControl("Compression","analogDynamics");addControl("Dry / Wet","analogMix");addControl("Output","analogOutput");
+        addControl("Compression","analogDynamics");addControl("Impact","analogImpact");addControl("Dry / Wet","analogMix");addControl("Output","analogOutput");
         included_.setTooltip("Analog Color is an optional post-chain processor after Harmonic Exciter.");
         mode_.setTooltip("Four original distinct saturation algorithms. These are not hardware circuit clones.");
     }

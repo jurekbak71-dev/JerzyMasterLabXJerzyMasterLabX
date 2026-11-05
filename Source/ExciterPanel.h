@@ -38,11 +38,11 @@ public:
         activeAttachment=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.state,"exciterOn",active);
         inChain.setTooltip("Adds a dedicated Harmonic Exciter after the legacy 6-module chain. It is not an adjustable parallel branch.");
         active.setTooltip("Bypass the post-chain Harmonic Exciter without discarding settings.");
-        for(const auto& entry:std::array<std::pair<const char*,const char*>,9>{{
+        for(const auto& entry:std::array<std::pair<const char*,const char*>,10>{{
             {"Low","exciterAmountLow"},{"Mid","exciterAmountMid"},
             {"High","exciterAmountHigh"},{"Air","exciterAmountAir"},
             {"Even H2","exciterEven"},{"Odd H3","exciterOdd"},
-            {"Drive dB","exciterDrive"},{"Dry / Wet","exciterMix"},{"Output dB","exciterOutput"}
+            {"Drive dB","exciterDrive"},{"Impact","exciterImpact"},{"Dry / Wet","exciterMix"},{"Output dB","exciterOutput"}
         }})addKnob(entry.first,entry.second);
     }
     ~ExciterPanel()override{setLookAndFeel(nullptr);}
