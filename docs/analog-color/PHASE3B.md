@@ -27,3 +27,12 @@ Date: 2026-11-05. Status: implementation under review. This document does not ce
 - `state_validation`: schema 1–11 migrations to schema 12.
 - `gui_smoke`: actual APVTS mode/drive/presence control.
 - Windows MSVC, full CTest, pluginval strictness 5 and host FL Studio gates are independent validation steps. Do not claim their success based only on source changes.
+
+## Verified local DSP checks — 2026-11-05
+An independent Linux x86-64 C++20 copy of `Source/AnalogColor.h` and the `tests/AnalogColorTests.cpp` test logic was compiled with `g++ -std=c++20 -O2 -Wall -Wextra -Werror`; all tests passed at 44.1, 48, 96 and 192 kHz. The tests cover four distinguishable outputs, 1/257/4097-size blocks, exact disabled bypass for finite signals, finite values with mode/drive automation, silence, and NaN guarding. A separate `-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer` build also passed with leak detection enabled. This is **not** evidence of JUCE/VST3 host integration.
+ 
+### Current Windows CI blocker
+GitHub Actions runs `42071492690` and `42072017685` reported `failure`. The GitHub connector's corresponding job log retrieval returned HTTP 404 `BlobNotFound`, with missing steps/log URL, preventing identification of the failed compilation/test step. Do not equate these runs with source compiler errors or with passing tests. The full Windows build, pluginval and GUI smoke are **not verified** for this change; the PR must stay draft until a usable build result is obtained. No installable Analog Color binary is claimed.
+
+### Next checks before acceptance
+Investigate Windows CI using accessible job diagnostics; isolate compilation vs tests; verify sample-peak ceiling safety when processing after limiter; measure alias-energy and CPU across all 4 modes, smooth mode changes, then produce a Windows x64 VST3 and test it in FL Studio.
