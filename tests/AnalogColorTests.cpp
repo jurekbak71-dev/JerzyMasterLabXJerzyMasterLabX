@@ -31,6 +31,7 @@ int main(){
   std::array<std::vector<float>,4> results;
   for(int mode=0;mode<4;++mode){
    results[mode]=render(sr,mode,257);
+   require(std::isfinite(metric(results[mode],2,sr,997,4096)),"finite even harmonic measurement");
    const auto single=render(sr,mode,1);
    const auto wide=render(sr,mode,4097);
    for(size_t i=0;i<single.size();++i)
