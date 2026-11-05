@@ -48,19 +48,31 @@ int main(){
    require(std::abs(bypass[i]-.3f*std::sin(2*pi*997*i/sr))<1e-6f,"disabled exact pass");
   std::printf("%.0f Hz: four models distinct, bypass and block tests PASS\n",sr);
  }
- // Switching colour models at a fixed input must not introduce a sharp jump.
+ // Switching models must start from the time-aligned previous render and
+ // finish at a measurably different sound on a non-DC stimulus.
  {
   AnalogColor e;AnalogColorSettings settings;settings.enabled=true;
   settings.mode=AnalogColorMode::Tube;settings.driveDb=18.f;settings.bias=.3f;
   settings.mix=1.f;e.settings(settings);e.prepare(48000);
   std::array<float,4096> l{},r{};
-  l.fill(.2f);r.fill(.2f);e.process(l.data(),r.data(),4096);
-  const float before=l.back();
+  for(size_t i=0;i<l.size();++i)l[i]=r[i]=.2f*std::sin(2*pi*997*i/48000);
+  e.process(l.data(),r.data(),4096);
+  AnalogColor reference=e;
   settings.mode=AnalogColorMode::SolidState;e.settings(settings);
-  l.fill(.2f);r.fill(.2f);e.process(l.data(),r.data(),4096);
-  if(std::abs(l.front()-before)>.02f){std::fprintf(stderr,"FAIL model switch discontinuity %f\n",std::abs(l.front()-before));return 5;}
-  const float after=l.back();
-  if(std::abs(after-before)<.001f)return 6;
+  std::array<float,4096> wet{},wetR{},referenceL{},referenceR{};
+  for(size_t i=0;i<wet.size();++i){
+   const float x=.2f*std::sin(2*pi*997*(i+4096)/48000);
+   wet[i]=wetR[i]=referenceL[i]=referenceR[i]=x;
+  }
+  e.process(wet.data(),wetR.data(),4096);
+  reference.process(referenceL.data(),referenceR.data(),4096);
+  require(std::abs(wet.front()-referenceL.front())<.002f,"model switch begins near old model");
+  double changed=0.;
+  for(size_t i=2048;i<wet.size();++i){
+   const double d=wet[i]-referenceL[i];changed+=d*d;
+   require(std::isfinite(wet[i])&&wet[i]==wetR[i],"model switch finite dual mono");
+  }
+  require(std::sqrt(changed/2048.)>.001,"switched model converges to distinct sound");
  }
  // Silence, invalid input and midstream automation.
  AnalogColor e;AnalogColorSettings s;s.enabled=true;s.driveDb=24;s.bias=.8f;s.mix=1;
