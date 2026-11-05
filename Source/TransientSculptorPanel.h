@@ -1,0 +1,74 @@
+#pragma once
+#include <memory>
+#include <vector>
+class TransientSculptorPanel final : public juce::Component {
+ Processor& processor_;
+ StudioTheme& theme_;
+ juce::ToggleButton present_{"In chain"},enabled_{"Active"};
+ std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> presentAttachment_,enabledAttachment_;
+ struct Knob {juce::Label label;juce::Slider slider;
+  std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;};
+ std::vector<std::unique_ptr<Knob>> knobs_;
+ masterlab::TransientSculptorReading reading_{};
+ void addKnob(const char* label,const char* parameter){
+  auto k=std::make_unique<Knob>();
+  k->label.setText(label,juce::dontSendNotification);
+  k->label.setColour(juce::Label::textColourId,juce::Colour(0xffe5c7ac));
+  k->slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+  k->slider.setTextBoxStyle(juce::Slider::TextBoxBelow,false,88,22);
+  k->slider.setComponentID(parameter);
+  k->slider.setColour(juce::Slider::rotarySliderFillColourId,juce::Colour(0xffffa15a));
+  addAndMakeVisible(k->label);addAndMakeVisible(k->slider);
+  k->attachment=std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(processor_.state,parameter,k->slider);
+  knobs_.push_back(std::move(k));
+ }
+public:
+ TransientSculptorPanel(Processor& p,StudioTheme& t):processor_(p),theme_(t){
+  setComponentID("transient-sculptor-panel");setLookAndFeel(&theme_);
+  present_.setComponentID("transient-present");enabled_.setComponentID("transient-enabled");
+  addAndMakeVisible(present_);addAndMakeVisible(enabled_);
+  presentAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor_.state,"transientPresent",present_);
+  enabledAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor_.state,"transientOn",enabled_);
+  for(const auto& item:std::array<std::pair<const char*,const char*>,8>{{
+   {"Low attack","transientAttackLow"},{"Mid attack","transientAttackMid"},
+   {"High attack","transientAttackHigh"},{"Low sustain","transientSustainLow"},
+   {"Mid sustain","transientSustainMid"},{"High sustain","transientSustainHigh"},
+   {"Dry / Wet","transientMix"},{"Output dB","transientOutput"}
+  }})addKnob(item.first,item.second);
+ }
+ ~TransientSculptorPanel()override{setLookAndFeel(nullptr);}
+ void update(const Processor::ResponseFrame& f){reading_=f.transient;repaint();}
+ void resized()override{
+  present_.setBounds(24,16,120,28);enabled_.setBounds(156,16,110,28);
+  const int columns=std::max(4,std::min(8,getWidth()/145));
+  const int width=(getWidth()-48)/columns;
+  for(size_t i=0;i<knobs_.size();++i){
+   const int x=24+static_cast<int>(i%columns)*width,y=110+static_cast<int>(i/columns)*142;
+   knobs_[i]->label.setBounds(x,y,width-8,24);
+   knobs_[i]->slider.setBounds(x,y+25,width-8,110);
+  }
+ }
+ void paint(juce::Graphics& g)override{
+  g.fillAll(juce::Colour(0xff1b1616));
+  g.setColour(juce::Colour(0xffffae6e));g.setFont(juce::Font(juce::FontOptions(23.f)));
+  g.drawText("TRANSIENT SCULPTOR",24,55,getWidth()-48,37,juce::Justification::left);
+  g.setColour(juce::Colour(0xffe5d1c0));g.setFont(13.f);
+  const int y=std::max(410,getHeight()-145);
+  g.drawText("ACTUAL DSP  /  Input "+juce::String(reading_.inputRms,4)+
+    "    Output "+juce::String(reading_.outputRms,4)+"    Delta "+juce::String(reading_.deltaRms,4),
+    24,y,getWidth()-48,28,juce::Justification::left);
+  for(int k=0;k<3;++k){
+   const int colWidth=(getWidth()-60)/3,x=24+k*colWidth;
+   const float strength=juce::jlimit(0.f,1.f,reading_.modulationRms[k]*6.f);
+   g.setColour(juce::Colour(0xff4c342d));
+   g.fillRoundedRectangle(static_cast<float>(x),static_cast<float>(y+37),static_cast<float>(colWidth-12),10.f,4.f);
+   g.setColour(juce::Colour(0xffffae6e));
+   g.fillRoundedRectangle(static_cast<float>(x),static_cast<float>(y+37),static_cast<float>(colWidth-12)*strength,10.f,4.f);
+   g.drawText(juce::String(std::array<const char*,3>{"LOW","MID","HIGH"}[k]),
+       x,y+51,colWidth-12,20,juce::Justification::left);
+  }
+  g.setColour(juce::Colour(0xffb5a39b));g.setFont(12.f);
+  g.drawText("Zero-lookahead post-chain processor. Extreme attack may increase output peaks.",
+    24,y+84,getWidth()-48,25,juce::Justification::left);
+ }
+};
