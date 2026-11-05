@@ -32,7 +32,9 @@ class AnalogColor {
         float dc=0.f, tapeMemory=0.f, tapeLow=0.f, transformerMemory=0.f;
         float toneLow=0.f, envelope=0.f;
     };
-    std::array<Channel,2> channels_{};
+    std::array<Channel,2> channels_{},previousChannels_{};
+    int activeMode_=0,previousMode_=0;
+    float modeFade_=1.f,fadeStep_=1.f/960.f;
     Slew bypass_{},drive_{},bias_{},tone_{},dynamics_{},mix_{},output_{},impact_{};
     AnalogColorSettings settings_{};
     AnalogColorReading reading_{};
@@ -50,7 +52,10 @@ public:
         reset();
     }
     void reset()noexcept {
-        channels_={};reading_={};
+        channels_={};previousChannels_={};reading_={};
+        activeMode_=std::clamp(static_cast<int>(settings_.mode),0,3);
+        previousMode_=activeMode_;modeFade_=1.f;
+        fadeStep_=static_cast<float>(1./std::max(1.,rate_*.02));
         bypass_.prepare(rate_,settings_.enabled?1.f:0.f);
         impact_.prepare(rate_,clamp(settings_.impact,0.f,1.f));
         drive_.prepare(rate_,clamp(settings_.driveDb,0.f,30.f));
@@ -70,6 +75,12 @@ public:
         const float memoryStep=static_cast<float>(1.-std::exp(-1./(rate_*.003)));
         const float envelopeStep=static_cast<float>(1.-std::exp(-1./(rate_*.03)));
         const int mode=std::clamp(static_cast<int>(settings_.mode),0,3);
+        if(mode!=activeMode_){
+            previousChannels_=channels_;
+            previousMode_=activeMode_;
+            activeMode_=mode;
+            modeFade_=0.f;
+        }
         double energyIn=0.,energyOut=0.,energyDelta=0.,dc=0.;
         for(int i=0;i<count;++i){
             const float bypass=bypass_.tick(settings_.enabled?1.f:0.f);
@@ -84,12 +95,12 @@ public:
             for(int c=0;c<2;++c){
                 float& io=(c==0?left[i]:right[i]);
                 const float input=clamp(io,-8.f,8.f);
-                auto& s=channels_[c];
-                s.envelope+=envelopeStep*(std::abs(input)-s.envelope);
+                auto render=[&](Channel& s,int model)noexcept -> float {
+                    s.envelope+=envelopeStep*(std::abs(input)-s.envelope);
                 const float compression=1.f/(1.f+dynamics*2.5f*s.envelope);
                 const float v=clamp(input*drive*compression,-32.f,32.f);
                 float shaped=0.f;
-                switch(mode){
+                switch(model){
                     case 0: { // Tube: asymmetric smooth transfer with bias; subtract zero-input offset.
                         const float b=bias*.65f;
                         shaped=(softOdd(v+b)-softOdd(b));
@@ -128,6 +139,15 @@ public:
                 const float colored=clamp(shaped-s.dc,-12.f,12.f);
                 const float gainComp=settings_.autoGain?1.f/std::pow(std::max(1.f,drive),.5f-.38f*impact):1.f;
                 const float processed=clamp(colored*gainComp*output*(1.f+1.5f*impact),-16.f,16.f);
+                    return processed;
+                };
+                const float modern=render(channels_[c],mode);
+                float processed=modern;
+                if(modeFade_<1.f){
+                    const float old=render(previousChannels_[c],previousMode_);
+                    const float t=modeFade_*modeFade_*(3.f-2.f*modeFade_);
+                    processed=old+(modern-old)*t;
+                }
                 const float blend=clamp(bypass*mix,0.f,1.f);
                 const float y=clamp(input+blend*(processed-input),-16.f,16.f);
                 io=y;
@@ -135,8 +155,9 @@ public:
                 energyIn+=static_cast<double>(input)*input;
                 energyOut+=static_cast<double>(y)*y;
                 energyDelta+=d*d;
-                dc+=s.dc;
+                dc+=channels_[c].dc;
             }
+            if(modeFade_<1.f)modeFade_=std::min(1.f,modeFade_+fadeStep_);
         }
         const double inv=1./(2.*count);
         reading_={static_cast<float>(std::sqrt(energyIn*inv)),

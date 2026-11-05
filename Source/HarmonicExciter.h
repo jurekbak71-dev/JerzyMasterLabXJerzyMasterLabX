@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 #include "HarmonicOversampler.h"
+#include "HarmonicOversampler4x.h"
 
 namespace masterlab {
 struct HarmonicExciterSettings {
@@ -13,6 +14,7 @@ struct HarmonicExciterSettings {
     std::array<float,4> amount{0.f,0.f,0.f,0.f};
     float even=0.5f,odd=0.5f,driveDb=0.f,mix=1.f,outputDb=0.f,impact=0.f;
     bool oversample2x=false; // experimental non-automatable mode; adds 32 samples of latency
+    bool oversample4x=false; // experimental non-automatable mode; adds 48 samples
     std::array<float,3> crossovers{180.f,2400.f,8000.f};
 };
 struct HarmonicExciterReading {
@@ -37,7 +39,10 @@ class HarmonicExciter {
     HarmonicExciterSettings settings_{};
     HarmonicExciterReading reading_{};
     std::array<std::array<HarmonicOversampler2x,4>,2> oversamplers_{};
+    std::array<std::array<HarmonicOversampler4x,4>,2> oversamplers4x_{};
     std::array<std::array<float,HarmonicOversampler2x::latencySamples>,2> dryDelay_{};
+    std::array<std::array<float,HarmonicOversampler4x::latencySamples>,2> dryDelay4x_{};
+    size_t dryPosition4x_=0;
     size_t dryPosition_=0;
     double sampleRate_=48000.;
     std::array<float,3> coefficient_{};
@@ -60,7 +65,8 @@ public:
     void reset() noexcept {
         for(auto& s:state_)s={};
         for(auto& channel:oversamplers_)for(auto& filter:channel)filter.reset();
-        dryDelay_={};dryPosition_=0;
+        for(auto& channel:oversamplers4x_)for(auto& filter:channel)filter.reset();
+        dryDelay_={};dryDelay4x_={};dryPosition_=dryPosition4x_=0;
         bypassSmoother_.prepare(sampleRate_,settings_.enabled?1.f:0.f);
         impactSmoother_.prepare(sampleRate_,finiteClamp(settings_.impact,0.f,1.f));
         driveSmoother_.prepare(sampleRate_,finiteClamp(settings_.driveDb,0.f,24.f));
@@ -77,7 +83,7 @@ public:
         settings_=value;updateCoefficients();
     }
     HarmonicExciterReading reading()const noexcept {return reading_;}
-    int latencySamples()const noexcept {return settings_.enabled&&settings_.oversample2x?HarmonicOversampler2x::latencySamples:0;}
+    int latencySamples()const noexcept {return settings_.enabled?(settings_.oversample4x?HarmonicOversampler4x::latencySamples:(settings_.oversample2x?HarmonicOversampler2x::latencySamples:0)):0;}
     void process(float* left,float* right,int count,bool delta=false) noexcept {
         if(!left||!right||count<=0)return;
         if(!settings_.enabled && bypassSmoother_.value<1e-6f){
@@ -85,8 +91,9 @@ public:
             if(delta)for(int i=0;i<count;++i)left[i]=right[i]=0.f;
             return;
         }
-        const bool oversampled=settings_.oversample2x;
-        const float dcAlpha=static_cast<float>(1.-std::exp(-6.283185307179586*12./(sampleRate_*(oversampled?2.:1.))));
+        const bool oversampled4x=settings_.oversample4x;
+        const bool oversampled=settings_.oversample2x&&!oversampled4x;
+        const float dcAlpha=static_cast<float>(1.-std::exp(-6.283185307179586*12./(sampleRate_*(oversampled4x?4.:(oversampled?2.:1.)))));
         std::array<double,4> generatedSquare{};
         double inSquare=0.,outSquare=0.;
         for(int i=0;i<count;++i){
@@ -118,9 +125,9 @@ public:
                         const float third=x*x*x;
                         return intensity*(0.5f*even*second+0.5f*odd*third);
                     };
-                    const float generated=oversampled?
-                        oversamplers_[channel][k].tick(band[k],nonlinear):
-                        nonlinear(band[k]);
+                    const float generated=oversampled4x?
+                        oversamplers4x_[channel][k].tick(band[k],nonlinear):
+                        (oversampled?oversamplers_[channel][k].tick(band[k],nonlinear):nonlinear(band[k]));
                     addition+=generated;
                     generatedSquare[k]+=static_cast<double>(generated)*generated;
                 }
@@ -128,6 +135,9 @@ public:
                 if(oversampled){
                     dry=dryDelay_[channel][dryPosition_];
                     dryDelay_[channel][dryPosition_]=input;
+                }else if(oversampled4x){
+                    dry=dryDelay4x_[channel][dryPosition4x_];
+                    dryDelay4x_[channel][dryPosition4x_]=input;
                 }
                 const float processed=std::clamp((dry+wet*authority*addition)*output,-16.f,16.f);
                 const float normal=dry+bypass*(processed-dry);
@@ -137,6 +147,7 @@ public:
                 outSquare+=static_cast<double>(normal)*normal;
             }
             if(oversampled)dryPosition_=(dryPosition_+1)%dryDelay_[0].size();
+            if(oversampled4x)dryPosition4x_=(dryPosition4x_+1)%dryDelay4x_[0].size();
         }
         const double denominator=static_cast<double>(count)*2.;
         reading_.inputRms=static_cast<float>(std::sqrt(inSquare/denominator));
