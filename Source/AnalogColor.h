@@ -13,7 +13,7 @@ enum class AnalogColorMode : int { Tube=0, Tape=1, Transformer=2, SolidState=3 }
 struct AnalogColorSettings {
     bool enabled=false;
     AnalogColorMode mode=AnalogColorMode::Tube;
-    float driveDb=0.f, bias=0.f, tone=0.f, dynamics=0.f, mix=1.f, outputDb=0.f;
+    float driveDb=0.f, bias=0.f, tone=0.f, dynamics=0.f, mix=1.f, outputDb=0.f, impact=0.f;
     bool autoGain=true;
 };
 struct AnalogColorReading {
@@ -33,7 +33,7 @@ class AnalogColor {
         float toneLow=0.f, envelope=0.f;
     };
     std::array<Channel,2> channels_{};
-    Slew bypass_{},drive_{},bias_{},tone_{},dynamics_{},mix_{},output_{};
+    Slew bypass_{},drive_{},bias_{},tone_{},dynamics_{},mix_{},output_{},impact_{};
     AnalogColorSettings settings_{};
     AnalogColorReading reading_{};
     double rate_=48000.;
@@ -52,6 +52,7 @@ public:
     void reset()noexcept {
         channels_={};reading_={};
         bypass_.prepare(rate_,settings_.enabled?1.f:0.f);
+        impact_.prepare(rate_,clamp(settings_.impact,0.f,1.f));
         drive_.prepare(rate_,clamp(settings_.driveDb,0.f,30.f));
         bias_.prepare(rate_,clamp(settings_.bias,-1.f,1.f));
         tone_.prepare(rate_,clamp(settings_.tone,-1.f,1.f));
@@ -78,6 +79,7 @@ public:
             const float tone=tone_.tick(clamp(settings_.tone,-1.f,1.f));
             const float dynamics=dynamics_.tick(clamp(settings_.dynamics,0.f,1.f));
             const float mix=mix_.tick(clamp(settings_.mix,0.f,1.f));
+            const float impact=impact_.tick(clamp(settings_.impact,0.f,1.f));
             const float output=std::pow(10.f,output_.tick(clamp(settings_.outputDb,-18.f,12.f))*.05f);
             for(int c=0;c<2;++c){
                 float& io=(c==0?left[i]:right[i]);
@@ -124,8 +126,8 @@ public:
                 // High pass/DC blocker removes any asymmetry-produced DC.
                 s.dc+=dcStep*(shaped-s.dc);
                 const float colored=clamp(shaped-s.dc,-12.f,12.f);
-                const float gainComp=settings_.autoGain?1.f/std::sqrt(std::max(1.f,drive)):1.f;
-                const float processed=clamp(colored*gainComp*output,-16.f,16.f);
+                const float gainComp=settings_.autoGain?1.f/std::pow(std::max(1.f,drive),.5f-.38f*impact):1.f;
+                const float processed=clamp(colored*gainComp*output*(1.f+1.5f*impact),-16.f,16.f);
                 const float blend=clamp(bypass*mix,0.f,1.f);
                 const float y=clamp(input+blend*(processed-input),-16.f,16.f);
                 io=y;
