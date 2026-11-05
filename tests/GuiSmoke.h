@@ -66,6 +66,21 @@ class GuiSmoke final : private juce::Timer {
         exciterPresent->setToggleState(false,juce::sendNotificationSync);
         if(actual("exciterPresent")!=0.f)return false;
         exciter->setVisible(false);
+        // Transient Sculptor controls must bind to real host parameters.
+        auto* transientPanel=editor->findChildWithID("transient-sculptor-panel");
+        if(!transientPanel)return false;
+        auto* lowAttack=dynamic_cast<juce::Slider*>(transientPanel->findChildWithID("transientAttackLow"));
+        auto* highSustain=dynamic_cast<juce::Slider*>(transientPanel->findChildWithID("transientSustainHigh"));
+        auto* transientPresent=dynamic_cast<juce::Button*>(transientPanel->findChildWithID("transient-present"));
+        if(!lowAttack||!highSustain||!transientPresent)return false;
+        transientPanel->setVisible(true);
+        lowAttack->setValue(.8,juce::sendNotificationSync);
+        highSustain->setValue(-.6,juce::sendNotificationSync);
+        if(std::abs(actual("transientAttackLow")-.8f)>.02f||std::abs(actual("transientSustainHigh")+.6f)>.02f)return false;
+        transientPresent->setToggleState(true,juce::sendNotificationSync);
+        if(actual("transientPresent")!=1.f)return false;
+        transientPresent->setToggleState(false,juce::sendNotificationSync);
+        transientPanel->setVisible(false);
         // Bass Architect must expose working APVTS-bound controls, not painted-only widgets.
         auto* bassPanel=editor->findChildWithID("bass-architect-panel");
         if(!bassPanel)return false;
