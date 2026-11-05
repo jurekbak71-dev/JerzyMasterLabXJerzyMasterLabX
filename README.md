@@ -1,4 +1,6 @@
 # Jerzy MasterLab X
+> **Experimental Phase 3A Harmonic Exciter (branch only):** the new dedicated post-chain module has 11 appended parameters (schema 11 / 191 parameters), a DSP-bound Hybrid Studio panel accessible from **+ Modules → Open Harmonic Exciter**, default off, and standalone/graph integration tests. It is intentionally outside the legacy six-module 720-order routing, and after Parallel summation. The VST3-exposed path is 1x only; 2x FIR is still an experimental DSP mode, NOT exposed to host due to unresolved PDC and real-time switching. Post-limiter saturation can exceed the sample-peak ceiling. **Do not treat this PR as a finished mastering plugin until CI, host tests, alias evaluation and latency architecture are verified.** See [Phase 3A specification](docs/PHASE3_HARMONIC_ANALOG_SPEC.md) and [prototype report](docs/harmonic-exciter/PHASE3A_PROTOTYPE.md).
+
 
 [Naprawa aktywacji, przeciągania modułów i trybów Serial/Parallel](CHAIN_ROUTING_FIX.md). Schema 10, 180 parametrów; starsze wersje stanu są migrowane z zachowaniem domyślnego miksu Parallel 1/N oraz trybów Dynamics i Stabilizer Legacy. [Audyt i pierwszy etap Stereo Architect](docs/stereo-architect/PHASE1.md). [Parallel routing Phase 2A](docs/parallel-routing/PHASE2A.md). [Smart Dynamics Phase 2B](docs/smart-dynamics/PHASE2B.md). [Stabilizer Phase 2C](docs/stabilizer/PHASE2C.md).
 

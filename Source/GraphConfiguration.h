@@ -8,6 +8,7 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
   engine.stabilizerSettings({v(149)>.5f&&v(150)>.5f,v(151)>.5f,v(159)>.5f,v(160)>.5f,static_cast<int>(v(152)),v(153),v(154),v(155),v(156),v(157),v(158),static_cast<int>(v(179))});
   engine.topology(v(161)>.5f,{v(110)>.5f,v(98)>.5f,v(88)>.5f,v(86)>.5f,v(87)>.5f,v(149)>.5f},{v(111)>.5f,v(99)>.5f,v(89)>.5f,v(4)>.5f,v(5)>.5f,v(150)>.5f});
   std::array<float,6> trims{},mixes{};for(size_t i=0;i<6;++i){trims[i]=v(164+i*2);mixes[i]=v(165+i*2);}engine.parallelSettings(v(163)>.5f,trims,mixes);
+  HarmonicExciterSettings h;h.enabled=v(180)>.5f&&v(181)>.5f;for(size_t k=0;k<4;++k)h.amount[k]=v(182+k);h.even=v(186);h.odd=v(187);h.driveDb=v(188);h.mix=v(189);h.outputDb=v(190);h.oversample2x=false;engine.harmonicExciterSettings(h);
   engine.routing(static_cast<int>(v(138)),v(6)>.5f);
 }
 template<class Getter> void configureGraph(SerialGraph& engine,Getter v) noexcept {
