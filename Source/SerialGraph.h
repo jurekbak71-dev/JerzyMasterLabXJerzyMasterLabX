@@ -1,6 +1,7 @@
 #pragma once
 #include "Stabilizer.h"
 #include "HarmonicExciter.h"
+#include "AnalogColor.h"
 namespace masterlab {
 using ModuleOrder=std::array<int,6>;
 // A single automatable integer encodes a permutation, so hosts cannot restore
@@ -58,12 +59,13 @@ class SerialGraph {
  };
  // Fixed post-graph slot: does NOT participate in the legacy six-family 720 permutations.
  HarmonicExciter harmonicExciter;
+ AnalogColor analogColor;
  std::array<Bank,2> banks;int active=0;float progress=1,step=1.f/960;
  ModuleOrder requested{5,0,1,2,3,4};bool requestedParallel=false;std::array<bool,6> requestedPresent{},requestedEnabled{true,true,true,true,true,true};
  std::array<std::array<float,128>,2> scratch{};std::array<float,128> trace{};
 public:
- void prepare(double rate,bool legacy=false,int code=0){rate=std::isfinite(rate)&&rate>=8000&&rate<=384000?rate:48000;harmonicExciter.prepare(rate);requested=decodeOrder(code,legacy);active=0;progress=1;step=static_cast<float>(1/(rate*.02));for(auto& b:banks){b.order=requested;b.engine.prepare(rate);b.stereo.prepare(rate);b.dynamics.prepare(rate);b.dynamicEq.prepare(rate);b.stabilizer.prepare(rate);b.parallel=requestedParallel;b.present=requestedPresent;b.enabled=requestedEnabled;b.prepareParallel(rate);b.alignPosition=0;for(auto& module:b.alignment)for(auto& channel:module)channel.assign(static_cast<size_t>(b.engine.latency()+1),0);}}
- void reset()noexcept{harmonicExciter.reset();progress=1;for(auto& b:banks){b.engine.reset();b.stereo.reset();b.dynamics.reset();b.dynamicEq.reset();b.stabilizer.reset();b.parallel=requestedParallel;b.present=requestedPresent;b.branchEnergy={};b.compensationSlew.value=b.compensated?1.f:0.f;b.alignPosition=0;for(size_t i=0;i<6;++i){b.trimSlew[i].value=dbGain(b.targetTrimDb[i]);b.mixSlew[i].value=b.targetMix[i];}for(auto& module:b.alignment)for(auto& channel:module)std::fill(channel.begin(),channel.end(),0);}}
+ void prepare(double rate,bool legacy=false,int code=0){rate=std::isfinite(rate)&&rate>=8000&&rate<=384000?rate:48000;harmonicExciter.prepare(rate);analogColor.prepare(rate);requested=decodeOrder(code,legacy);active=0;progress=1;step=static_cast<float>(1/(rate*.02));for(auto& b:banks){b.order=requested;b.engine.prepare(rate);b.stereo.prepare(rate);b.dynamics.prepare(rate);b.dynamicEq.prepare(rate);b.stabilizer.prepare(rate);b.parallel=requestedParallel;b.present=requestedPresent;b.enabled=requestedEnabled;b.prepareParallel(rate);b.alignPosition=0;for(auto& module:b.alignment)for(auto& channel:module)channel.assign(static_cast<size_t>(b.engine.latency()+1),0);}}
+ void reset()noexcept{harmonicExciter.reset();analogColor.reset();progress=1;for(auto& b:banks){b.engine.reset();b.stereo.reset();b.dynamics.reset();b.dynamicEq.reset();b.stabilizer.reset();b.parallel=requestedParallel;b.present=requestedPresent;b.branchEnergy={};b.compensationSlew.value=b.compensated?1.f:0.f;b.alignPosition=0;for(size_t i=0;i<6;++i){b.trimSlew[i].value=dbGain(b.targetTrimDb[i]);b.mixSlew[i].value=b.targetMix[i];}for(auto& module:b.alignment)for(auto& channel:module)std::fill(channel.begin(),channel.end(),0);}}
  int latency()const noexcept{return banks[active].engine.latency();}
  void parameters(float hz,float db,float q,float ceiling,bool eq,bool lim)noexcept{for(auto& b:banks)b.engine.parameters(hz,db,q,ceiling,eq,lim);}
  void limiterParameters(float drive,float release)noexcept{for(auto& b:banks)b.engine.limiterParameters(drive,release);}
@@ -75,6 +77,8 @@ public:
  void stabilizerSettings(StabilizerSettings c)noexcept{for(auto& b:banks)b.stabilizer.settings(c);}
  void harmonicExciterSettings(HarmonicExciterSettings c)noexcept{c.oversample2x=false;harmonicExciter.settings(c);}
  HarmonicExciterReading harmonicExciterRead()const noexcept{return harmonicExciter.reading();}
+ void analogColorSettings(AnalogColorSettings c)noexcept{analogColor.settings(c);}
+ AnalogColorReading analogColorRead()const noexcept{return analogColor.reading();}
  void topology(bool parallel,std::array<bool,6> present)noexcept{topology(parallel,present,{true,true,true,true,true,true});}
  void topology(bool parallel,std::array<bool,6> present,std::array<bool,6> enabled)noexcept{requestedParallel=parallel;requestedPresent=present;requestedEnabled=enabled;for(auto& b:banks)b.enabled=enabled;}
  void parallelSettings(bool compensated,std::array<float,6> trims,std::array<float,6> mixes)noexcept{for(auto& b:banks)b.parallelSettings(compensated,trims,mixes);}
@@ -92,6 +96,7 @@ public:
    // Run only after the six-family graph has produced a fully mixed output.
    // In Parallel this is post-sum, not a seventh normalized branch.
    harmonicExciter.process(l+offset,r+offset,n);
+   analogColor.process(l+offset,r+offset,n);
    offset+=n;
   }
  }
