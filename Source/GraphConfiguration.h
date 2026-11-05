@@ -10,6 +10,7 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
   std::array<float,6> trims{},mixes{};for(size_t i=0;i<6;++i){trims[i]=v(164+i*2);mixes[i]=v(165+i*2);}engine.parallelSettings(v(163)>.5f,trims,mixes);
   HarmonicExciterSettings h;h.enabled=v(180)>.5f&&v(181)>.5f;for(size_t k=0;k<4;++k)h.amount[k]=v(182+k);h.even=v(186);h.odd=v(187);h.driveDb=v(188);h.mix=v(189);h.outputDb=v(190);h.impact=v(201);h.oversample2x=false;engine.harmonicExciterSettings(h);
   AnalogColorSettings a;a.enabled=v(191)>.5f&&v(192)>.5f;a.mode=static_cast<AnalogColorMode>(std::clamp(static_cast<int>(v(193)),0,3));a.driveDb=v(194);a.bias=v(195);a.tone=v(196);a.dynamics=v(197);a.mix=v(198);a.outputDb=v(199);a.autoGain=v(200)>.5f;a.impact=v(202);engine.analogColorSettings(a);
+  BassArchitectSettings b;b.enabled=v(203)>.5f&&v(204)>.5f;b.sub=v(205);b.body=v(206);b.harmonics=v(207);b.monoBass=v(208);b.mix=v(209);b.outputDb=v(210);engine.bassArchitectSettings(b);
   engine.routing(static_cast<int>(v(138)),v(6)>.5f);
 }
 template<class Getter> void configureGraph(SerialGraph& engine,Getter v) noexcept {
