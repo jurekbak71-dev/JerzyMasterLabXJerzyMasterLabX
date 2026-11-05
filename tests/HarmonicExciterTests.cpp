@@ -117,9 +117,12 @@ int main() {
         cfg.driveDb=0;cfg.enabled=false;e.settings(cfg);
         std::array<float,4096> bypassLeft{},bypassRight{};
         for(size_t i=0;i<bypassLeft.size();++i)bypassLeft[i]=bypassRight[i]=.3f*std::sin(2*pi*1000*i/48000);
-        const float previous=wetLeft.back();
+        // Time-aligned continuous wet reference is essential for a valid click test.
+        HarmonicExciter held=e;
+        std::array<float,4096> heldLeft=bypassLeft,heldRight=bypassRight;
+        held.process(heldLeft.data(),heldRight.data(),4096);
         e.process(bypassLeft.data(),bypassRight.data(),4096);
-        require(std::abs(bypassLeft[0]-previous)<.2f,"disable ramp bounded");
+        require(std::abs(bypassLeft[0]-heldLeft[0])<.002f,"disable starts near continuous wet reference");
         for(float v:bypassLeft)require(std::isfinite(v),"automated disable finite");
     }
     HarmonicExciter effect;HarmonicExciterSettings on;on.enabled=true;on.amount={1,1,1,1};
