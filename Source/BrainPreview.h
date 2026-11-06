@@ -42,6 +42,6 @@ template<class Cancel> void verifyBrainProposal(BrainProposal& proposal,const Br
  proposal.reasons.push_back("Measured full-chain DSP preview: "+std::to_string(best.lufs)+" LUFS; section spread "+std::to_string(best.spread)+" dB; limiter reduction p95 "+std::to_string(best.gr95)+" dB. No host parameters were changed during verification.");
  if(std::abs(best.lufs-config.targetLufs)>1)proposal.warnings.push_back("Requested loudness was not reached within the limiting budget. The measured preview value takes precedence over the target.");
  if(best.gr95>budget+.5f)proposal.warnings.push_back("Limiting exceeds the preferred reduction budget even at the tested drive. Review the ceiling and input level.");
- if(features.seconds>left.size()/features.rate+.01)proposal.warnings.push_back("Verification uses the first 16 seconds of the longer analysed interval.");
+ if(features.seconds>left.size()/features.rate+.01)proposal.warnings.push_back("Full-length diagnostics cover every 3-second section. DSP audition samples four 4-second windows distributed across the capture; it is not a full-song render. Measure the finished song after Apply.");
 }
 }
