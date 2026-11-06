@@ -264,7 +264,7 @@ class Editor final : public juce::AudioProcessorEditor,
     double lastAnalysis=0;
     std::array<juce::Point<float>,1024> scope{};
     int head = 0;
-    const juce::Colour background{0xff101318}, panel{0xff191d25}, muted{0xffabb5c3};
+    const juce::Colour background{0xff0c1118}, panel{0xff1c2631}, muted{0xffa9b8c4};
     const juce::Colour accent{0xff82dfcd}, curve{0xffe7bb6a};
 
     juce::String parameterId(const char* base, int band) const {
@@ -542,16 +542,43 @@ public:
     }
     void paint(juce::Graphics& g) override {
         g.fillAll(background);
-        g.setGradientFill(juce::ColourGradient(juce::Colour(0xff232b34),0,0,background,static_cast<float>(getWidth()),100,false));g.fillRect(0,0,getWidth(),76);
-        g.setColour(juce::Colours::whitesmoke);g.setFont(juce::Font(juce::FontOptions(26.f)));g.drawText("Masterlab X",24,11,194,34,juce::Justification::left);
-        if(getWidth()>=1000){g.setColour(muted);g.setFont(theme.font(12));g.drawText(juce::String(sampleRate()/1000,1)+" kHz   /   Stereo",getWidth()-230,14,206,22,juce::Justification::right);}
+        // Hardware-inspired chassis: a distinct faceplate, not a legacy colour swap.
+        g.setGradientFill(juce::ColourGradient(juce::Colour(0xff29333f),0.f,0.f,
+                                              juce::Colour(0xff080c12),0.f,80.f,false));
+        g.fillRect(0,0,getWidth(),78);
+        g.setColour(juce::Colour(0xff6d8395));g.drawHorizontalLine(77,0.f,static_cast<float>(getWidth()));
+        g.setColour(juce::Colour(0xff101922));g.fillRoundedRectangle(15.f,10.f,270.f,57.f,7.f);
+        g.setColour(juce::Colour(0xff35495a));g.drawRoundedRectangle(15.f,10.f,270.f,57.f,7.f,1.f);
+        for(float screwX : {22.f,static_cast<float>(getWidth()-21)}) {
+            g.setColour(juce::Colour(0xff090d12));g.fillEllipse(screwX-5.f,33.f,10.f,10.f);
+            g.setColour(juce::Colour(0xff718290));g.drawEllipse(screwX-4.f,34.f,8.f,8.f,1.f);
+            g.drawLine(screwX-2.f,40.f,screwX+2.f,36.f,.9f);
+        }
+        g.setColour(juce::Colour(0xffe1e8eb));g.setFont(theme.font(20.f));
+        g.drawText("MASTERLAB X",37,10,237,33,juce::Justification::left);
+        g.setColour(juce::Colour(0xffd9ad63));g.setFont(theme.font(9.f));
+        g.drawText("HYBRID STUDIO  /  MASTERING CONSOLE",38,41,245,17,juce::Justification::left);
+        if(getWidth()>=1000){
+            g.setColour(juce::Colour(0xff152029));
+            g.fillRoundedRectangle(static_cast<float>(getWidth()-224),17.f,188.f,38.f,6.f);
+            g.setColour(juce::Colour(0xffa7d6c4));g.setFont(theme.font(12.f));
+            g.drawText(juce::String(sampleRate()/1000,1)+" kHz  /  STEREO",getWidth()-215,22,169,26,juce::Justification::centred);
+        }
         const int dock=getHeight()-174,cell=(getWidth()-64)/4;
         g.setColour(panel);g.fillRoundedRectangle(24.f,static_cast<float>(dock),getWidth()-48.f,146.f,20.f);
         const auto modules=chainModules();
         bool first=std::find(modules.begin(),modules.end(),4)<std::find(modules.begin(),modules.end(),3);
         if(modules.empty()){g.setColour(muted);g.setFont(theme.font(12));g.drawText("Empty chain / use + Modules to add processors",24,84,getWidth()-48,48,juce::Justification::centred);}
         for(size_t i=0;i<modules.size();++i){int kind=modules[i];const float width=(getWidth()-48.f)/modules.size(),x=24+i*width;const bool active=(kind<3||kind==5)?moduleView==(kind==5?3:kind):(!showingParallel&&!showingBrain&&!showingInspector&&moduleView<0&&(kind==3?!showingLimiter:showingLimiter));const bool on=processor.state.getRawParameterValue(std::array<const char*,6>{"dynamicEqOn","dynamicsOn","stereoOn","eq","lim","stabilizerOn"}[kind])->load()>.5f;
-            const auto colour=kind==4?curve:accent;g.setColour(active?juce::Colour(0xff20323c):panel);g.fillRoundedRectangle(x,84,width-8,48,24);if(chainDragging&&chainHover==kind){g.setColour(accent);g.drawRoundedRectangle(x,84,width-8,48,24,2);}g.setColour(on?colour:muted.withAlpha(.35f));g.fillEllipse(x+16,104,7,7);
+            const auto colour=kind==4?curve:accent;
+            const juce::Rectangle<float> slot(x+1.f,84.f,width-10.f,48.f);
+            g.setGradientFill(juce::ColourGradient(active?juce::Colour(0xff394c57):juce::Colour(0xff252e39),
+                                                     x,84.f,juce::Colour(0xff101821),x,132.f,false));
+            g.fillRoundedRectangle(slot,5.f);
+            g.setColour(active?colour:juce::Colour(0xff3a4a55));g.drawRoundedRectangle(slot,5.f,active?1.6f:.8f);
+            if(chainDragging&&chainHover==kind){g.setColour(accent);g.drawRoundedRectangle(slot,5.f,2.f);}
+            g.setColour(juce::Colour(0xff070d12));g.fillEllipse(x+12.f,101.f,13.f,13.f);
+            g.setColour(on?colour:juce::Colour(0xff45515b));g.fillEllipse(x+15.f,104.f,7.f,7.f);
             g.setColour(juce::Colours::whitesmoke);g.setFont(theme.font(modules.size()>3?12.f:16.f));g.drawText(std::array<const char*,6>{"Dynamic EQ","Dynamics","Stereo","Spectral EQ","Limiter","Stabilizer"}[kind],static_cast<int>(x)+34,90,static_cast<int>(width)-48,22,juce::Justification::left);
             g.setColour(muted);g.setFont(theme.font(10));g.drawText(on?std::array<const char*,6>{"3 detectors","Down / upward","4-band M/S","16 bands","5 ms lookahead","Adaptive tone"}[kind]:"Bypassed",static_cast<int>(x)+34,111,static_cast<int>(width)-48,16,juce::Justification::left);
         }
