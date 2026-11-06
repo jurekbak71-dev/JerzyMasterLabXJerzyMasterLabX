@@ -147,6 +147,15 @@ public:
         g.drawText("MASTER MONITOR / LIVE DSP",static_cast<int>(pane.getX()+18),
                    static_cast<int>(pane.getY()+10),static_cast<int>(pane.getWidth()-36),24,
                    juce::Justification::left);
+        if(haveTelemetry_){
+            const bool clipped=telemetry_.outputReading.peak>1.f;
+            const int lampX=juce::roundToInt(pane.getRight()-123.f);
+            theme_.paintStatusLed(g,lampX,juce::roundToInt(pane.getY()+10.f),23,clipped);
+            g.setColour(juce::Colour(clipped?0xffff5669:0xff70e89e));
+            g.setFont(theme_.font(9.f));
+            g.drawText(clipped?"SAMPLE CLIP":"SIGNAL OK",lampX+24,
+                       juce::roundToInt(pane.getY()+11.f),89,20,juce::Justification::left);
+        }
         // Analyzer is fed with the same real FFT amplitude bins as the legacy editor.
         const float plotX=pane.getX()+18.f,plotY=pane.getY()+41.f;
         const float plotW=juce::jmax(80.f,pane.getWidth()*.59f-26.f);
