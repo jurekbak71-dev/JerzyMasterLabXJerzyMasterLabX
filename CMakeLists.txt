@@ -158,7 +158,17 @@ if(MASTERLAB_PLUGIN)
    "${MASTERLAB_GUI_ASSET_DIR}/ring_green_on.png"
    "${MASTERLAB_GUI_ASSET_DIR}/ring_red_on.png"
    "${MASTERLAB_GUI_ASSET_DIR}/powdercoat_tile.png"
-   "${MASTERLAB_GUI_ASSET_DIR}/analog_gr_bezel.png")
+   "${MASTERLAB_GUI_ASSET_DIR}/analog_gr_bezel.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/led_wreath_96_atlas.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/led_wreath_160_atlas.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/glass_analyzer.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/glass_overlay.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/glass_readout.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/glass_readout_overlay.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/module_glow_on.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/module_glow_off.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/switch_on.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/switch_off.png")
  target_link_libraries(JerzyMasterLabX PUBLIC MasterLabFonts MasterLabGuiAssets)
  add_test(NAME concept_c_asset_pack
    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/gui_assets/validate_concept_c.py" "${MASTERLAB_GUI_ASSET_DIR}")
