@@ -68,6 +68,18 @@ def led(size, color, active=True):
     dr.ellipse((c-r*.62,c-r*.68,c+r*.2,c-r*.05),fill=(255,255,255,180 if active else 35))
     return im.resize((size,size),Image.Resampling.LANCZOS)
 
+def led_ring(size,color):
+    S=4;d=size*S;c=d//2
+    rgb=tuple(int(color[i:i+2],16) for i in (1,3,5))
+    glow=Image.new("RGBA",(d,d),(0,0,0,0));dg=ImageDraw.Draw(glow,"RGBA")
+    box=(int(d*.075),int(d*.075),int(d*.925),int(d*.925))
+    for k in range(12):
+        start=-120+k*25
+        dg.arc(box,start,start+17,fill=(*rgb,240),width=9*S)
+    blur=glow.filter(ImageFilter.GaussianBlur(8*S))
+    blur.alpha_composite(glow)
+    return blur.resize((size,size),Image.Resampling.LANCZOS)
+
 for size in (96,160):
     atlas = Image.new("RGBA",(size*11,size*10),(0,0,0,0))
     for i in range(101):
@@ -81,6 +93,8 @@ for color in ("green","red","blue"):
     for state in ("on","off"):
         save(led(96,PALETTE[color],state=="on"),
              f"led_{color}_{state}.png","led",state=state,role=color)
+    save(led_ring(192,PALETTE[color]),f"ring_{color}_on.png","ring",
+         role=color,diameter=192,segments=12)
 # Nine-slice starter. Keep the powder coat background stationary and labels separate.
 tile=Image.new("RGBA",(128,128),(238,240,241,255));d=ImageDraw.Draw(tile)
 for y in range(128):
