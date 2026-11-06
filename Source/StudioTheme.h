@@ -88,6 +88,38 @@ public:
   if(!sprite.isNull())
    g.drawImage(sprite,x,y,size,size,0,0,sprite.getWidth(),sprite.getHeight());
  }
+ void drawLinearSlider(juce::Graphics& g,int x,int y,int width,int height,
+                       float sliderPos,float minSliderPos,float maxSliderPos,
+                       juce::Slider::SliderStyle style,juce::Slider& slider) override {
+  const bool horizontal=style==juce::Slider::LinearHorizontal;
+  const bool vertical=style==juce::Slider::LinearVertical;
+  if(!horizontal&&!vertical){
+   juce::LookAndFeel_V4::drawLinearSlider(g,x,y,width,height,sliderPos,minSliderPos,maxSliderPos,style,slider);
+   return;
+  }
+  const float centreX=static_cast<float>(x)+width*.5f,centreY=static_cast<float>(y)+height*.5f;
+  const float trackWidth=horizontal?static_cast<float>(width-22):6.f;
+  const float trackHeight=vertical?static_cast<float>(height-22):6.f;
+  const auto track=juce::Rectangle<float>(horizontal?x+11.f:centreX-3.f,
+                           vertical?y+11.f:centreY-3.f,trackWidth,trackHeight);
+  g.setColour(juce::Colour(0xff07141e));g.fillRoundedRectangle(track,3.f);
+  g.setColour(juce::Colour(0xff5c7184));g.drawRoundedRectangle(track,3.f,.8f);
+  const float position=horizontal?juce::jlimit(track.getX(),track.getRight(),sliderPos)
+                                 :juce::jlimit(track.getY(),track.getBottom(),sliderPos);
+  const auto lit=juce::Colour(slider.isEnabled()?0xff067bff:0xff546675);
+  g.setColour(lit);
+  if(horizontal)g.fillRoundedRectangle(track.withWidth(juce::jmax(1.f,position-track.getX())),3.f);
+  else g.fillRoundedRectangle(track.withTop(position),3.f);
+  const int cap=juce::jmin(34,horizontal?height:width);
+  const int px=juce::roundToInt(horizontal?position-cap*.5f:centreX-cap*.5f);
+  const int py=juce::roundToInt(vertical?position-cap*.5f:centreY-cap*.5f);
+  if(!knob96_.isNull())g.drawImage(knob96_,px,py,cap,cap,6*96,4*96,96,96);
+  if(slider.hasKeyboardFocus(true)){
+   g.setColour(juce::Colour(0xff0c8bff));
+   g.drawEllipse(static_cast<float>(px-1),static_cast<float>(py-1),
+                 static_cast<float>(cap+2),static_cast<float>(cap+2),1.f);
+  }
+ }
  void drawRotarySlider(juce::Graphics& g,int x,int y,int width,int height,
                        float position,float,float,juce::Slider& slider) override {
   if(width<24||height<24)return;
