@@ -148,6 +148,21 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
   "Low short-window dynamic contrast: potential overcompression, verify perceived punch.");
  if(f.correlation<-.15f)p.warnings.push_back(
   "Strong negative stereo correlation: check phase and mono fold-down.");
+ // Quantitative comparison to authored genre tonal reference (not a copied song).
+ constexpr std::array<const char*,5> referenceBands{"sub 20-80 Hz","bass 80-250 Hz",
+                                      "mids 250 Hz-2 kHz","presence 2-6 kHz","air 6-20 kHz"};
+ p.reasons.push_back(std::string("GENRE REFERENCE: ")+brainGenres[c.genre]+
+  " tonal distribution from five authored octave-normalized weightings (not external copyrighted audio).");
+ for(size_t region=0;region<5;++region){
+  if(p.targetShares[region]<1e-5f)continue;
+  const float delta=10.f*std::log10(std::max(1e-5f,p.shares[region])/
+                                   std::max(1e-5f,p.targetShares[region]));
+  p.reasons.push_back(std::string(referenceBands[region])+": "+
+                      std::to_string(delta)+" dB relative to genre target.");
+  if(std::abs(delta)>6.f)
+   p.warnings.push_back(std::string("Large genre-reference deviation in ")+
+      referenceBands[region]+"; check whether this is an intentional arrangement or a mix issue.");
+ }
  p.valid=(c.useEq||c.useLimiter||c.useStereo||c.useDynamics||c.useDynamicEq||c.useStabilizer);return p;
 }
 }
