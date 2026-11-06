@@ -156,6 +156,8 @@ if(MASTERLAB_PLUGIN)
    "${MASTERLAB_GUI_ASSET_DIR}/led_blue_off.png"
    "${MASTERLAB_GUI_ASSET_DIR}/powdercoat_tile.png")
  target_link_libraries(JerzyMasterLabX PUBLIC MasterLabFonts MasterLabGuiAssets)
+ add_test(NAME concept_c_asset_pack
+   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/gui_assets/validate_concept_c.py" "${MASTERLAB_GUI_ASSET_DIR}")
  target_sources(JerzyMasterLabX PRIVATE Source/Plugin.cpp)
  target_link_libraries(JerzyMasterLabX PRIVATE masterlab juce::juce_audio_utils juce::juce_dsp PUBLIC juce::juce_recommended_config_flags)
  target_compile_definitions(JerzyMasterLabX PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
