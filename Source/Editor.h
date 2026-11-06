@@ -153,7 +153,8 @@ class Editor final : public juce::AudioProcessorEditor,
             if(p.valid&&snapshot.config.useDynamicEq){report+="\nDYNAMIC EQ PROPOSAL: adaptive frequency, Q and detector threshold.\n";for(int band=1;band<=3;++band){auto suffix=std::to_string(band);report+=juce::String(proposed("deqFreq"+suffix),0)+" Hz: range "+juce::String(proposed("deqRange"+suffix),1)+" dB; Q "+juce::String(proposed("deqQ"+suffix),2)+"; threshold "+juce::String(proposed("deqThreshold"+suffix),1)+" dBFS.\n";}}
             for(const auto& line:p.reasons)report+="\n"+juce::String(line)+"\n";
             for(const auto& line:p.warnings)report+="\nNOTE: "+juce::String(line)+"\n";
-            if(stale&&snapshot.phase==masterlab::BrainPhase::Ready)report="SETTINGS CHANGED: reanalyse before Apply.\n\n"+report;
+            if(stale&&snapshot.phase==masterlab::BrainPhase::Ready)report="SETTINGS CHANGED: "+processor.brainStaleReasonUI()+
+                                   "\nReanalyse before Apply.\n\n"+report;
         }
         if(report!=previousBrainReport){brainReport.setText(report,false);previousBrainReport=report;}
     }
