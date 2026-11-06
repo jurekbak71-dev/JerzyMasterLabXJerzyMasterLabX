@@ -90,8 +90,9 @@ public:
    const auto margin=shown*.02f;
    auto ring=bounds.expanded(margin);
    g.setOpacity(slider.isEnabled()?0.90f:0.35f);
-   g.drawImage(led,ring,juce::Rectangle<float>(0.f,0.f,
-                 static_cast<float>(led.getWidth()),static_cast<float>(led.getHeight())));
+   g.drawImage(led,juce::roundToInt(ring.getX()),juce::roundToInt(ring.getY()),
+               juce::roundToInt(ring.getWidth()),juce::roundToInt(ring.getHeight()),
+               0,0,led.getWidth(),led.getHeight());
    g.setOpacity(1.f);
   }
   const int sourceX=(frame%11)*sourceSide;
