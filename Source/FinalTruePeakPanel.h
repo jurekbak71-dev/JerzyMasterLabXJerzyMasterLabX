@@ -70,12 +70,7 @@ public:
   if(getWidth()>=870){
    const float cx=static_cast<float>(getWidth()-172),cy=209.f,radius=92.f;
    const juce::Rectangle<float> bezel(cx-126.f,105.f,252.f,196.f);
-   g.setColour(juce::Colour(0xff070b10));g.fillRoundedRectangle(bezel,16.f);
-   g.setGradientFill(juce::ColourGradient(juce::Colour(0xff414c55),cx,105.f,
-                                        juce::Colour(0xff111920),cx,301.f,false));
-   g.fillRoundedRectangle(bezel.reduced(5.f),12.f);
-   g.setColour(juce::Colour(0xffe6d5b2));
-   g.fillRoundedRectangle(bezel.reduced(13.f),9.f);
+   theme_.drawAnalogGrBezel(g,bezel);
    auto polar=[&](float angle,float r){
     return juce::Point<float>(cx+std::sin(angle)*r,cy-std::cos(angle)*r);
    };
