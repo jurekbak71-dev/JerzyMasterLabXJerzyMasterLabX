@@ -48,7 +48,7 @@ public:
     ~AnalogColorPanel()override {setLookAndFeel(nullptr);}
     void update(const Processor::ResponseFrame& r){reading_=r.analog;repaint();}
     void resized()override {
-        included_.setBounds(24,16,120,28);enabled_.setBounds(156,16,110,28);
+        included_.setBounds(24,12,130,34);enabled_.setBounds(162,12,116,34);
         autoGain_.setBounds(278,16,182,28);mode_.setBounds(470,16,200,28);
         const int cols=std::max(3,std::min(6,getWidth()/145));
         const int width=std::max(110,(getWidth()-48)/cols);
