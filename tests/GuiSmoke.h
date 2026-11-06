@@ -206,6 +206,7 @@ class GuiSmoke final : private juce::Timer {
             // Store actual host-sized console renders for large and minimum supported viewport.
             for(const auto dim:{juce::Point<int>{750,550},juce::Point<int>{1400,1000}}){
                 editor->setSize(dim.x,dim.y);
+                if(!controlsFit())return false;
                 auto visual=editor->createComponentSnapshot(editor->getLocalBounds());
                 if(!visual.isValid())return false;
                 const auto file=juce::File::getCurrentWorkingDirectory().getChildFile(
