@@ -38,7 +38,23 @@ class MasterBrain final : private juce::Thread {
    }++fftFrames;
   }
   void process(const Packet& packet){
-   for(int i=0;i<packet.length&&count<target;++i){float l=packet.left[i],r=packet.right[i];detail.push(l,r);if(count<previewLeft.size()){previewLeft[static_cast<size_t>(count)]=l;previewRight[static_cast<size_t>(count)]=r;}
+   for(int i=0;i<packet.length&&count<target;++i){float l=packet.left[i],r=packet.right[i];detail.push(l,r);// A representative DSP audition spans the full analysis, rather than using
+    // only the first 16 seconds. Four 4-second windows cover start/middle/end.
+    if(!previewLeft.empty()){
+     const std::uint64_t N=previewLeft.size();
+     if(target<=N){
+      if(count<N){previewLeft[static_cast<size_t>(count)]=l;previewRight[static_cast<size_t>(count)]=r;}
+     }else{
+      const std::uint64_t part=N/4;
+      for(std::uint64_t region=0;region<4;++region){
+       const std::uint64_t start=(target-N)*region/3;
+       if(count>=start&&count<start+part){
+        size_t dst=static_cast<size_t>(region*part+count-start);
+        previewLeft[dst]=l;previewRight[dst]=r;break;
+       }
+      }
+     }
+    }
     const float a=splitCoefficients[0],b=splitCoefficients[1],c=splitCoefficients[2];
     auto leftBands=bandLeft.tick(l,a,b,c),rightBands=bandRight.tick(r,a,b,c);for(size_t k=0;k<4;++k){bandLL[k]+=static_cast<double>(leftBands[k])*leftBands[k];bandRR[k]+=static_cast<double>(rightBands[k])*rightBands[k];bandLR[k]+=static_cast<double>(leftBands[k])*rightBands[k];}
     loudness.push(l,r);ll+=static_cast<double>(l)*l;rr+=static_cast<double>(r)*r;lr+=static_cast<double>(l)*r;peak=std::max(peak,std::max(std::abs(l),std::abs(r)));clips+=std::max(std::abs(l),std::abs(r))>1?1:0;
@@ -108,7 +124,7 @@ public:
  void prepare(double sampleRate){
   active.store(0);nextGeneration.fetch_add(1);{
    std::scoped_lock lock(mutex);rate=std::isfinite(sampleRate)&&sampleRate>=8000&&sampleRate<=384000?sampleRate:48000;
-   packets.resize(static_cast<size_t>(capacity));fifo.reset();job.reset();snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Play the loudest section, then analyse. No parameters change until Apply.";audioGeneration=audioCount=0;
+   packets.resize(static_cast<size_t>(capacity));fifo.reset();job.reset();snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Play the full track from the beginning. No parameters change before Apply.";audioGeneration=audioCount=0;
   }if(!isThreadRunning())startThread();
  }
  void startUI(BrainConfig config){
