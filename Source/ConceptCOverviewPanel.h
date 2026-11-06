@@ -20,6 +20,7 @@ class ConceptCOverviewPanel final : public juce::Component {
     std::vector<std::unique_ptr<Control>> controls_;
     std::vector<std::unique_ptr<juce::TextButton>> openButtons_;
     Processor::ResponseFrame telemetry_{};
+    bool haveTelemetry_=false;
     static constexpr std::array<const char*,9> titles_{{
         "SPECTRAL EQ", "DYNAMICS", "STEREO ARCHITECT", "FINAL TRUE-PEAK",
         "ANALOG COLOR", "BASS ARCHITECT", "TRANSIENT SCULPTOR", "STABILIZER", "MASTER BRAIN"
@@ -107,7 +108,7 @@ public:
         }
     }
     ~ConceptCOverviewPanel()override{setLookAndFeel(nullptr);}
-    void update(const Processor::ResponseFrame& frame){telemetry_=frame;repaint();}
+    void update(const Processor::ResponseFrame& frame){telemetry_=frame;haveTelemetry_=true;repaint();}
     void resized()override{
         for(size_t i=0;i<openButtons_.size();++i){
             auto r=card(static_cast<int>(i));
@@ -140,10 +141,10 @@ public:
         const int left=static_cast<int>(pane.getX()+17),right=static_cast<int>(pane.getRight()-17);
         const int colWidth=(right-left)/4;
         const std::array<juce::String,4> values{{
-            db(telemetry_.inputReading.peak)+" dBFS",
-            db(telemetry_.outputReading.peak)+" dBFS",
-            juce::String(telemetry_.outputLufs.integrated,1)+" LUFS",
-            juce::String(telemetry_.truePeak.gainReductionDb,2)+" dB"
+            haveTelemetry_?db(telemetry_.inputReading.peak)+" dBFS":"--",
+            haveTelemetry_?db(telemetry_.outputReading.peak)+" dBFS":"--",
+            haveTelemetry_?juce::String(telemetry_.outputLufs.integrated,1)+" LUFS":"--",
+            haveTelemetry_?juce::String(telemetry_.truePeak.gainReductionDb,2)+" dB":"--"
         }};
         const std::array<const char*,4> labels{{"INPUT SAMPLE PEAK","OUTPUT SAMPLE PEAK","INTEGRATED LOUDNESS","TRUE-PEAK GAIN REDUCTION"}};
         for(int c=0;c<4;++c){
