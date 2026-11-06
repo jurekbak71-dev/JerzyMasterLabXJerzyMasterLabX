@@ -74,6 +74,8 @@ public:
      MasterLabGuiAssets::led_red_on_png,MasterLabGuiAssets::led_red_on_pngSize)};
  juce::Image powderTile_{juce::ImageCache::getFromMemory(
      MasterLabGuiAssets::powdercoat_tile_png,MasterLabGuiAssets::powdercoat_tile_pngSize)};
+ juce::Image blueRing_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::ring_blue_on_png,MasterLabGuiAssets::ring_blue_on_pngSize)};
  void paintPowderCoat(juce::Graphics& g,juce::Rectangle<int> area)const{
   g.setColour(juce::Colour(0xffedf0f2));g.fillRect(area);
   if(!powderTile_.isNull()){
@@ -152,6 +154,12 @@ public:
               juce::roundToInt(bounds.getWidth()),juce::roundToInt(bounds.getHeight()),
               sourceX,sourceY,sourceSide,sourceSide);
   g.setOpacity(1.f);
+  // Segmented electric-blue ring is pre-rendered RGBA, not an animated fake light.
+  if(slider.isEnabled()&&!blueRing_.isNull()){
+   g.setOpacity(.82f);
+   g.drawImage(blueRing_,bounds.expanded(shown*.065f));
+   g.setOpacity(1.f);
+  }
   if(slider.hasKeyboardFocus(true)){
    g.setColour(juce::Colour(0xff087bff).withAlpha(.8f));
    g.drawEllipse(bounds.expanded(1.5f),1.5f);
