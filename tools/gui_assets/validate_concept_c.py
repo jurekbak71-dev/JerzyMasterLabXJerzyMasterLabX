@@ -30,6 +30,17 @@ for size in (96,160):
 for size in (96,160):
     atlas=next(a for a in manifest["assets"] if a["name"]==f"knob_{size}_atlas.png")
     assert atlas["width"]==size*11 and atlas["height"]==size*10
+# Regression: the prior faux-glass overlays contained opaque-looking white
+# triangles. Reflections must be alpha-only; dark substrate must stay dark.
+for name in ("glass_overlay.png","glass_readout_overlay.png"):
+    with Image.open(p/name) as im:
+        assert im.getchannel("A").getextrema()[1]<=65, (
+            name,"glass glare can never obscure actual LCD telemetry")
+for name in ("glass_analyzer.png","glass_readout.png"):
+    with Image.open(p/name) as im:
+        red,green,blue,alpha=im.getpixel((im.width//2,im.height//2))
+        assert alpha==255 and red<30 and green<40 and blue<65, (
+            name,"LCD substrate must be dark, not white painted glass")
 for size in (96,160):
     with Image.open(p/f"led_wreath_{size}_atlas.png") as img:
         def count_lit(frame):
