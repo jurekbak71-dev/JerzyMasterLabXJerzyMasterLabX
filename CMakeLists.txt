@@ -154,6 +154,9 @@ if(MASTERLAB_PLUGIN)
    "${MASTERLAB_GUI_ASSET_DIR}/led_red_off.png"
    "${MASTERLAB_GUI_ASSET_DIR}/led_blue_on.png"
    "${MASTERLAB_GUI_ASSET_DIR}/led_blue_off.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/ring_blue_on.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/ring_green_on.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/ring_red_on.png"
    "${MASTERLAB_GUI_ASSET_DIR}/powdercoat_tile.png")
  target_link_libraries(JerzyMasterLabX PUBLIC MasterLabFonts MasterLabGuiAssets)
  add_test(NAME concept_c_asset_pack
