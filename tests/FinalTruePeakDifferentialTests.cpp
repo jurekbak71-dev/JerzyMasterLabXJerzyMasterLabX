@@ -42,7 +42,8 @@ int main(){
      check(std::abs(right[i]-rightReference[i])<1e-6f,
            "right render deviates from preoptimization reference");
     }
-    auto newReading=optimized.reading(),oldReading=reference.reading();
+    const auto newReading=optimized.reading();
+    const auto oldReading=reference.reading();
     check(std::abs(newReading.gainReductionDb-oldReading.gainReductionDb)<1e-5f,
           "gain reduction telemetry changed");
     check(std::abs(newReading.detectedTruePeak-oldReading.detectedTruePeak)<1e-5f,
