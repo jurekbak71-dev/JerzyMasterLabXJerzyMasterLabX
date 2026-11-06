@@ -91,6 +91,22 @@ class Editor final : public juce::AudioProcessorEditor,
         for(auto* component:std::initializer_list<juce::Component*>{&brainGenre,&brainStyle,&brainDuration,&brainTarget,&brainCeiling,&brainIntensity,&brainModulesButton,&brainAnalyse,&brainApply,&brainAuditionA,&brainAuditionB,&brainReport})component->setVisible(visible);
         for(auto& label:brainLabels)label.setVisible(visible);
     }
+    void reflectFactoryBrainControls(){
+        const masterlab::BrainConfig defaults{};
+        brainGenre.setSelectedId(defaults.genre+1,juce::dontSendNotification);
+        brainStyle.setSelectedId(defaults.style+1,juce::dontSendNotification);
+        brainDuration.setSelectedId(defaults.seconds,juce::dontSendNotification);
+        brainTarget.setValue(defaults.targetLufs,juce::dontSendNotification);
+        brainCeiling.setValue(defaults.ceiling,juce::dontSendNotification);
+        brainIntensity.setValue(defaults.intensity,juce::dontSendNotification);
+        brainUseStabilizer=defaults.useStabilizer;
+        brainAutomatic=defaults.automaticModules;
+        brainUseStereo=defaults.useStereo;
+        brainUseDynamics=defaults.useDynamics;
+        brainUseDynamicEq=defaults.useDynamicEq;
+        brainEq.setToggleState(defaults.useEq,juce::dontSendNotification);
+        brainLimiter.setToggleState(defaults.useLimiter,juce::dontSendNotification);
+    }
     void showBrain(){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);setBrainVisible(true);refreshBrain();repaint();}
     masterlab::BrainConfig brainConfig() const {
         masterlab::BrainConfig config;config.genre=brainGenre.getSelectedId()-1;config.style=brainStyle.getSelectedId()-1;config.seconds=brainDuration.getSelectedId();config.targetLufs=static_cast<float>(brainTarget.getValue());config.ceiling=static_cast<float>(brainCeiling.getValue());config.intensity=static_cast<float>(brainIntensity.getValue());config.useEq=brainEq.getToggleState();config.useLimiter=brainLimiter.getToggleState();config.useStabilizer=brainUseStabilizer;config.automaticModules=brainAutomatic;config.useStereo=brainUseStereo;config.useDynamics=brainUseDynamics;config.useDynamicEq=brainUseDynamicEq;return config;
@@ -493,7 +509,7 @@ public:
         undoButton.setComponentID("undo");redoButton.setComponentID("redo");presetButton.setComponentID("preset");
         newButton.setComponentID("factory-default");
         newButton.setTooltip("NEW / preset 0: restore every factory parameter, clear Master Brain, and keep saved presets. Undo restores previous settings.");
-        newButton.onClick=[this]{endDrag();processor.loadFactoryDefaultUI();refreshBrain();repaint();};
+        newButton.onClick=[this]{endDrag();processor.loadFactoryDefaultUI();reflectFactoryBrainControls();refreshBrain();repaint();};
         undoButton.onClick=[this]{endDrag();processor.undo();};redoButton.onClick=[this]{endDrag();processor.redo();};
         undoButton.setTooltip("Undo the last parameter transaction. Host automation may also be recorded while it runs.");
         redoButton.setTooltip("Redo an undone transaction.");
@@ -502,7 +518,7 @@ public:
             auto safe=juce::Component::SafePointer<Editor>(this);
             menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(presetButton),[safe](int selection){
                 if(!safe)return;
-                if(selection==3){safe->endDrag();safe->processor.loadFactoryDefaultUI();safe->refreshBrain();safe->repaint();}
+                if(selection==3){safe->endDrag();safe->processor.loadFactoryDefaultUI();safe->reflectFactoryBrainControls();safe->refreshBrain();safe->repaint();}
                 else if(selection==1||selection==2)safe->choosePreset(selection==2);
             });
         };
