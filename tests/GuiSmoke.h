@@ -188,6 +188,14 @@ class GuiSmoke final : private juce::Timer {
             editor->setSize(1000,700);
             auto image=editor->createComponentSnapshot(editor->getLocalBounds());
             if(!image.isValid())return false;
+            // Assert real right-hand LCD telemetry remains dark: the old
+            // white polygon glare made pale readouts completely unreadable.
+            const auto lcdRight=image.getPixelAt(947,439);
+            if(lcdRight.getRed()>95||lcdRight.getGreen()>105||lcdRight.getBlue()>125){
+                std::cerr<<"Concept C LCD display still painted white: "
+                         <<int(lcdRight.getRed())<<"/"<<int(lcdRight.getGreen())
+                         <<"/"<<int(lcdRight.getBlue())<<"\n";return false;
+            }
             int powderPixels=0,bluePixels=0;
             for(int y=140;y<image.getHeight()-10;y+=2)
                 for(int x=15;x<image.getWidth()-15;x+=2){
