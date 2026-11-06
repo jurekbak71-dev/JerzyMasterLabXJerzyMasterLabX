@@ -43,7 +43,7 @@ public:
  ~BassArchitectPanel()override{setLookAndFeel(nullptr);}
  void update(const Processor::ResponseFrame& r){reading_=r.bass;repaint();}
  void resized()override{
-  present_.setBounds(24,16,118,28);enabled_.setBounds(154,16,110,28);
+  present_.setBounds(24,12,130,34);enabled_.setBounds(162,12,116,34);
   const int cols=std::max(3,std::min(6,getWidth()/150));
   const int width=(getWidth()-48)/cols;
   for(size_t i=0;i<knobs_.size();++i){
