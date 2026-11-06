@@ -75,6 +75,8 @@ public:
      MasterLabGuiAssets::led_blue_on_png,MasterLabGuiAssets::led_blue_on_pngSize)};
  juce::Image redOn_{juce::ImageCache::getFromMemory(
      MasterLabGuiAssets::led_red_on_png,MasterLabGuiAssets::led_red_on_pngSize)};
+ juce::Image redOff_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::led_red_off_png,MasterLabGuiAssets::led_red_off_pngSize)};
  juce::Image grBezel_{juce::ImageCache::getFromMemory(
      MasterLabGuiAssets::analog_gr_bezel_png,MasterLabGuiAssets::analog_gr_bezel_pngSize)};
  void drawAnalogGrBezel(juce::Graphics& g,juce::Rectangle<float> rect) const{
