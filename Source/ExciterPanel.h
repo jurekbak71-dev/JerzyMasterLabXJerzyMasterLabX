@@ -52,7 +52,7 @@ public:
         return nullptr;
     }
     void resized()override {
-        inChain.setBounds(26,16,114,28);active.setBounds(146,16,110,28);
+        inChain.setBounds(26,12,126,34);active.setBounds(160,12,116,34);
         const int columns=std::max(3,std::min(5,getWidth()/140));
         const int cell=std::max(90,(getWidth()-48)/columns);
         for(size_t i=0;i<knobs.size();++i) {
