@@ -145,16 +145,43 @@ def segmented_wreath(size, phase):
     return im.resize((size,size),Image.Resampling.LANCZOS)
 
 def recessed_glass(size, overlay=False):
-    w,h=size; im=Image.new("RGBA",(w,h),(0,0,0,0));d=ImageDraw.Draw(im,"RGBA")
+    """Dark LCD housing and physically restrained alpha reflections, never white wedges.
+
+    Overlay is alpha-only artwork: no opaque paper-like polygons. The editor
+    composites live DSP curves/text BETWEEN these two different PNG layers.
+    """
+    w,h=size
+    im=Image.new("RGBA",(w,h),(0,0,0,0))
+    d=ImageDraw.Draw(im,"RGBA")
+    radius=max(5,min(16,h//9))
     if not overlay:
-        d.rounded_rectangle((0,0,w-1,h-1),radius=12,fill=(8,21,37,255),
-                            outline=(45,156,200,255),width=3)
-        d.rounded_rectangle((5,5,w-6,h-6),radius=9,outline=(149,201,230,88),width=2)
-    d.polygon(((9,7),(int(w*.55),7),(int(w*.28),int(h*.45)),(6,int(h*.52))),
-              fill=(235,249,255,42 if overlay else 20))
-    d.polygon(((int(w*.81),6),(w-7,6),(w-7,int(h*.42)),(int(w*.68),int(h*.59))),
-              fill=(222,244,255,26 if overlay else 16))
+        # Smoked-LCD substrate: deep navy with subtle center lift and floor bloom.
+        for y in range(h):
+            mix=y/max(1,h-1)
+            blue=int(15+9*(1-mix)+6*math.sin(math.pi*mix))
+            d.line((0,y,w-1,y),fill=(3,10+int(5*(1-mix)),blue,255))
+        d.rounded_rectangle((2,2,w-3,h-3),radius=radius,outline=(32,100,136,220),width=2)
+        d.rounded_rectangle((7,7,w-8,h-8),radius=max(3,radius-4),
+                            outline=(61,187,225,77),width=1)
+        d.line((radius,4,w-radius,4),fill=(148,240,255,112),width=2)
+        d.line((radius,h-6,w-radius,h-6),fill=(0,194,255,150),width=2)
+        d.line((7,17,7,h-19),fill=(19,140,203,80),width=2)
+    else:
+        # Restrained studio-light reflections: at most 13% alpha, with soft,
+        # narrow streaks instead of opaque white triangular paint.
+        gloss=Image.new("RGBA",(w,h),(0,0,0,0))
+        gd=ImageDraw.Draw(gloss,"RGBA")
+        gd.polygon(((int(w*.08),int(h*.045)),(int(w*.47),int(h*.045)),
+                    (int(w*.34),int(h*.15)),(int(w*.02),int(h*.15))),
+                   fill=(124,207,246,17))
+        gd.polygon(((int(w*.75),int(h*.08)),(int(w*.86),int(h*.08)),
+                    (int(w*.72),int(h*.60)),(int(w*.67),int(h*.60))),
+                   fill=(111,201,239,23))
+        gd.line((radius,6,w-radius,6),fill=(172,235,255,30),width=2)
+        gd.line((radius,h-8,w-radius,h-8),fill=(0,215,255,40),width=3)
+        im=gloss.filter(ImageFilter.GaussianBlur(max(1,h//110)))
     return im
+
 
 def card_glow(on):
     w,h=320,180; core=Image.new("RGBA",(w,h),(0,0,0,0))
