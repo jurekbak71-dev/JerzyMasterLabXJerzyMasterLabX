@@ -116,6 +116,8 @@ public:
     ~ConceptCOverviewPanel()override{setLookAndFeel(nullptr);}
     void update(const Processor::ResponseFrame& frame){telemetry_=frame;haveTelemetry_=true;repaint();}
     void updateSpectrum(const std::array<float,256>& bins){spectrum_=bins;haveSpectrum_=true;repaint();}
+    bool hasMeasuredSpectrum() const noexcept{return haveSpectrum_;}
+    int connectedControlCount() const noexcept{return static_cast<int>(controls_.size());}
     void resized()override{
         for(size_t i=0;i<openButtons_.size();++i){
             auto r=card(static_cast<int>(i));
