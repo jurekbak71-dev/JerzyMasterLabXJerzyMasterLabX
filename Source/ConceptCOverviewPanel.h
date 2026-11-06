@@ -74,16 +74,23 @@ class ConceptCOverviewPanel final : public juce::Component {
         g.setColour(juce::Colour(0xff9aa8b4));g.drawRoundedRectangle(r,8.f,1.f);
         g.setColour(juce::Colour(index==3?0xfff53148:0xff087dff));
         g.fillRoundedRectangle(r.getX()+8.f,r.getY()+9.f,4.f,24.f,2.f);
+        bool moduleEnabled=false;
         if(index<8){
             constexpr std::array<const char*,8> onIds{{
                 "eq","dynamicsOn","stereoOn","truePeakOn",
                 "analogOn","bassOn","transientOn","stabilizerOn"
             }};
-            auto* value=processor_.state.getRawParameterValue(onIds[static_cast<size_t>(index)]);
-            const bool on=value!=nullptr&&value->load()>.5f;
-            theme_.paintPowerLed(g,juce::roundToInt(r.getRight()-85.f),
-                                 juce::roundToInt(r.getY()+11.f),22,on);
+            constexpr std::array<const char*,8> presentIds{{
+                "eqPresent","dynamicsPresent","stereoPresent","truePeakPresent",
+                "analogPresent","bassPresent","transientPresent","stabilizerPresent"
+            }};
+            auto* enabled=processor_.state.getRawParameterValue(onIds[static_cast<size_t>(index)]);
+            auto* present=processor_.state.getRawParameterValue(presentIds[static_cast<size_t>(index)]);
+            moduleEnabled=enabled&&enabled->load()>.5f&&(!present||present->load()>.5f);
         }
+        theme_.paintModuleGlow(g,r,moduleEnabled);
+        theme_.paintSmallRedLed(g,juce::roundToInt(r.getRight()-85.f),
+                               juce::roundToInt(r.getY()+11.f),18,moduleEnabled);
         g.setColour(juce::Colour(0xff172631));g.setFont(theme_.font(r.getWidth()<200?10.f:12.f));
         g.drawFittedText(titles_[static_cast<size_t>(index)],juce::Rectangle<int>(
             static_cast<int>(r.getX()+17),static_cast<int>(r.getY()+8),
@@ -154,8 +161,8 @@ public:
         const float W=static_cast<float>(getWidth()),H=static_cast<float>(getHeight());
         const float top=H*.305f+25.f,centreHeight=H*.25f;
         const juce::Rectangle<float> pane(12.f,top,W-24.f,centreHeight);
-        g.setColour(juce::Colour(0xff202c38));g.fillRoundedRectangle(pane,9.f);
-        g.setColour(juce::Colour(0xff8298aa));g.drawRoundedRectangle(pane,9.f,1.f);
+        theme_.paintGlassScreen(g,pane);
+        g.setColour(juce::Colour(0xff04b8ff).withAlpha(.7f));g.drawRoundedRectangle(pane,9.f,1.f);
         g.setFont(theme_.font(12.f));g.setColour(juce::Colour(0xff1d91ff));
         g.drawText("MASTER MONITOR / LIVE DSP",static_cast<int>(pane.getX()+18),
                    static_cast<int>(pane.getY()+10),static_cast<int>(pane.getWidth()-36),24,
@@ -238,6 +245,8 @@ public:
         g.drawText("20 Hz                                  FREQUENCY (LOG)                                  20 kHz",
                    static_cast<int>(plotX),static_cast<int>(plot.getBottom()+3.f),
                    static_cast<int>(plotW),13,juce::Justification::centred);
+        // Optical glass reflection lies above live spectrum, EQ and DSP readings.
+        theme_.paintGlassReflection(g,pane);
         // Master Brain is guided analysis, not a fake AI or a passive empty card.
         auto brain=card(8);
         g.setColour(juce::Colour(0xff2c4f67));
