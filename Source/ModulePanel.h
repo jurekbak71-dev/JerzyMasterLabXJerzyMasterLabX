@@ -77,7 +77,15 @@ public:
   if(kind!=2){monoBass.setBounds(left+12,getHeight()-48,side/2-12,28);mono.setBounds(left+side/2+6,getHeight()-48,side/2-18,28);}
  }
  void paint(juce::Graphics& g)override{
-  g.fillAll(juce::Colour(0xff101318));g.setColour(juce::Colours::whitesmoke);g.setFont(theme.font(23));g.drawText(kind==3?"Stabilizer":kind==0?"Dynamic EQ":(kind==1?"Smart Dynamics":"Stereo Architect"),24,6,getWidth()-280,36,juce::Justification::left);
+  g.fillAll(juce::Colour(0xffedf0f2));
+  // Concept C powder-coated sheet-metal side rails and inset dark instrument panel.
+  const float panelWidth=juce::jmax(1.f,static_cast<float>(getWidth())-20.f);
+  g.setGradientFill(juce::ColourGradient(juce::Colour(0xff344553),10.f,0.f,
+                                        juce::Colour(0xff111b25),10.f,static_cast<float>(getHeight()),false));
+  g.fillRect(10.f,0.f,panelWidth,static_cast<float>(getHeight()));
+  g.setColour(juce::Colour(0xff96a7b6));
+  g.drawVerticalLine(10,0.f,static_cast<float>(getHeight()));
+  g.drawVerticalLine(juce::jmax(10,getWidth()-11),0.f,static_cast<float>(getHeight()));g.setColour(juce::Colours::whitesmoke);g.setFont(theme.font(23));g.drawText(kind==3?"Stabilizer":kind==0?"Dynamic EQ":(kind==1?"Smart Dynamics":"Stereo Architect"),24,6,getWidth()-280,36,juce::Justification::left);
   const int side=std::min(340,getWidth()/2-24);const float right=getWidth()-side-24.f,plotWidth=right-48.f;
   g.setColour(juce::Colour(0xff191d25));g.fillRoundedRectangle(24,54,plotWidth,getHeight()-94.f,18);g.fillRoundedRectangle(right,48,side,getHeight()-72.f,18);
   g.setColour(muted);g.setFont(theme.font(11));g.drawText("Live DSP / 20 ms bypass / drag chain cards to change processing order",24,getHeight()-32,getWidth()-48,22,juce::Justification::left);
