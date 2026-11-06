@@ -7,7 +7,11 @@
 #include <mutex>
 namespace masterlab {
 enum class BrainPhase { Idle, Pending, Analysing, Validating, Ready, Failed, Cancelled, Applied };
-struct BrainSnapshot {BrainPhase phase=BrainPhase::Idle;BrainConfig config;BrainFeatures features;BrainProposal proposal;double progress=0;std::string message="Play the loudest section, then analyse. No parameters change until Apply.";};
+struct BrainSnapshot {
+ BrainPhase phase=BrainPhase::Idle;BrainConfig config;BrainFeatures features;
+ BrainProposal proposal,alternateProposal;int selectedVariant=0;bool alternateReady=false;
+ double progress=0;std::string message="Play the track from the beginning, then analyse. No parameters change until Apply.";
+};
 class MasterBrain final : private juce::Thread {
  struct Packet {std::array<float,128> left{},right{};std::uint64_t generation=0,firstSample=0;int length=0;};
  struct Job {
@@ -67,13 +71,33 @@ class MasterBrain final : private juce::Thread {
    }
    if(verification){
     auto proposal=proposeMastering(verification->features,verification->config);
+    // Two independently verified options from exactly the same captured audio.
+    // B is an alternate mastering character, not a copy of the A controls.
+    BrainConfig alternativeConfig=verification->config;
+    alternativeConfig.style=verification->config.style==2?0:2;
+    alternativeConfig.intensity=std::clamp(verification->config.intensity*
+                                          (alternativeConfig.style==2?1.15f:.8f),.25f,1.5f);
+    auto alternative=proposeMastering(verification->features,alternativeConfig);
     const auto generation=verification->generation;
     auto abort=[&]{return threadShouldExit()||nextGeneration.load()!=generation||cancelled.load()==generation;};
-    try{verifyBrainProposal(proposal,verification->features,verification->config,verification->previewLeft,verification->previewRight,abort);}
-    catch(const std::exception&){proposal.valid=false;proposal.previewVerified=false;proposal.warnings.push_back("DSP verification failed. No parameters changed; Apply disabled.");}
+    try{
+     verifyBrainProposal(proposal,verification->features,verification->config,
+                         verification->previewLeft,verification->previewRight,abort);
+     if(!abort())verifyBrainProposal(alternative,verification->features,alternativeConfig,
+                                   verification->previewLeft,verification->previewRight,abort);
+    }
+    catch(const std::exception&){proposal.valid=false;proposal.previewVerified=false;alternative.valid=false;
+     proposal.warnings.push_back("DSP verification failed. No parameters changed; Apply disabled.");}
     std::scoped_lock lock(mutex);
     if(cancelled.load()==generation&&nextGeneration.load()==generation&&snapshot.phase==BrainPhase::Validating){snapshot.phase=BrainPhase::Cancelled;snapshot.proposal={};snapshot.message="Verification cancelled. No parameters changed.";}
-    if(!abort()&&snapshot.phase==BrainPhase::Validating){snapshot.proposal=std::move(proposal);snapshot.phase=BrainPhase::Ready;snapshot.message=snapshot.proposal.previewVerified?"DSP verification complete. Review measured results before Apply.":"Analysis complete. Review before Apply.";job=std::move(verification);}
+    if(!abort()&&snapshot.phase==BrainPhase::Validating){snapshot.proposal=std::move(proposal);
+      snapshot.alternateReady=alternative.valid&&alternative.previewVerified;
+      snapshot.alternateProposal=std::move(alternative);snapshot.selectedVariant=0;
+      snapshot.phase=BrainPhase::Ready;
+      snapshot.message=snapshot.proposal.previewVerified?
+        "A/B proposals verified through actual DSP. Audition A or B, then Apply.":
+        "Analysis complete. Review before Apply.";
+      job=std::move(verification);}
    }
    wait(10);
   }
@@ -101,6 +125,17 @@ public:
   else {snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Settings changed. Analyse a new fragment.";}
  }
  BrainSnapshot readUI(){std::scoped_lock lock(mutex);return snapshot;}
+ bool selectVariantUI(int index){
+  std::scoped_lock lock(mutex);
+  if(snapshot.phase!=BrainPhase::Ready||index<0||index>1)return false;
+  if(index==1&&!snapshot.alternateReady)return false;
+  if(index!=snapshot.selectedVariant){
+   std::swap(snapshot.proposal,snapshot.alternateProposal);
+   snapshot.selectedVariant=index;
+  }
+  snapshot.message=index==0?"Variant A selected: original style. Audition and Apply.":"Variant B selected: contrasting style. Audition and Apply.";
+  return true;
+ }
  void markAppliedUI(){std::scoped_lock lock(mutex);snapshot.phase=BrainPhase::Applied;snapshot.message="Applied as one Undo transaction. Measure and audition the full processed song.";}
  // Single audio producer. No locks, wake-up signals, allocation or FFT here.
  void capture(const float* left,const float* right,int length)noexcept {
