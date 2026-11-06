@@ -238,10 +238,19 @@ public:
   // Undo the last audition before switching. Undo on B then restores
   // the pre-Brain state, not variant A.
   if(brainAuditionVariant>=0){
-   if(!undo())return false;
+   if(!undo()){
+    brainActionMessage="Audition switch: Undo manager could not revert the previous preview.";
+    return false;
+   }
    brainAuditionVariant=-1;brainAuditionValues.clear();
   }
-  if(brainStaleUI()||!brain.selectVariantUI(variant))return false;
+  if(brainStaleUI()){
+   brainActionMessage="Audition switch: previous preview was not fully reverted: "+
+                      brainStaleReasonUI();return false;
+  }
+  if(!brain.selectVariantUI(variant)){
+   brainActionMessage="Audition switch: requested recipe is not available.";return false;
+  }
   beginUiTransaction(variant==0?"Master Brain audition A":"Master Brain audition B");
   for(const auto& [id,value]:proposal.changes){
    auto* p=state.getParameter(id);
