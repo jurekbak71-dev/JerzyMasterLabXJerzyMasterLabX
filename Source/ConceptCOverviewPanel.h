@@ -109,10 +109,9 @@ public:
     ~ConceptCOverviewPanel()override{setLookAndFeel(nullptr);}
     void update(const Processor::ResponseFrame& frame){telemetry_=frame;repaint();}
     void resized()override{
-        for(auto& b:openButtons_){
-            const auto index=static_cast<int>(&b-&openButtons_[0]);
-            auto r=card(index);
-            b->setBounds(static_cast<int>(r.getRight()-62),static_cast<int>(r.getY()+11),54,22);
+        for(size_t i=0;i<openButtons_.size();++i){
+            auto r=card(static_cast<int>(i));
+            openButtons_[i]->setBounds(static_cast<int>(r.getRight()-62),static_cast<int>(r.getY()+11),54,22);
         }
         for(auto& p:controls_){
             const auto r=card(p->card);
