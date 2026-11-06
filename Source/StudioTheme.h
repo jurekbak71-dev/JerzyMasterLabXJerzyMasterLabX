@@ -90,6 +90,11 @@ public:
   if(!sprite.isNull())
    g.drawImage(sprite,x,y,size,size,0,0,sprite.getWidth(),sprite.getHeight());
  }
+ void paintPowerLed(juce::Graphics& g,int x,int y,int size,bool enabled)const{
+  const auto& sprite=enabled?greenOn_:greenOff_;
+  if(!sprite.isNull())
+   g.drawImage(sprite,x,y,size,size,0,0,sprite.getWidth(),sprite.getHeight());
+ }
  void drawLinearSlider(juce::Graphics& g,int x,int y,int width,int height,
                        float sliderPos,float minSliderPos,float maxSliderPos,
                        juce::Slider::SliderStyle style,juce::Slider& slider) override {
