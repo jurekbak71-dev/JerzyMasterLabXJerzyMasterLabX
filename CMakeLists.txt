@@ -125,7 +125,37 @@ if(MASTERLAB_PLUGIN)
  FetchContent_MakeAvailable(JUCE)
  juce_add_plugin(JerzyMasterLabX BUNDLE_ID com.jerzymasterlab.masterlabx COMPANY_NAME "Jerzy MasterLab" PLUGIN_MANUFACTURER_CODE Jrzy PLUGIN_CODE Jmlx FORMATS VST3 PRODUCT_NAME "JerzyMasterLabX" COPY_PLUGIN_AFTER_BUILD FALSE)
  juce_add_binary_data(MasterLabFonts SOURCES Assets/Fonts/Manrope.ttf)
- target_link_libraries(JerzyMasterLabX PUBLIC MasterLabFonts)
+ # Concept C: generate deterministic RGBA sprite atlases BEFORE BinaryData is configured.
+ # All image decoding occurs in the editor; the audio callback never accesses these assets.
+ find_package(Python3 COMPONENTS Interpreter REQUIRED)
+ set(MASTERLAB_GUI_ASSET_DIR "${CMAKE_CURRENT_BINARY_DIR}/concept_c_gui")
+ file(MAKE_DIRECTORY "${MASTERLAB_GUI_ASSET_DIR}")
+ execute_process(
+   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/gui_assets/render_concept_c.py" "${MASTERLAB_GUI_ASSET_DIR}"
+   RESULT_VARIABLE MASTERLAB_GUI_RENDER_RESULT
+   OUTPUT_VARIABLE MASTERLAB_GUI_RENDER_OUTPUT
+   ERROR_VARIABLE MASTERLAB_GUI_RENDER_ERROR)
+ if(NOT MASTERLAB_GUI_RENDER_RESULT EQUAL 0)
+   message(FATAL_ERROR "Concept C resource generation failed: ${MASTERLAB_GUI_RENDER_ERROR}")
+ endif()
+ execute_process(
+   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/gui_assets/validate_concept_c.py" "${MASTERLAB_GUI_ASSET_DIR}"
+   RESULT_VARIABLE MASTERLAB_GUI_VALIDATE_RESULT
+   ERROR_VARIABLE MASTERLAB_GUI_VALIDATE_ERROR)
+ if(NOT MASTERLAB_GUI_VALIDATE_RESULT EQUAL 0)
+   message(FATAL_ERROR "Concept C resource validation failed: ${MASTERLAB_GUI_VALIDATE_ERROR}")
+ endif()
+ juce_add_binary_data(MasterLabGuiAssets NAMESPACE MasterLabGuiAssets SOURCES
+   "${MASTERLAB_GUI_ASSET_DIR}/knob_96_atlas.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/knob_160_atlas.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/led_green_on.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/led_green_off.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/led_red_on.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/led_red_off.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/led_blue_on.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/led_blue_off.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/powdercoat_tile.png")
+ target_link_libraries(JerzyMasterLabX PUBLIC MasterLabFonts MasterLabGuiAssets)
  target_sources(JerzyMasterLabX PRIVATE Source/Plugin.cpp)
  target_link_libraries(JerzyMasterLabX PRIVATE masterlab juce::juce_audio_utils juce::juce_dsp PUBLIC juce::juce_recommended_config_flags)
  target_compile_definitions(JerzyMasterLabX PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
