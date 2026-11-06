@@ -176,6 +176,15 @@ class GuiSmoke final : private juce::Timer {
             if(overview->connectedControlCount()!=16||!overview->hasMeasuredSpectrum()){
                 std::cerr<<"Concept C real APVTS knobs or measured FFT missing\n";return false;
             }
+            // A visible Concept C rotary must update the existing parameter, then restore it.
+            auto* consoleGain=dynamic_cast<juce::Slider*>(overview->findChildWithID("console-gain"));
+            if(!consoleGain)return false;
+            const double initialGain=consoleGain->getValue();
+            const double testGain=initialGain>0.5?initialGain*.63:initialGain+1.;
+            consoleGain->setValue(testGain,juce::sendNotificationSync);
+            if(std::abs(actual("gain")-static_cast<float>(consoleGain->getValue()))>.02f)
+                return false;
+            consoleGain->setValue(initialGain,juce::sendNotificationSync);
             editor->setSize(1000,700);
             auto image=editor->createComponentSnapshot(editor->getLocalBounds());
             if(!image.isValid())return false;
