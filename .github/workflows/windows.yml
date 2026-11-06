@@ -14,6 +14,19 @@ jobs:
         run: cmake --build build --config Release --parallel 2
       - name: DSP tests
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Measure adversarial true-peak and CPU on Windows x64
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build/truepeak-evidence | Out-Null
+          & ./build/Release/final_true_peak_adversarial_tests.exe | Tee-Object -FilePath build/truepeak-evidence/adversarial-8x.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./build/Release/final_true_peak_benchmark.exe | Tee-Object -FilePath build/truepeak-evidence/cpu-benchmark.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TruePeak-8x-adversarial-and-CPU-evidence
+          path: build/truepeak-evidence/
+          if-no-files-found: error
       - name: Report test failure details
         if: failure()
         shell: pwsh
