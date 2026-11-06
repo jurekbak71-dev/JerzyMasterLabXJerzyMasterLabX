@@ -1,6 +1,7 @@
 #pragma once
 #include "../Source/ParallelPanel.h"
 #include "../Source/ModulePanel.h"
+#include "../Source/ConceptCOverviewPanel.h"
 
 // Runs the actual JUCE message loop: timer-driven DSP analysis must reach the editor.
 class GuiSmoke final : private juce::Timer {
