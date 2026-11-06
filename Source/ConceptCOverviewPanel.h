@@ -72,6 +72,16 @@ class ConceptCOverviewPanel final : public juce::Component {
         g.setColour(juce::Colour(0xff9aa8b4));g.drawRoundedRectangle(r,8.f,1.f);
         g.setColour(juce::Colour(index==3?0xfff53148:0xff087dff));
         g.fillRoundedRectangle(r.getX()+8.f,r.getY()+9.f,4.f,24.f,2.f);
+        if(index<8){
+            constexpr std::array<const char*,8> onIds{{
+                "eq","dynamicsOn","stereoOn","truePeakOn",
+                "analogOn","bassOn","transientOn","stabilizerOn"
+            }};
+            auto* value=processor_.state.getRawParameterValue(onIds[static_cast<size_t>(index)]);
+            const bool on=value!=nullptr&&value->load()>.5f;
+            theme_.paintPowerLed(g,juce::roundToInt(r.getRight()-85.f),
+                                 juce::roundToInt(r.getY()+11.f),22,on);
+        }
         g.setColour(juce::Colour(0xff172631));g.setFont(theme_.font(r.getWidth()<200?10.f:12.f));
         g.drawFittedText(titles_[static_cast<size_t>(index)],juce::Rectangle<int>(
             static_cast<int>(r.getX()+17),static_cast<int>(r.getY()+8),
