@@ -11,7 +11,10 @@ class GuiSmoke final : private juce::Timer {
     void fail(const char* message){std::cerr<<message<<'\n';success=false;stopTimer();editor.reset();juce::MessageManager::getInstance()->stopDispatchLoop();}
     juce::RangedAudioParameter* parameter(const char* id){for(auto* p:processor.getParameters())if(auto* ranged=dynamic_cast<juce::RangedAudioParameter*>(p))if(ranged->paramID==id)return ranged;return nullptr;}
     float actual(const char* id){auto* p=parameter(id);return p->convertFrom0to1(p->getValue());}
-    void open(){editor.reset(processor.createEditor());editor->addToDesktop(0);editor->setVisible(true);phase=0;}
+    void open(){editor.reset(processor.createEditor());editor->addToDesktop(0);editor->setVisible(true);
+        // Legacy EQ interaction regression continues from its real page; console is tested separately.
+        if(auto* eq=dynamic_cast<juce::Button*>(editor->findChildWithID("view-eq")))eq->onClick();
+        phase=0;}
     void feed(int blocks){juce::AudioBuffer<float> buffer(2,256);juce::MidiBuffer midi;for(int block=0;block<blocks;++block){for(int i=0;i<256;++i,++sample){float envelope=.35f+1.65f*std::pow(.5f+.5f*std::sin(sample/48000.f*2.1f),3.f);buffer.setSample(0,i,envelope*.08f*std::sin(juce::MathConstants<float>::twoPi*1000*sample/48000.f)+envelope*.04f*std::sin(juce::MathConstants<float>::twoPi*3333*sample/48000.f));buffer.setSample(1,i,envelope*.08f*std::sin(juce::MathConstants<float>::twoPi*1000*sample/48000.f));}processor.processBlock(buffer,midi);}}
     bool gestures(){
         editor->setSize(1000,700);
@@ -163,6 +166,22 @@ class GuiSmoke final : private juce::Timer {
         return true;
     }
     bool capture(){
+        if(iteration==0){
+            auto* console=dynamic_cast<juce::Button*>(editor->findChildWithID("view-console"));
+            if(!console){std::cerr<<"Concept C console navigation missing\n";return false;}
+            console->onClick();
+            auto* overview=editor->findChildWithID("concept-c-overview");
+            if(!overview||!overview->isVisible())return false;
+            editor->setSize(1000,700);
+            auto image=editor->createComponentSnapshot(editor->getLocalBounds());
+            if(!image.isValid())return false;
+            const auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/console-smoke.png");
+            output.getParentDirectory().createDirectory();
+            juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();
+            if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return false;
+            auto* eq=dynamic_cast<juce::Button*>(editor->findChildWithID("view-eq"));
+            if(!eq)return false;eq->onClick();
+        }
         for(auto size:{juce::Point<int>(750,550),juce::Point<int>(1000,700),juce::Point<int>(2000,1400)}){
             editor->setSize(size.x,size.y);auto image=editor->createComponentSnapshot(editor->getLocalBounds());
             if(!image.isValid()||image.getWidth()!=size.x||image.getHeight()!=size.y)return false;
