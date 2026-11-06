@@ -264,7 +264,7 @@ class Editor final : public juce::AudioProcessorEditor,
     double lastAnalysis=0;
     std::array<juce::Point<float>,1024> scope{};
     int head = 0;
-    const juce::Colour background{0xff0c1118}, panel{0xff1c2631}, muted{0xffa9b8c4};
+    const juce::Colour background{0xffebeff2}, panel{0xff202e3b}, muted{0xffa9b8c4};
     const juce::Colour accent{0xff82dfcd}, curve{0xffe7bb6a};
 
     juce::String parameterId(const char* base, int band) const {
@@ -543,25 +543,25 @@ public:
     void paint(juce::Graphics& g) override {
         g.fillAll(background);
         // Hardware-inspired chassis: a distinct faceplate, not a legacy colour swap.
-        g.setGradientFill(juce::ColourGradient(juce::Colour(0xff29333f),0.f,0.f,
-                                              juce::Colour(0xff080c12),0.f,80.f,false));
+        g.setGradientFill(juce::ColourGradient(juce::Colour(0xfff8fafb),0.f,0.f,
+                                              juce::Colour(0xffc8d0d8),0.f,80.f,false));
         g.fillRect(0,0,getWidth(),78);
-        g.setColour(juce::Colour(0xff6d8395));g.drawHorizontalLine(77,0.f,static_cast<float>(getWidth()));
-        g.setColour(juce::Colour(0xff101922));g.fillRoundedRectangle(15.f,10.f,270.f,57.f,7.f);
-        g.setColour(juce::Colour(0xff35495a));g.drawRoundedRectangle(15.f,10.f,270.f,57.f,7.f,1.f);
+        g.setColour(juce::Colour(0xff8398aa));g.drawHorizontalLine(77,0.f,static_cast<float>(getWidth()));
+        g.setColour(juce::Colour(0xffe5eaf0));g.fillRoundedRectangle(15.f,10.f,270.f,57.f,7.f);
+        g.setColour(juce::Colour(0xff8b99a6));g.drawRoundedRectangle(15.f,10.f,270.f,57.f,7.f,1.f);
         for(float screwX : {22.f,static_cast<float>(getWidth()-21)}) {
             g.setColour(juce::Colour(0xff090d12));g.fillEllipse(screwX-5.f,33.f,10.f,10.f);
             g.setColour(juce::Colour(0xff718290));g.drawEllipse(screwX-4.f,34.f,8.f,8.f,1.f);
             g.drawLine(screwX-2.f,40.f,screwX+2.f,36.f,.9f);
         }
-        g.setColour(juce::Colour(0xffe1e8eb));g.setFont(theme.font(20.f));
+        g.setColour(juce::Colour(0xff162635));g.setFont(theme.font(20.f));
         g.drawText("MASTERLAB X",37,10,237,33,juce::Justification::left);
-        g.setColour(juce::Colour(0xffd9ad63));g.setFont(theme.font(9.f));
+        g.setColour(juce::Colour(0xff076fff));g.setFont(theme.font(9.f));
         g.drawText("HYBRID STUDIO  /  MASTERING CONSOLE",38,41,245,17,juce::Justification::left);
         if(getWidth()>=1000){
             g.setColour(juce::Colour(0xff152029));
             g.fillRoundedRectangle(static_cast<float>(getWidth()-224),17.f,188.f,38.f,6.f);
-            g.setColour(juce::Colour(0xffa7d6c4));g.setFont(theme.font(12.f));
+            g.setColour(juce::Colour(0xff3df36e));g.setFont(theme.font(12.f));
             g.drawText(juce::String(sampleRate()/1000,1)+" kHz  /  STEREO",getWidth()-215,22,169,26,juce::Justification::centred);
         }
         const int dock=getHeight()-174,cell=(getWidth()-64)/4;
