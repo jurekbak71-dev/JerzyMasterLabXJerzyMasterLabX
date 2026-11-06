@@ -26,7 +26,10 @@ public:
  juce::Font getTextButtonFont(juce::TextButton&,int) override {return font(12.f);}
  juce::Font getComboBoxFont(juce::ComboBox&) override{return font(13.f);}
  void drawComboBox(juce::Graphics& g,int w,int h,bool,int,int,int,int,juce::ComboBox& box)override{
-  g.setColour(juce::Colour(0xff24272f));g.fillRoundedRectangle(.5f,.5f,w-1.f,h-1.f,h*.48f);
+  // Recessed hardware selector with a clear machined edge.
+  g.setGradientFill(juce::ColourGradient(juce::Colour(0xff344350),0.f,0.f,juce::Colour(0xff101820),0.f,static_cast<float>(h),false));
+  g.fillRoundedRectangle(.5f,.5f,w-1.f,h-1.f,5.f);
+  g.setColour(juce::Colour(0xff63788a));g.drawRoundedRectangle(.5f,.5f,w-1.f,h-1.f,5.f,.8f);
   const float cx=w-17.f,cy=h*.5f;const bool lit=box.isPopupActive()||box.isMouseOver(true)||box.hasKeyboardFocus(true);
   g.setColour(juce::Colour(lit?0xff3c645e:0xff323841));g.fillEllipse(cx-8,cy-8,16,16);
   if(lit){g.setColour(juce::Colour(0xff82dfcd).withAlpha(.13f));g.fillEllipse(cx-6,cy-6,12,12);}
@@ -39,8 +42,12 @@ public:
  }
  void drawButtonBackground(juce::Graphics& g,juce::Button& button,const juce::Colour&,bool hover,bool down) override {
   auto r=button.getLocalBounds().toFloat().reduced(.5f);const bool active=button.getToggleState(),primary=button.getComponentID()=="brain-apply"||button.getComponentID()=="brain-analyse";
-  g.setColour(juce::Colour(active?0xff31504d:(primary?0xff315b55:(hover||down?0xff353b45:0xff242830))).withAlpha(button.isEnabled()?1.f:.35f));g.fillRoundedRectangle(r,r.getHeight()*.5f);
-  if(button.hasKeyboardFocus(true)){g.setColour(juce::Colour(0xff73ddce));g.drawRoundedRectangle(r,r.getHeight()*.5f,1);}
+  const auto upper=juce::Colour(active?0xff35695f:(primary?0xff356a63:(hover||down?0xff3b5363:0xff344453)));
+  const auto lower=juce::Colour(active?0xff183d37:(primary?0xff21443e:0xff131b25));
+  g.setGradientFill(juce::ColourGradient(upper.withAlpha(button.isEnabled()?1.f:.35f),r.getX(),r.getY(),lower,r.getX(),r.getBottom(),false));
+  g.fillRoundedRectangle(r,5.f);
+  g.setColour(juce::Colour(active?0xffa2d8c8:0xff526b7b));g.drawRoundedRectangle(r,5.f,1.f);
+  if(button.hasKeyboardFocus(true)){g.setColour(juce::Colour(0xff73ddce));g.drawRoundedRectangle(r.reduced(2.f),4.f,1.3f);}
  }
  void drawRotarySlider(juce::Graphics& g,int x,int y,int width,int height,
                        float position,float start,float end,juce::Slider& slider) override {
