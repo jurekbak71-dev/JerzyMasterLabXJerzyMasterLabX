@@ -131,6 +131,13 @@ public:
                           11.f+layer*.45f,1.35f);
   }
   if(!glassScreen_.isNull())g.drawImage(glassScreen_,rect);
+  // Guarantee dark optical contrast even when an embedded image fails to load
+  // or graphics backend composites a transparent source unexpectedly.
+  g.setGradientFill(juce::ColourGradient(juce::Colour(0xff071320),rect.getX(),rect.getY(),
+                                         juce::Colour(0xff0a2335),rect.getX(),rect.getBottom(),false));
+  g.fillRoundedRectangle(rect.reduced(3.f),9.f);
+  g.setColour(juce::Colour(0xff023f62).withAlpha(.7f));
+  g.drawRoundedRectangle(rect.reduced(5.f),8.f,1.f);
   g.setColour(juce::Colour(0xff06cfff).withAlpha(.85f));
   g.drawRoundedRectangle(rect.reduced(2.f),10.f,1.15f);
   g.setColour(juce::Colour(0xff7deaff).withAlpha(.34f));
