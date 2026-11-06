@@ -91,7 +91,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Concept-C-JUCE-GUI-screenshots
-          path: build-plugin/*-smoke.png
+          path: |
+            build-plugin/*-smoke.png
+            build-plugin/console-*.png
           if-no-files-found: error
       - name: Download pluginval 1.0.3
         shell: pwsh
