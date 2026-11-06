@@ -12,6 +12,7 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
   AnalogColorSettings a;a.enabled=v(191)>.5f&&v(192)>.5f;a.mode=static_cast<AnalogColorMode>(std::clamp(static_cast<int>(v(193)),0,3));a.driveDb=v(194);a.bias=v(195);a.tone=v(196);a.dynamics=v(197);a.mix=v(198);a.outputDb=v(199);a.autoGain=v(200)>.5f;a.impact=v(202);engine.analogColorSettings(a);
   BassArchitectSettings b;b.enabled=v(203)>.5f&&v(204)>.5f;b.sub=v(205);b.body=v(206);b.harmonics=v(207);b.monoBass=v(208);b.mix=v(209);b.outputDb=v(210);engine.bassArchitectSettings(b);
   TransientSculptorSettings t;t.enabled=v(211)>.5f&&v(212)>.5f;for(size_t k=0;k<3;++k){t.attack[k]=v(213+k);t.sustain[k]=v(216+k);}t.mix=v(219);t.outputDb=v(220);engine.transientSculptorSettings(t);
+  FinalTruePeakSettings tp;tp.enabled=v(221)>.5f&&v(222)>.5f;tp.ceilingDb=v(223);tp.releaseMs=v(224);tp.driveDb=v(225);engine.finalTruePeakSettings(tp);
   engine.routing(static_cast<int>(v(138)),v(6)>.5f);
 }
 template<class Getter> void configureGraph(SerialGraph& engine,Getter v) noexcept {
