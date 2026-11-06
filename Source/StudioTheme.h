@@ -99,6 +99,8 @@ public:
      MasterLabGuiAssets::glass_overlay_png,MasterLabGuiAssets::glass_overlay_pngSize)};
  juce::Image glassReadout_{juce::ImageCache::getFromMemory(
      MasterLabGuiAssets::glass_readout_png,MasterLabGuiAssets::glass_readout_pngSize)};
+ juce::Image glassReadoutReflection_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::glass_readout_overlay_png,MasterLabGuiAssets::glass_readout_overlay_pngSize)};
  juce::Image moduleGlowOn_{juce::ImageCache::getFromMemory(
      MasterLabGuiAssets::module_glow_on_png,MasterLabGuiAssets::module_glow_on_pngSize)};
  juce::Image moduleGlowOff_{juce::ImageCache::getFromMemory(
@@ -181,6 +183,10 @@ public:
    g.setColour(label.isEnabled()?juce::Colour(0xffb5f1ff):juce::Colour(0xff607887));
    g.setFont(font(juce::jmin(14.f,area.getHeight()*.65f)));
    g.drawFittedText(label.getText(),label.getLocalBounds().reduced(3,0),label.getJustificationType(),1);
+   // Transparent optical layer above live text, never hardcode parameter values.
+   if(!glassReadoutReflection_.isNull()){
+    g.setOpacity(.33f);g.drawImage(glassReadoutReflection_,area);g.setOpacity(1.f);
+   }
    return;
   }
   juce::LookAndFeel_V4::drawLabel(g,label);
