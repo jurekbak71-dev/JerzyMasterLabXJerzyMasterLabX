@@ -168,6 +168,28 @@ public:
  void finishUiTransaction(){state.copyState();undoManager.beginNewTransaction();}
  bool undo(){state.copyState();bool changed=undoManager.undo();undoManager.beginNewTransaction();return changed;}
  bool redo(){state.copyState();bool changed=undoManager.redo();undoManager.beginNewTransaction();return changed;}
+ // Factory preset 0: reset every real host parameter to its declared JUCE
+ // default. Preserve host state schema and saved .jmlx files. One Undo action.
+ bool loadFactoryDefaultUI(){
+  const auto hostParameters=getParameters();
+  bool changed=false;
+  for(auto* p:hostParameters)
+   changed|=std::abs(p->getValue()-p->getDefaultValue())>1.0e-6f;
+  brain.clearUI();
+  brainBaseline.clear();brainAuditionValues.clear();brainAuditionVariant=-1;
+  brainActionMessage="DEFAULT 0: factory settings restored.";
+  if(!changed)return true;
+  beginUiTransaction("NEW / DEFAULT 0");
+  for(auto* p:hostParameters){
+   if(std::abs(p->getValue()-p->getDefaultValue())<=1.0e-6f)continue;
+   p->beginChangeGesture();
+   p->setValueNotifyingHost(p->getDefaultValue());
+   p->endChangeGesture();
+  }
+  finishUiTransaction();
+  resetMeterRequest.store(true);
+  return true;
+ }
  bool applyPreset(const void* data,int size){
   auto validated=parseState(data,size);if(!validated.isValid())return false;
   beginUiTransaction("Load preset");
