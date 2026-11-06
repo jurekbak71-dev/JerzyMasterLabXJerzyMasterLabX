@@ -37,17 +37,31 @@ public:
   g.setColour(juce::Colour(lit?0xffa2f3df:0xff849b98).withAlpha(box.isEnabled()?1.f:.35f));g.fillEllipse(cx-2,cy-2,4,4);
   if(box.hasKeyboardFocus(true)){g.setColour(juce::Colour(0xff73ddce));g.drawRoundedRectangle(.5f,.5f,w-1.f,h-1.f,h*.48f,1);}
  }
- void drawToggleButton(juce::Graphics& g,juce::ToggleButton& b,bool hover,bool)override{
-  // State comes from the real JUCE button / APVTS attachment; PNGs are decorative only.
+ void drawToggleButton(juce::Graphics& g,juce::ToggleButton& b,bool hover,bool down)override{
+  // Full button rectangle (including the label) is an interactive hit target.
+  // Every caption is rendered over a dark inset, with WCAG-friendly contrast.
+  auto bounds=b.getLocalBounds().toFloat().reduced(.5f);
+  g.setColour(juce::Colour(hover?0xff20384b:0xff142537));
+  g.fillRoundedRectangle(bounds,6.f);
+  g.setColour(juce::Colour(b.getToggleState()?0xff4b8ea4:0xff546679));
+  g.drawRoundedRectangle(bounds,6.f,hover?1.4f:.8f);
+  const int side=juce::jlimit(17,22,b.getHeight()-10);
+  const int lampX=7,lampY=(b.getHeight()-side)/2;
   auto& lamp=b.hasKeyboardFocus(true)?blueOn_:(b.getToggleState()?greenOn_:greenOff_);
   if(!lamp.isNull()){
-   const int side=juce::jmin(27,b.getHeight());
-   g.setOpacity(b.isEnabled()?1.f:.3f);
-   g.drawImage(lamp,0,(b.getHeight()-side)/2,side,side,0,0,lamp.getWidth(),lamp.getHeight());
+   g.setOpacity(b.isEnabled()?1.f:.7f);
+   g.drawImage(lamp,lampX,lampY,side,side,0,0,lamp.getWidth(),lamp.getHeight());
    g.setOpacity(1.f);
   }
-  g.setFont(font(12.f));g.setColour(juce::Colour(hover?0xff101c28:0xff25394c).withAlpha(b.isEnabled()?1.f:.5f));
-  g.drawText(b.getButtonText(),32,0,b.getWidth()-32,b.getHeight(),juce::Justification::left);
+  g.setFont(font(juce::jmin(15.f,juce::jmax(13.f,static_cast<float>(b.getHeight())*.43f))));
+  g.setColour(juce::Colour(b.isEnabled()?0xffedf6ff:0xffabb9c8));
+  g.drawFittedText(b.getButtonText(),juce::Rectangle<int>(lampX+side+7,0,
+                 juce::jmax(1,b.getWidth()-lampX-side-13),b.getHeight()),
+                 juce::Justification::centredLeft,1);
+  if(down||b.hasKeyboardFocus(true)){
+   g.setColour(juce::Colour(0xff6bdaff));
+   g.drawRoundedRectangle(bounds.reduced(2.f),5.f,1.4f);
+  }
  }
  void drawButtonBackground(juce::Graphics& g,juce::Button& button,const juce::Colour&,bool hover,bool down) override {
   auto r=button.getLocalBounds().toFloat().reduced(.5f);const bool active=button.getToggleState(),primary=button.getComponentID()=="brain-apply"||button.getComponentID()=="brain-analyse";
