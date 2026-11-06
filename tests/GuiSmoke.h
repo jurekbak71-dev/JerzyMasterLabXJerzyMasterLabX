@@ -178,6 +178,17 @@ class GuiSmoke final : private juce::Timer {
             editor->setSize(1000,700);
             auto image=editor->createComponentSnapshot(editor->getLocalBounds());
             if(!image.isValid())return false;
+            int powderPixels=0,bluePixels=0;
+            for(int y=140;y<image.getHeight()-10;y+=2)
+                for(int x=15;x<image.getWidth()-15;x+=2){
+                    auto px=image.getPixelAt(x,y);
+                    if(px.getRed()>187&&px.getGreen()>190&&px.getBlue()>190)++powderPixels;
+                    if(px.getBlue()>130&&px.getBlue()>px.getRed()+45&&px.getBlue()>px.getGreen()+20)++bluePixels;
+                }
+            if(powderPixels<8000||bluePixels<100){
+                std::cerr<<"Concept C material or blue LED pixels missing (powder="
+                         <<powderPixels<<", blue="<<bluePixels<<")\n";return false;
+            }
             const auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/console-smoke.png");
             output.getParentDirectory().createDirectory();
             juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();
