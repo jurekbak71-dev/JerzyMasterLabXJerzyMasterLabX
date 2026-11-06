@@ -51,7 +51,7 @@ class Editor final : public juce::AudioProcessorEditor,
     std::unique_ptr<ComboAttachment> typeAttachment;
     std::unique_ptr<ButtonAttachment> bandEnabledAttachment;
     juce::TextButton resetMetersButton{"RESET METERS"};
-    juce::TextButton undoButton{"Undo"},redoButton{"Redo"},presetButton{"Presets"};
+    juce::TextButton undoButton{"Undo"},redoButton{"Redo"},presetButton{"Presets"},newButton{"NEW"};
     std::unique_ptr<juce::FileChooser> presetChooser;
     juce::TextButton eqView{"Spectral EQ"}, limiterView{"Limiter"}, inspectorView{"Inspector"}, brainView{"Master Brain"};
     bool showingLimiter=false,showingInspector=false,showingBrain=false;
@@ -489,15 +489,22 @@ public:
         eqView.onClick=[this]{showLimiter(false);};limiterView.onClick=[this]{showLimiter(true);};
         eqView.setClickingTogglesState(false);limiterView.setClickingTogglesState(false);
         addAndMakeVisible(resetMetersButton);resetMetersButton.setComponentID("reset-meters");resetMetersButton.onClick=[this]{processor.resetMeterRequest.store(true);};resetMetersButton.setTooltip("Reset RMS, sample peaks and LUFS at the next audio callback. Audio settings and processing are preserved.");resetMetersButton.setVisible(false);
-        addAndMakeVisible(undoButton);addAndMakeVisible(redoButton);addAndMakeVisible(presetButton);
+        addAndMakeVisible(undoButton);addAndMakeVisible(redoButton);addAndMakeVisible(presetButton);addAndMakeVisible(newButton);
         undoButton.setComponentID("undo");redoButton.setComponentID("redo");presetButton.setComponentID("preset");
+        newButton.setComponentID("factory-default");
+        newButton.setTooltip("NEW / preset 0: restore every factory parameter, clear Master Brain, and keep saved presets. Undo restores previous settings.");
+        newButton.onClick=[this]{endDrag();processor.loadFactoryDefaultUI();refreshBrain();repaint();};
         undoButton.onClick=[this]{endDrag();processor.undo();};redoButton.onClick=[this]{endDrag();processor.redo();};
         undoButton.setTooltip("Undo the last parameter transaction. Host automation may also be recorded while it runs.");
         redoButton.setTooltip("Redo an undone transaction.");
         presetButton.onClick=[this]{
-            juce::PopupMenu menu;menu.addItem(1,"Load preset...");menu.addItem(2,"Save preset...");
+            juce::PopupMenu menu;menu.addItem(0,"0  Default / NEW");menu.addSeparator();menu.addItem(1,"Load preset...");menu.addItem(2,"Save preset...");
             auto safe=juce::Component::SafePointer<Editor>(this);
-            menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(presetButton),[safe](int selection){if(safe&&(selection==1||selection==2))safe->choosePreset(selection==2);});
+            menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(presetButton),[safe](int selection){
+                if(!safe)return;
+                if(selection==0){safe->endDrag();safe->processor.loadFactoryDefaultUI();safe->refreshBrain();safe->repaint();}
+                else if(selection==1||selection==2)safe->choosePreset(selection==2);
+            });
         };
         addAndMakeVisible(brainView);brainView.setComponentID("view-brain");brainView.onClick=[this]{showBrain();};
         for(size_t i=0;i<masterlab::brainGenres.size();++i)brainGenre.addItem(masterlab::brainGenres[i],static_cast<int>(i)+1);
@@ -544,7 +551,8 @@ public:
     ~Editor() override {stopTimer();endDrag();setLookAndFeel(nullptr);}
     void resized() override {
         resetMetersButton.setBounds(getWidth()-210,136,186,26);
-        presetButton.setBounds(224,14,94,26);undoButton.setBounds(328,14,50,26);redoButton.setBounds(388,14,50,26);
+        newButton.setBounds(211,13,52,30);presetButton.setBounds(267,13,89,30);
+        undoButton.setBounds(360,13,40,30);redoButton.setBounds(404,13,40,30);
         eqView.setBounds(getWidth()-432,48,98,26);limiterView.setBounds(getWidth()-326,48,98,26);inspectorView.setBounds(getWidth()-220,48,98,26);brainView.setBounds(getWidth()-114,48,98,26);
         const int brainCell=(getWidth()-80)/4;
         for(int i=0;i<4;++i)brainLabels[static_cast<size_t>(i)].setBounds(40+i*brainCell,166,brainCell-12,20);
