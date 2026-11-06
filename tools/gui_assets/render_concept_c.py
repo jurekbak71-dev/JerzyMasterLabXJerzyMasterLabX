@@ -80,6 +80,29 @@ def led_ring(size,color):
     blur.alpha_composite(glow)
     return blur.resize((size,size),Image.Resampling.LANCZOS)
 
+def analog_meter_bezel():
+    """Locked-frame, high-res PNG faceplate; live needle is drawn by JUCE."""
+    width,height=504,392
+    im=Image.new("RGBA",(width,height),(0,0,0,0))
+    dr=ImageDraw.Draw(im,"RGBA")
+    dr.rounded_rectangle((2,2,width-3,height-3),radius=28,fill=(68,76,83,255),
+                         outline=(18,25,32,255),width=6)
+    dr.rounded_rectangle((12,12,width-13,height-13),radius=22,fill=(164,174,182,255),
+                         outline=(220,228,232,255),width=5)
+    dr.rounded_rectangle((26,24,width-27,height-28),radius=18,fill=(24,32,40,255),
+                         outline=(96,111,123,255),width=5)
+    dr.rounded_rectangle((36,34,width-37,height-39),radius=12,fill=(235,220,188,255),
+                         outline=(110,93,77,255),width=4)
+    for y in range(47,height-44,3):
+        alpha=int(26*(y-47)/max(1,height-90))
+        dr.line((48,y,width-48,y),fill=(124,101,72,alpha),width=2)
+    # Four hardware mounting screws, in separate recessed corners.
+    for cx,cy in ((20,20),(width-20,20),(20,height-20),(width-20,height-20)):
+        dr.ellipse((cx-11,cy-11,cx+11,cy+11),fill=(43,53,64,255))
+        dr.ellipse((cx-7,cy-7,cx+7,cy+7),fill=(197,208,215,255))
+        dr.line((cx-4,cy+4,cx+4,cy-4),fill=(62,73,84,255),width=3)
+    return im
+
 for size in (96,160):
     atlas = Image.new("RGBA",(size*11,size*10),(0,0,0,0))
     for i in range(101):
@@ -101,6 +124,7 @@ for y in range(128):
     t=y/127
     d.line((0,y,127,y),fill=(int(244-10*t),int(246-10*t),int(247-10*t),255))
 save(tile,"powdercoat_tile.png","background")
+save(analog_meter_bezel(),"analog_gr_bezel.png","meter_bezel",live_needle=True)
 with (OUT/"manifest.json").open("w",encoding="utf-8") as f:
     json.dump(SPEC,f,indent=2)
 print(f"Created {len(SPEC['assets'])} RGBA images in {OUT}")
