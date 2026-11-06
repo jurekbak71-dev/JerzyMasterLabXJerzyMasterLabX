@@ -294,15 +294,30 @@ class GuiSmoke final : private juce::Timer {
         }
         auto* a=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-audition-a"));
         auto* b=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-audition-b"));
-        if(!a||!b||!a->isVisible()||!b->isVisible()||!a->isEnabled()||!b->isEnabled())
-            return false;
-        a->onClick();if(!report->getText().contains("Audition A is live"))return false;
-        b->onClick();if(!report->getText().contains("Audition B is live")||!apply->isEnabled())return false;
+        if(!a||!b||!a->isVisible()||!b->isVisible()||!a->isEnabled()||!b->isEnabled()){
+            std::cerr<<"Brain GUI A/B control state failed: A "<<(a&&a->isVisible())<<"/"<<(a&&a->isEnabled())
+                     <<" B "<<(b&&b->isVisible())<<"/"<<(b&&b->isEnabled())
+                     <<"\n"<<report->getText()<<"\n";return false;
+        }
+        a->onClick();
+        if(!report->getText().contains("Audition A is live")){
+            std::cerr<<"Brain GUI Audition A failed: "<<report->getText()<<"\n";return false;
+        }
+        b->onClick();
+        if(!report->getText().contains("Audition B is live")||!apply->isEnabled()){
+            std::cerr<<"Brain GUI Audition B failed: "<<report->getText()<<"\n";return false;
+        }
         apply->onClick();
-        if(!report->getText().contains("APPLIED")||apply->isEnabled())return false;
+        if(!report->getText().contains("APPLIED")||apply->isEnabled()){
+            std::cerr<<"Brain GUI Apply failed: "<<report->getText()<<"\n";return false;
+        }
         dynamic_cast<juce::Button*>(editor->findChildWithID("undo"))->onClick();
-        for(int i=0;i<processor.getParameters().size();++i)if(processor.getParameters()[i]->getValue()!=brainBefore[static_cast<size_t>(i)])return false;
-        if(actual("limiterDrive")!=driveBefore||actual("gain16")!=gainBefore)return false;
+        for(int i=0;i<processor.getParameters().size();++i)if(processor.getParameters()[i]->getValue()!=brainBefore[static_cast<size_t>(i)]){
+            std::cerr<<"Brain GUI Undo failed parameter index "<<i<<"\n";return false;
+        }
+        if(actual("limiterDrive")!=driveBefore||actual("gain16")!=gainBefore){
+            std::cerr<<"Brain GUI Undo failed limiterDrive or gain16\n";return false;
+        }
         eq->onClick();if(!frequency->isVisible()||drive->isVisible()||release->isVisible())return false;
         return true;
     }
