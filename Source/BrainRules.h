@@ -90,26 +90,6 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
   if(wanted<0)p.warnings.push_back("Input is already above the selected target. Drive cannot attenuate it; lower input gain in the DAW.");
   if(wanted>p.drive+.5f)p.warnings.push_back("Drive was restricted to protect dynamics. The requested loudness may not be reached.");
  }else p.reasons.push_back("Limiter excluded: its settings and chain order are preserved.");
- // Sectional whole-track diagnostics from every captured 3-second window.
- if(f.detail.sectionLevelsDb.size()>1){
-  const auto& levels=f.detail.sectionLevelsDb;
-  float loudest=*std::max_element(levels.begin(),levels.end());
-  float quietest=*std::min_element(levels.begin(),levels.end());
-  int peakSection=static_cast<int>(std::max_element(levels.begin(),levels.end())-levels.begin());
-  int lowSection=static_cast<int>(std::min_element(levels.begin(),levels.end())-levels.begin());
-  p.reasons.push_back("Whole capture: "+std::to_string(levels.size())+
-    " consecutive ~3-second sections; loudest section near "+std::to_string(peakSection*3)+
-    "s ("+std::to_string(loudest)+" dB), quietest near "+std::to_string(lowSection*3)+
-    "s ("+std::to_string(quietest)+" dB).");
-  if(loudest-quietest>12.f)p.warnings.push_back(
-   "Large section-to-section level contrast (>12 dB): review quiet and loud parts before applying one master.");
-  if(f.detail.sectionJumpDb>9.f)p.warnings.push_back(
-   "Abrupt level transition between adjacent sections: review arrangements and limiter pumping.");
- }
- if(f.detail.windowSpreadDb<2.f&&f.peak>0.2f)p.warnings.push_back(
-  "Low short-window dynamic contrast: potential overcompression, verify perceived punch.");
- if(f.correlation<-.15f)p.warnings.push_back(
-  "Strong negative stereo correlation: check phase and mono fold-down.");
  if(f.correlation<0)p.warnings.push_back("Negative input correlation: check mono compatibility. Narrowing can help mono compatibility but cannot reconstruct missing phase information.");
  if(f.clips)p.warnings.push_back("Input samples exceeded 0 dBFS. Reduce upstream level; lost transients cannot be recovered by these rules.");
  p.warnings.push_back("Genre/style profiles are explicit DSP heuristics, not a trained AI model. Analog selects gentle settings and Analog compressor when selected; no standalone Analog Laboratory is added.");
@@ -148,6 +128,26 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
  // Only change the full topology when all families are under Brain control.
  if(c.useEq&&c.useLimiter&&c.useStereo&&c.useDynamics&&c.useDynamicEq&&c.useStabilizer){add("chainOrder",0);p.reasons.push_back("Proposed order: Stabilizer, Dynamic EQ, Dynamics, Imager, EQ, Limiter; absent modules are skipped. Limiter is last. One instance per family is currently supported.");}
  refineDetailedProposal(p,f,c);
+ // Sectional whole-track diagnostics from every captured 3-second window.
+ if(f.detail.sectionLevelsDb.size()>1){
+  const auto& levels=f.detail.sectionLevelsDb;
+  float loudest=*std::max_element(levels.begin(),levels.end());
+  float quietest=*std::min_element(levels.begin(),levels.end());
+  int peakSection=static_cast<int>(std::max_element(levels.begin(),levels.end())-levels.begin());
+  int lowSection=static_cast<int>(std::min_element(levels.begin(),levels.end())-levels.begin());
+  p.reasons.push_back("Whole capture: "+std::to_string(levels.size())+
+    " consecutive ~3-second sections; loudest section near "+std::to_string(peakSection*3)+
+    "s ("+std::to_string(loudest)+" dB), quietest near "+std::to_string(lowSection*3)+
+    "s ("+std::to_string(quietest)+" dB).");
+  if(loudest-quietest>12.f)p.warnings.push_back(
+   "Large section-to-section level contrast (>12 dB): review quiet and loud parts before applying one master.");
+  if(f.detail.sectionJumpDb>9.f)p.warnings.push_back(
+   "Abrupt level transition between adjacent sections: review arrangements and limiter pumping.");
+ }
+ if(f.detail.windowSpreadDb<2.f&&f.peak>0.2f)p.warnings.push_back(
+  "Low short-window dynamic contrast: potential overcompression, verify perceived punch.");
+ if(f.correlation<-.15f)p.warnings.push_back(
+  "Strong negative stereo correlation: check phase and mono fold-down.");
  p.valid=(c.useEq||c.useLimiter||c.useStereo||c.useDynamics||c.useDynamicEq||c.useStabilizer);return p;
 }
 }
