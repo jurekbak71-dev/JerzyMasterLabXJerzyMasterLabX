@@ -70,6 +70,13 @@ public:
      MasterLabGuiAssets::led_green_off_png,MasterLabGuiAssets::led_green_off_pngSize)};
  juce::Image blueOn_{juce::ImageCache::getFromMemory(
      MasterLabGuiAssets::led_blue_on_png,MasterLabGuiAssets::led_blue_on_pngSize)};
+ juce::Image redOn_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::led_red_on_png,MasterLabGuiAssets::led_red_on_pngSize)};
+ void paintStatusLed(juce::Graphics& g,int x,int y,int size,bool warning)const{
+  const auto& sprite=warning?redOn_:greenOn_;
+  if(!sprite.isNull())
+   g.drawImage(sprite,x,y,size,size,0,0,sprite.getWidth(),sprite.getHeight());
+ }
  void drawRotarySlider(juce::Graphics& g,int x,int y,int width,int height,
                        float position,float,float,juce::Slider& slider) override {
   if(width<24||height<24)return;
