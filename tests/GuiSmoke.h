@@ -193,6 +193,17 @@ class GuiSmoke final : private juce::Timer {
             output.getParentDirectory().createDirectory();
             juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();
             if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return false;
+            // Store actual host-sized console renders for large and minimum supported viewport.
+            for(const auto dim:{juce::Point<int>{750,550},juce::Point<int>{1400,1000}}){
+                editor->setSize(dim.x,dim.y);
+                auto visual=editor->createComponentSnapshot(editor->getLocalBounds());
+                if(!visual.isValid())return false;
+                const auto file=juce::File::getCurrentWorkingDirectory().getChildFile(
+                    "build-plugin/console-"+juce::String(dim.x)+"x"+juce::String(dim.y)+".png");
+                juce::FileOutputStream out(file);out.truncate();
+                if(!juce::PNGImageFormat{}.writeImageToStream(visual,out))return false;
+            }
+            editor->setSize(1000,700);
             // Nine real OPEN actions must leave the overview and enter existing module pages.
             for(int i=0;i<9;++i){
                 auto* button=dynamic_cast<juce::Button*>(overview->findChildWithID("console-open-"+juce::String(i)));
