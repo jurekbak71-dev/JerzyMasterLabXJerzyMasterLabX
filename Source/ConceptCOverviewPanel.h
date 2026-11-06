@@ -162,8 +162,8 @@ public:
         const float top=H*.305f+25.f,centreHeight=H*.25f;
         const juce::Rectangle<float> pane(12.f,top,W-24.f,centreHeight);
         theme_.paintGlassScreen(g,pane);
-        g.setColour(juce::Colour(0xff04b8ff).withAlpha(.7f));g.drawRoundedRectangle(pane,9.f,1.f);
-        g.setFont(theme_.font(12.f));g.setColour(juce::Colour(0xff1d91ff));
+        // LCD hardware faceplate: etched cyan label stays legible over glass.
+        g.setFont(theme_.font(12.f));g.setColour(juce::Colour(0xffe4f8ff));
         g.drawText("MASTER MONITOR / LIVE DSP",static_cast<int>(pane.getX()+18),
                    static_cast<int>(pane.getY()+10),static_cast<int>(pane.getWidth()-36),24,
                    juce::Justification::left);
@@ -181,7 +181,16 @@ public:
         const float plotW=juce::jmax(80.f,pane.getWidth()*.59f-26.f);
         const float plotH=juce::jmax(34.f,pane.getHeight()-69.f);
         const juce::Rectangle<float> plot(plotX,plotY,plotW,plotH);
-        g.setColour(juce::Colour(0xff0c1825));g.fillRoundedRectangle(plot,4.f);
+        g.setGradientFill(juce::ColourGradient(juce::Colour(0xff071321),plotX,plotY,
+                     juce::Colour(0xff0c2b43),plotX,plot.getBottom(),false));
+        g.fillRoundedRectangle(plot,5.f);
+        g.setColour(juce::Colour(0xff1b7298).withAlpha(.72f));
+        g.drawRoundedRectangle(plot,5.f,1.f);
+        for(int tick=1;tick<8;++tick){
+            const float x=plotX+tick*plotW/8.f;
+            g.setColour(juce::Colour(0xff1c5672).withAlpha(.33f));
+            g.drawVerticalLine(juce::roundToInt(x),plotY,plot.getBottom());
+        }
         for(int tick=1;tick<4;++tick){
             const float y=plotY+tick*plotH/4.f;
             g.setColour(juce::Colour(0xff273c4e));g.drawHorizontalLine(static_cast<int>(y),plotX,plotX+plotW);
@@ -200,7 +209,10 @@ public:
             g.setColour(juce::Colour(0xff047cff).withAlpha(.22f));
             juce::Path area=p;area.lineTo(plot.getRight(),plot.getBottom());
             area.lineTo(plot.getX(),plot.getBottom());area.closeSubPath();g.fillPath(area);
-            g.setColour(juce::Colour(0xff3bbcff));g.strokePath(p,juce::PathStrokeType(1.5f));
+            g.setColour(juce::Colour(0xff00b9ff).withAlpha(.16f));
+            g.strokePath(p,juce::PathStrokeType(6.f));
+            g.setColour(juce::Colour(0xff4bdfff));
+            g.strokePath(p,juce::PathStrokeType(1.7f));
         }else{
             g.setColour(juce::Colour(0xff7294aa));g.setFont(theme_.font(10.f));
             g.drawText("Waiting for audio / FFT",plot.toNearestInt(),juce::Justification::centred);
@@ -214,8 +226,10 @@ public:
             }
             juce::Graphics::ScopedSaveState clip(g);
             g.reduceClipRegion(plot.toNearestInt());
-            g.setColour(juce::Colour(0xffff4056));
-            g.strokePath(eq,juce::PathStrokeType(1.8f));
+            g.setColour(juce::Colour(0xffff455e).withAlpha(.24f));
+            g.strokePath(eq,juce::PathStrokeType(4.2f));
+            g.setColour(juce::Colour(0xffff5365));
+            g.strokePath(eq,juce::PathStrokeType(1.6f));
         }
         const float statX=plot.getRight()+18.f;
         const float statW=juce::jmax(80.f,pane.getRight()-statX-13.f);
@@ -230,18 +244,23 @@ public:
         const std::array<const char*,4> labels{{
             "INPUT PEAK","OUTPUT PEAK","LOUDNESS I","TRUE-PEAK GR"
         }};
+        // LCD stats are deliberately unobstructed by glass glare.
+        g.setColour(juce::Colour(0xff30bde8).withAlpha(.28f));
+        g.drawVerticalLine(juce::roundToInt(statX-9.f),statY,statY+cellH*2.f-4.f);
+        g.drawVerticalLine(juce::roundToInt(statX+cellW-7.f),statY+2.f,statY+cellH*2.f-4.f);
+        g.drawHorizontalLine(juce::roundToInt(statY+cellH-5.f),statX,statX+statW-8.f);
         for(int c=0;c<4;++c){
             const int x=juce::roundToInt(statX+(c%2)*cellW);
             const int y=juce::roundToInt(statY+(c/2)*cellH);
             const int w=juce::roundToInt(cellW-8.f);
-            g.setColour(juce::Colour(0xff9ab1c3));g.setFont(theme_.font(8.f));
+            g.setColour(juce::Colour(0xffb5d5e8));g.setFont(theme_.font(juce::jmin(11.f,cellH*.25f)));
             g.drawFittedText(labels[static_cast<size_t>(c)],x,y,w,13,juce::Justification::left,1);
             g.setColour(juce::Colour(c==3?0xff38e87a:0xffedf7ff));
-            g.setFont(theme_.font(juce::jmin(16.f,cellH*.38f)));
+            g.setFont(theme_.font(juce::jmin(18.f,cellH*.42f)));
             g.drawFittedText(values[static_cast<size_t>(c)],x,y+14,w,
                              juce::jmax(13,juce::roundToInt(cellH*.48f)),juce::Justification::left,1);
         }
-        g.setColour(juce::Colour(0xff7d9aaf));g.setFont(theme_.font(8.f));
+        g.setColour(juce::Colour(0xffa3cbdd));g.setFont(theme_.font(9.f));
         g.drawText("20 Hz                                  FREQUENCY (LOG)                                  20 kHz",
                    static_cast<int>(plotX),static_cast<int>(plot.getBottom()+3.f),
                    static_cast<int>(plotW),13,juce::Justification::centred);
