@@ -125,6 +125,75 @@ for y in range(128):
     d.line((0,y,127,y),fill=(int(244-10*t),int(246-10*t),int(247-10*t),255))
 save(tile,"powdercoat_tile.png","background")
 save(analog_meter_bezel(),"analog_gr_bezel.png","meter_bezel",live_needle=True)
+
+# Glass/LED kit (separate RGBA strata, imported at CMake configure time).
+def segmented_wreath(size, phase):
+    d=size*2; im=Image.new("RGBA",(d,d),(0,0,0,0))
+    layer=Image.new("RGBA",(d,d),(0,0,0,0))
+    draw=ImageDraw.Draw(layer,"RGBA")
+    n=48; count=round(n*phase/100)
+    center=d*.5; r1=d*.411; r2=d*.463
+    for i in range(n):
+        angle=math.radians(-135+270*i/(n-1))
+        p1=(center+math.sin(angle)*r1,center-math.cos(angle)*r1)
+        p2=(center+math.sin(angle)*r2,center-math.cos(angle)*r2)
+        draw.line((*p1,*p2),fill=(57,221,255,255) if i<count else (30,65,87,145),
+                  width=max(2,size//22))
+    glow=layer.filter(ImageFilter.GaussianBlur(max(2,size//15)))
+    glow.putalpha(glow.getchannel("A").point(lambda x: int(x*.66)))
+    im.alpha_composite(glow); im.alpha_composite(layer)
+    return im.resize((size,size),Image.Resampling.LANCZOS)
+
+def recessed_glass(size, overlay=False):
+    w,h=size; im=Image.new("RGBA",(w,h),(0,0,0,0));d=ImageDraw.Draw(im,"RGBA")
+    if not overlay:
+        d.rounded_rectangle((0,0,w-1,h-1),radius=12,fill=(8,21,37,255),
+                            outline=(45,156,200,255),width=3)
+        d.rounded_rectangle((5,5,w-6,h-6),radius=9,outline=(149,201,230,88),width=2)
+    d.polygon(((9,7),(int(w*.55),7),(int(w*.28),int(h*.45)),(6,int(h*.52))),
+              fill=(235,249,255,42 if overlay else 20))
+    d.polygon(((int(w*.81),6),(w-7,6),(w-7,int(h*.42)),(int(w*.68),int(h*.59))),
+              fill=(222,244,255,26 if overlay else 16))
+    return im
+
+def card_glow(on):
+    w,h=320,180; core=Image.new("RGBA",(w,h),(0,0,0,0))
+    d=ImageDraw.Draw(core,"RGBA")
+    d.rounded_rectangle((11,11,w-12,h-12),radius=12,
+                        outline=(8,205,255,230) if on else (65,89,108,95),width=4)
+    glow=core.filter(ImageFilter.GaussianBlur(12))
+    glow.alpha_composite(core)
+    return glow
+
+def switch_sprite(on):
+    w,h=160,70; im=Image.new("RGBA",(w,h),(0,0,0,0));d=ImageDraw.Draw(im,"RGBA")
+    d.rounded_rectangle((3,3,w-4,h-4),radius=11,fill=(25,42,58,255),
+                        outline=(119,149,170,255),width=3)
+    d.rounded_rectangle((9,9,w-10,h-10),radius=8,
+                        fill=(18,91,126,255) if on else (12,22,32,255),
+                        outline=(45,204,249,235) if on else (61,83,98,255),width=2)
+    d.line((16,13,w-17,13),fill=(240,251,255,125),width=2)
+    return im
+
+for size in (96,160):
+    wreath=Image.new("RGBA",(size*11,size*10),(0,0,0,0))
+    for phase in range(101):
+        wreath.alpha_composite(segmented_wreath(size,phase),
+                               ((phase%11)*size,(phase//11)*size))
+    save(wreath,f"led_wreath_{size}_atlas.png","led_ring_atlas",
+         frame_size=size,frames=101,columns=11,rows=10,segments=48)
+for name,im,category in (
+    ("glass_analyzer.png",recessed_glass((720,240)),"glass"),
+    ("glass_overlay.png",recessed_glass((720,240),True),"glass_overlay"),
+    ("glass_readout.png",recessed_glass((240,80)),"glass"),
+    ("glass_readout_overlay.png",recessed_glass((240,80),True),"glass_overlay"),
+    ("module_glow_on.png",card_glow(True),"panel_glow"),
+    ("module_glow_off.png",card_glow(False),"panel_glow"),
+    ("switch_on.png",switch_sprite(True),"switch"),
+    ("switch_off.png",switch_sprite(False),"switch"),
+):
+    save(im,name,category)
+
 with (OUT/"manifest.json").open("w",encoding="utf-8") as f:
     json.dump(SPEC,f,indent=2)
 print(f"Created {len(SPEC['assets'])} RGBA images in {OUT}")
