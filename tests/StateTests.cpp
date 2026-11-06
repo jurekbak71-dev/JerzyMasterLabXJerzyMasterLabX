@@ -48,10 +48,10 @@ int main(){
  juce::MemoryBlock oversized(1024*1024+1,true);target->setStateInformation(oversized.getData(),static_cast<int>(oversized.getSize()));
  if(!unchanged()){std::cerr<<"invalid binary changed settings";return 1;}
  juce::MemoryBlock after;target->getStateInformation(after);auto afterXml=juce::AudioProcessor::getXmlFromBinary(after.getData(),static_cast<int>(after.getSize()));
- if(!afterXml||afterXml->getStringAttribute("schemaVersion")!="15"){std::cerr<<"schema lost";return 1;}
+ if(!afterXml||afterXml->getStringAttribute("schemaVersion")!="16"){std::cerr<<"schema lost";return 1;}
  // Upgrade both previous versions; newly introduced parameters use factory defaults.
- for(int version:{1,2,3,4,5,6,7,8,9,10,11,12,13,14}){
-  const int count=version==1?52:(version==2?54:(version==3?86:(version==4?138:(version==5?161:(version==6?162:(version==7?163:(version==8?176:(version==9?179:(version==10?180:(version==11?191:(version==12?201:(version==13?203:211))))))))))));
+ for(int version:{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15}){
+  const int count=version==1?52:(version==2?54:(version==3?86:(version==4?138:(version==5?161:(version==6?162:(version==7?163:(version==8?176:(version==9?179:(version==10?180:(version==11?191:(version==12?201:(version==13?203:(version==14?211:221)))))))))))));
   auto legacy=original.createCopy();legacy.setProperty("schemaVersion",version,nullptr);
   for(int i=count;i<source->getParameters().size();++i){auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(source->getParameters()[i]);legacy.removeChild(legacy.getChildWithProperty("id",parameter->paramID),nullptr);}
   std::unique_ptr<juce::AudioProcessor> migrated(createPluginFilter());
