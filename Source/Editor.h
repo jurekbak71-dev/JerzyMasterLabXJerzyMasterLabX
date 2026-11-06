@@ -177,7 +177,7 @@ class Editor final : public juce::AudioProcessorEditor,
     void paintBrain(juce::Graphics& g){
         g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);
         g.setColour(panel);g.fillRoundedRectangle(24.f,154.f,getWidth()-48.f,178.f,18);
-        g.setColour(accent);g.setFont(theme.font(12));g.drawText("Master Brain  /  Guided mastering",40,134,getWidth()-80,20,juce::Justification::left);
+        g.setColour(juce::Colour(0xff284760));g.setFont(theme.font(14));g.drawText("Master Brain  /  Guided mastering",40,134,getWidth()-80,20,juce::Justification::left);
         g.setColour(juce::Colour(0xff0a1119));g.fillRoundedRectangle(40.f,294.f,getWidth()-80.f,18.f,4.f);
         if(brainProgress>0){g.setColour(accent.withAlpha(.35f));g.fillRoundedRectangle(40.f,294.f,static_cast<float>((getWidth()-80)*brainProgress),18.f,4.f);}
         g.setColour(juce::Colours::whitesmoke);g.setFont(theme.font(11));g.drawText(brainProgressText,40,294,getWidth()-80,18,juce::Justification::centred);
@@ -203,14 +203,14 @@ class Editor final : public juce::AudioProcessorEditor,
             }
             g.setColour(juce::Colours::whitesmoke);g.strokePath(measured,juce::PathStrokeType(1.5f));g.setColour(accent);g.strokePath(estimated,juce::PathStrokeType(1.8f));
         }else{g.setColour(muted);g.drawFittedText("Play audio and analyse to measure five frequency regions.",36,382,cardWidth-24,cardHeight-48,juce::Justification::centred,3);}
-        g.setColour(muted);g.setFont(theme.font(11));g.drawText("Review all selected processors. Apply can replace settings; one Undo restores them.",40,getHeight()-66,getWidth()-280,36,juce::Justification::left);
-        g.drawText("Explicit DSP rules / no trained AI model / sample-peak limiter",24,getHeight()-25,getWidth()-48,18,juce::Justification::left);
+        g.setColour(juce::Colour(0xff3c5265));g.setFont(theme.font(13));g.drawText("Review all selected processors. Apply can replace settings; one Undo restores them.",40,getHeight()-66,getWidth()-280,36,juce::Justification::left);
+        g.setColour(juce::Colour(0xff435769));g.setFont(theme.font(12));g.drawText("Explicit DSP rules / no trained AI model / sample-peak limiter",24,getHeight()-25,getWidth()-48,18,juce::Justification::left);
     }
     juce::String dbText(float level) const {return level>1e-10f?juce::String(juce::Decibels::gainToDecibels(level),1):juce::String("--");}
     juce::String lufsText(float value) const {return value>-119?juce::String(value,1):juce::String("--");}
     void paintInspector(juce::Graphics& g){
         auto area=plot();const bool compact=area.getHeight()<220;
-        g.setColour(muted);g.setFont(theme.font(12));g.drawText("Master Inspector  /  Input and output",48,144,getWidth()-300,20,juce::Justification::left);
+        g.setColour(juce::Colour(0xff324d64));g.setFont(theme.font(14));g.drawText("Master Inspector  /  Input and output",48,144,getWidth()-300,20,juce::Justification::left);
         for(int i=0;i<2;++i){auto reading=i==0?response.inputReading:response.outputReading;auto loudness=i==0?response.inputLufs:response.outputLufs;float x=24.f+i*(area.getWidth()+48)/2,w=(area.getWidth()+48)/2-10;
             g.setColour(panel);g.fillRoundedRectangle(x,162,w,area.getHeight()+24,8);
             g.setColour(i==0?muted:accent);g.setFont(theme.font(13));g.drawText(i==0?"INPUT":"OUTPUT",static_cast<int>(x)+16,176,static_cast<int>(w)-32,20,juce::Justification::left);
@@ -668,7 +668,7 @@ public:
         g.setColour(panel);g.fillRoundedRectangle(24.f,static_cast<float>(dock),getWidth()-48.f,146.f,20.f);
         const auto modules=chainModules();
         bool first=std::find(modules.begin(),modules.end(),4)<std::find(modules.begin(),modules.end(),3);
-        if(modules.empty()){g.setColour(muted);g.setFont(theme.font(12));g.drawText("Empty chain / use + Modules to add processors",24,84,getWidth()-48,48,juce::Justification::centred);}
+        if(modules.empty()){g.setColour(juce::Colour(0xff344b60));g.setFont(theme.font(14));g.drawText("Empty chain / use + Modules to add processors",24,84,getWidth()-48,48,juce::Justification::centred);}
         for(size_t i=0;i<modules.size();++i){int kind=modules[i];const float width=(getWidth()-48.f)/modules.size(),x=24+i*width;const bool active=(kind<3||kind==5)?moduleView==(kind==5?3:kind):(!showingParallel&&!showingBrain&&!showingInspector&&moduleView<0&&(kind==3?!showingLimiter:showingLimiter));const bool on=processor.state.getRawParameterValue(std::array<const char*,6>{"dynamicEqOn","dynamicsOn","stereoOn","eq","lim","stabilizerOn"}[kind])->load()>.5f;
             const auto colour=kind==4?curve:accent;
             const juce::Rectangle<float> slot(x+1.f,84.f,width-10.f,48.f);
@@ -687,7 +687,7 @@ public:
         if(showingParallel||showingExciter||showingAnalog){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
         if(showingBrain){paintBrain(g);return;}
         if(showingInspector){paintInspector(g);return;}
-        if(showingLimiter){paintLimiter(g);g.setColour(first?curve:muted);g.setFont(theme.font(11));g.drawText(processor.state.getRawParameterValue("routingMode")->load()>.5f?"PARALLEL: limiter ceiling applies to its branch, not the full sum":(first?"Processors after limiter may exceed its ceiling":"SAMPLE PEAK  /  True Peak unavailable"),24,getHeight()-25,getWidth()-48,18,juce::Justification::left);return;}
+        if(showingLimiter){paintLimiter(g);g.setColour(juce::Colour(0xff334e63));g.setFont(theme.font(12));g.drawText(processor.state.getRawParameterValue("routingMode")->load()>.5f?"PARALLEL: limiter ceiling applies to its branch, not the full sum":(first?"Processors after limiter may exceed its ceiling":"SAMPLE PEAK  /  True Peak unavailable"),24,getHeight()-25,getWidth()-48,18,juce::Justification::left);return;}
         auto area=plot();g.setColour(juce::Colour(0xff151920));g.fillRoundedRectangle(area.expanded(24,12),18);
         g.setFont(theme.font(11));
         for(float db:{-18.f,-12.f,-6.f,0.f,6.f,12.f,18.f}){float y=yForGain(db);g.setColour(db==0?juce::Colour(0xff536374):juce::Colour(0xff242a33));g.drawHorizontalLine(static_cast<int>(y),area.getX(),area.getRight());g.setColour(muted);g.drawText(juce::String(db,0),8,static_cast<int>(y)-8,32,16,juce::Justification::right);}
