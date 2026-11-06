@@ -27,6 +27,24 @@ int main(){
  p.startBrainUI(config);wait(p,masterlab::BrainPhase::Analysing);feed(false);wait(p,masterlab::BrainPhase::Ready);
  gain->setValueNotifyingHost(gain->convertTo0to1(3));auto manual=values(p);check(p.brainStaleUI()&&!p.applyBrainUI()&&values(p)==manual,"stale proposal overwrote manual settings");gain->setValueNotifyingHost(gain->convertTo0to1(2));
  check(p.applyBrainUI()&&values(p)!=before,"approved proposal not applied");for(const char* id:{"stereoPresent","dynamicsPresent","dynamicEqPresent"}){float proposed=-1;for(const auto& change:p.brain.readUI().proposal.changes)if(change.first==id)proposed=change.second;check(p.state.getRawParameterValue(id)->load()==proposed,"Brain did not apply its selected module presence");}check(p.undo()&&values(p)==before,"proposal is not one Undo transaction");check(!p.applyBrainUI(),"applied proposal applied twice");
+ // Variant A/B are distinct verified recipes from one capture. Their audition
+ // switches the *actual processor* with reversible host automation.
+ p.startBrainUI(config);wait(p,masterlab::BrainPhase::Analysing);
+ feed(false);auto variants=wait(p,masterlab::BrainPhase::Ready);
+ check(variants.alternateReady&&variants.alternateProposal.previewVerified,
+       "two real DSP-verified mastering variants were not produced");
+ check(variants.features.detail.sectionLevelsDb.size()>=2,
+       "consecutive full-capture loudness sections are unavailable");
+ check(values(p)==before,"A/B preview changed host settings before user request");
+ check(p.auditionBrainUI(0),"audition A failed");
+ auto aValues=values(p);check(aValues!=before,"audition A made no audio-parameter changes");
+ check(p.auditionBrainUI(1),"audition B failed");
+ auto bValues=values(p);check(bValues!=aValues,"audition B did not change the mastering recipe");
+ check(p.brain.readUI().selectedVariant==1&&!p.brainStaleUI(),"B selection stale or lost");
+ check(p.applyBrainUI()&&p.brain.readUI().phase==masterlab::BrainPhase::Applied,
+       "Apply did not commit the audible B mastering result");
+ check(p.undo()&&values(p)==before,"Undo after B Apply did not restore pre-Brain parameters");
+ check(!p.applyBrainUI(),"Apply ran again after the variant was committed");
  // Preview must agree with the actual Processor after applying exactly its settings.
  std::array<float,masterlab::parameterCount> settings{};for(size_t i=0;i<settings.size();++i)settings[i]=p.state.getRawParameterValue(masterlab::parameterId(i))->load();
  // The preceding Undo restored the baseline: verify that state, including existing EQ.
