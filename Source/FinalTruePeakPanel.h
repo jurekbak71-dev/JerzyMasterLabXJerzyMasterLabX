@@ -50,6 +50,41 @@ public:
   g.fillAll(juce::Colour(0xff121c1f));
   g.setColour(juce::Colour(0xffb3e2ce));g.setFont(juce::Font(juce::FontOptions(23.f)));
   g.drawText("FINAL TRUE-PEAK",24,56,getWidth()-48,37,juce::Justification::left);
+  // Live, mechanically styled gain reduction meter; sourced from DSP
+  // telemetry rather than a decorative animation.
+  if(getWidth()>=870){
+   const float cx=static_cast<float>(getWidth()-172),cy=209.f,radius=92.f;
+   const juce::Rectangle<float> bezel(cx-126.f,105.f,252.f,196.f);
+   g.setColour(juce::Colour(0xff070b10));g.fillRoundedRectangle(bezel,16.f);
+   g.setGradientFill(juce::ColourGradient(juce::Colour(0xff414c55),cx,105.f,
+                                        juce::Colour(0xff111920),cx,301.f,false));
+   g.fillRoundedRectangle(bezel.reduced(5.f),12.f);
+   g.setColour(juce::Colour(0xffe6d5b2));
+   g.fillRoundedRectangle(bezel.reduced(13.f),9.f);
+   auto polar=[&](float angle,float r){
+    return juce::Point<float>(cx+std::sin(angle)*r,cy-std::cos(angle)*r);
+   };
+   constexpr float a0=-1.13f,a1=1.13f;
+   for(int tick=0;tick<=9;++tick){
+    const float angle=a0+(a1-a0)*(tick/9.f);
+    auto p1=polar(angle,radius*.70f),p2=polar(angle,radius*.84f);
+    g.setColour(juce::Colour(0xff51463d));g.drawLine({p1,p2},tick%3==0?1.9f:1.f);
+    if(tick%3==0){
+     g.setFont(11.f);
+     g.drawText(juce::String(tick*2),static_cast<int>(p2.x)-14,static_cast<int>(p2.y)-27,28,18,
+                juce::Justification::centred);
+    }
+   }
+   const float reduction=juce::jlimit(0.f,18.f,reading_.gainReductionDb);
+   const float angle=a0+(a1-a0)*reduction/18.f;
+   const auto tip=polar(angle,radius*.76f);
+   g.setColour(juce::Colour(0xff2b333a));g.drawLine({juce::Point<float>(cx+1.f,cy+2.f),tip.translated(1.f,2.f)},3.f);
+   g.setColour(juce::Colour(0xffab332b));g.drawLine({juce::Point<float>(cx,cy),tip},2.2f);
+   g.setColour(juce::Colour(0xff3a302a));g.fillEllipse(cx-5.f,cy-5.f,10.f,10.f);
+   g.setColour(juce::Colour(0xff554738));g.setFont(12.f);
+   g.drawText("GAIN REDUCTION  /  dB",static_cast<int>(cx-108.f),266,216,24,
+              juce::Justification::centred);
+  }
   g.setColour(juce::Colour(0xffd4dee6));g.setFont(14.f);
   const int y=std::max(315,getHeight()-155);
   auto db=[](float x){return juce::String(20.f*std::log10(std::max(1e-9f,x)),2);};
