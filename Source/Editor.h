@@ -547,22 +547,22 @@ public:
                                               juce::Colour(0xffc8d0d8),0.f,80.f,false));
         g.fillRect(0,0,getWidth(),78);
         g.setColour(juce::Colour(0xff8398aa));g.drawHorizontalLine(77,0.f,static_cast<float>(getWidth()));
-        g.setColour(juce::Colour(0xffe5eaf0));g.fillRoundedRectangle(15.f,10.f,270.f,57.f,7.f);
-        g.setColour(juce::Colour(0xff8b99a6));g.drawRoundedRectangle(15.f,10.f,270.f,57.f,7.f,1.f);
+        g.setColour(juce::Colour(0xffe5eaf0));g.fillRoundedRectangle(15.f,5.f,190.f,39.f,7.f);
+        g.setColour(juce::Colour(0xff8b99a6));g.drawRoundedRectangle(15.f,5.f,190.f,39.f,7.f,1.f);
         for(float screwX : {22.f,static_cast<float>(getWidth()-21)}) {
-            g.setColour(juce::Colour(0xff090d12));g.fillEllipse(screwX-5.f,33.f,10.f,10.f);
-            g.setColour(juce::Colour(0xff718290));g.drawEllipse(screwX-4.f,34.f,8.f,8.f,1.f);
-            g.drawLine(screwX-2.f,40.f,screwX+2.f,36.f,.9f);
+            g.setColour(juce::Colour(0xff090d12));g.fillEllipse(screwX-5.f,19.f,10.f,10.f);
+            g.setColour(juce::Colour(0xff718290));g.drawEllipse(screwX-4.f,20.f,8.f,8.f,1.f);
+            g.drawLine(screwX-2.f,26.f,screwX+2.f,22.f,.9f);
         }
         g.setColour(juce::Colour(0xff162635));g.setFont(theme.font(20.f));
-        g.drawText("MASTERLAB X",37,10,237,33,juce::Justification::left);
+        g.drawText("MASTERLAB X",32,6,167,24,juce::Justification::left);
         g.setColour(juce::Colour(0xff076fff));g.setFont(theme.font(9.f));
-        g.drawText("HYBRID STUDIO  /  MASTERING CONSOLE",38,41,245,17,juce::Justification::left);
+        g.drawText("POWDER COAT  /  CONCEPT C",32,29,167,12,juce::Justification::left);
         if(getWidth()>=1000){
             g.setColour(juce::Colour(0xff152029));
-            g.fillRoundedRectangle(static_cast<float>(getWidth()-224),17.f,188.f,38.f,6.f);
+            g.fillRoundedRectangle(static_cast<float>(getWidth()-224),7.f,188.f,34.f,6.f);
             g.setColour(juce::Colour(0xff3df36e));g.setFont(theme.font(12.f));
-            g.drawText(juce::String(sampleRate()/1000,1)+" kHz  /  STEREO",getWidth()-215,22,169,26,juce::Justification::centred);
+            g.drawText(juce::String(sampleRate()/1000,1)+" kHz  /  STEREO",getWidth()-215,11,169,24,juce::Justification::centred);
         }
         const int dock=getHeight()-174,cell=(getWidth()-64)/4;
         g.setColour(panel);g.fillRoundedRectangle(24.f,static_cast<float>(dock),getWidth()-48.f,146.f,20.f);
