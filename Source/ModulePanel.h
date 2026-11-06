@@ -61,7 +61,7 @@ public:
  void updateScope(const std::array<juce::Point<float>,1024>& points){scope=points;}
  void update(const Processor::ResponseFrame& f){frame=f;history[historyHead]={f.dynamics.reduction,f.dynamics.upward,f.dynamics.punch};historyHead=(historyHead+1)%history.size();historyCount=std::min(history.size(),historyCount+1);repaint();}
  void resized()override{
-  present.setBounds(getWidth()-232,12,112,28);enabled.setBounds(getWidth()-114,12,104,28);
+  present.setBounds(getWidth()-264,10,130,34);enabled.setBounds(getWidth()-128,10,118,34);
   const int side=std::min(340,getWidth()/2-24),left=getWidth()-side-24;
   const int row=54;controlsViewport.setBounds(left+12,94,side-24,getHeight()-154);controlsContent.setSize(side-40,static_cast<int>(controls.size())*row);
   for(size_t i=0;i<controls.size();++i){int y=static_cast<int>(i)*row;controls[i]->label.setBounds(0,y,side-40,18);controls[i]->slider.setBounds(0,y+20,side-40,30);}
