@@ -336,7 +336,26 @@ class Editor final : public juce::AudioProcessorEditor,
         for(int i=0;i<count;++i){response=processor.responses[start+i];haveResponse=true;}
         for(int i=0;i<count2;++i){response=processor.responses[start2+i];haveResponse=true;}
         processor.responseFifo.finishedRead(count+count2);
-        if(count+count2){for(auto& panel:modulePanels)if(panel)panel->update(response);parallelPanel.update(response);exciterPanel.update(response);analogPanel.update(response);bassPanel.update(response);transientPanel.update(response);truePeakPanel.update(response);overviewPanel.update(response);}
+        if(count+count2){
+            for(auto& panel:modulePanels)if(panel)panel->update(response);
+            parallelPanel.update(response);exciterPanel.update(response);analogPanel.update(response);
+            bassPanel.update(response);transientPanel.update(response);
+            truePeakPanel.update(response);overviewPanel.update(response);
+            // True, measured 16-band EQ transfer. UI thread only; no synthetic response curve.
+            std::array<float,256> curveDb{};
+            const double nyquist=juce::jmax(40.,response.rate*.5);
+            for(size_t i=0;i<curveDb.size();++i){
+                const double hz=20.*std::pow(nyquist/20.,static_cast<double>(i)/255.);
+                std::complex<double> transfer{1.,0.};
+                for(size_t band=0;band<16;++band)
+                    transfer*=(1.-response.blends[band])+
+                              static_cast<double>(response.blends[band])*
+                              response.bands[band].response(response.rate,hz);
+                transfer=(1.-response.eqMix)+static_cast<double>(response.eqMix)*transfer;
+                curveDb[i]=static_cast<float>(20.*std::log10(juce::jmax(1.0e-12,std::abs(transfer))));
+            }
+            overviewPanel.updateEqCurve(curveDb);
+        }
         processor.fifo.prepareToRead(processor.fifo.getNumReady(),start,count,start2,count2);
         auto consume=[&](int first,int size){for(int i=0;i<size;++i){float l=processor.traceL[first+i],r=processor.traceR[first+i];samples[0][head]=l;samples[1][head]=r;scope[head%1024]={r-l,r+l};head=(head+1)%32768;}};
         consume(start,count);consume(start2,count2);processor.fifo.finishedRead(count+count2);
