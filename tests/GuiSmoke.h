@@ -193,6 +193,17 @@ class GuiSmoke final : private juce::Timer {
             output.getParentDirectory().createDirectory();
             juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();
             if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return false;
+            // Nine real OPEN actions must leave the overview and enter existing module pages.
+            for(int i=0;i<9;++i){
+                auto* button=dynamic_cast<juce::Button*>(overview->findChildWithID("console-open-"+juce::String(i)));
+                if(!button)return false;
+                button->onClick();
+                if(overview->isVisible()){
+                    std::cerr<<"Concept C OPEN failed for module "<<i<<"\n";return false;
+                }
+                console->onClick();
+                if(!overview->isVisible())return false;
+            }
             auto* eq=dynamic_cast<juce::Button*>(editor->findChildWithID("view-eq"));
             if(!eq)return false;eq->onClick();
         }
