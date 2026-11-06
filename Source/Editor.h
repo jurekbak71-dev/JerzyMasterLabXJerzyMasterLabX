@@ -8,6 +8,7 @@
 #include "BassArchitectPanel.h"
 #include "TransientSculptorPanel.h"
 #include "FinalTruePeakPanel.h"
+#include "ConceptCOverviewPanel.h"
 
 // Included after Processor. GUI work and FFT never run in the audio callback.
 class Editor final : public juce::AudioProcessorEditor,
@@ -25,7 +26,10 @@ class Editor final : public juce::AudioProcessorEditor,
     BassArchitectPanel bassPanel;
     TransientSculptorPanel transientPanel;
     FinalTruePeakPanel truePeakPanel;
+    ConceptCOverviewPanel overviewPanel;
     ParallelPanel parallelPanel;
+    juce::TextButton consoleView{"Console"};
+    bool showingConsole=false;
     juce::TextButton dynamicView{"Dynamic EQ"},dynamicsView{"Dynamics"},stereoView{"Stereo"},stabilizerView{"Stabilizer"},modulesButton{"+ Modules"};
     int moduleView=-1,chainDragKind=-1,chainHover=-1;bool chainDragging=false,showingParallel=false,showingExciter=false,showingAnalog=false,showingBass=false,showingTransient=false,showingTruePeak=false;
     juce::ComboBox routingChoice;std::unique_ptr<ComboAttachment> routingAttachment;
@@ -36,7 +40,8 @@ class Editor final : public juce::AudioProcessorEditor,
         return result;
     }
     int chainAt(float x)const {auto list=chainModules();if(list.empty()||x<24||x>getWidth()-24)return -1;size_t i=static_cast<size_t>((x-24)/((getWidth()-48.f)/list.size()));return i<list.size()?list[i]:-1;}
-    void hideModules(){showingTruePeak=false;truePeakPanel.setVisible(false);showingTransient=false;transientPanel.setVisible(false);showingBass=false;bassPanel.setVisible(false);showingAnalog=false;analogPanel.setVisible(false);showingExciter=false;exciterPanel.setVisible(false);moduleView=-1;for(auto& panel:modulePanels)if(panel)panel->setVisible(false);dynamicView.setToggleState(false,juce::dontSendNotification);dynamicsView.setToggleState(false,juce::dontSendNotification);stereoView.setToggleState(false,juce::dontSendNotification);stabilizerView.setToggleState(false,juce::dontSendNotification);}
+    void hideModules(){showingConsole=false;overviewPanel.setVisible(false);showingTruePeak=false;truePeakPanel.setVisible(false);showingTransient=false;transientPanel.setVisible(false);showingBass=false;bassPanel.setVisible(false);showingAnalog=false;analogPanel.setVisible(false);showingExciter=false;exciterPanel.setVisible(false);moduleView=-1;for(auto& panel:modulePanels)if(panel)panel->setVisible(false);dynamicView.setToggleState(false,juce::dontSendNotification);dynamicsView.setToggleState(false,juce::dontSendNotification);stereoView.setToggleState(false,juce::dontSendNotification);stabilizerView.setToggleState(false,juce::dontSendNotification);}
+    void showConsole(){showInspector();showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);resetMetersButton.setVisible(false);showingConsole=true;overviewPanel.setVisible(true);repaint();}
     void showModule(int kind){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);moduleView=kind;modulePanels[static_cast<size_t>(kind)]->setVisible(true);std::array<juce::TextButton*,4>{&dynamicView,&dynamicsView,&stereoView,&stabilizerView}[static_cast<size_t>(kind)]->setToggleState(true,juce::dontSendNotification);repaint();}
     void toggleParameter(const char* id){auto* parameter=processor.state.getParameter(id);processor.beginUiTransaction("Module chain");parameter->beginChangeGesture();parameter->setValueNotifyingHost(parameter->getValue()>.5f?0.f:1.f);parameter->endChangeGesture();processor.finishUiTransaction();repaint();}
 
@@ -331,7 +336,7 @@ class Editor final : public juce::AudioProcessorEditor,
         for(int i=0;i<count;++i){response=processor.responses[start+i];haveResponse=true;}
         for(int i=0;i<count2;++i){response=processor.responses[start2+i];haveResponse=true;}
         processor.responseFifo.finishedRead(count+count2);
-        if(count+count2){for(auto& panel:modulePanels)if(panel)panel->update(response);parallelPanel.update(response);exciterPanel.update(response);analogPanel.update(response);bassPanel.update(response);transientPanel.update(response);truePeakPanel.update(response);}
+        if(count+count2){for(auto& panel:modulePanels)if(panel)panel->update(response);parallelPanel.update(response);exciterPanel.update(response);analogPanel.update(response);bassPanel.update(response);transientPanel.update(response);truePeakPanel.update(response);overviewPanel.update(response);}
         processor.fifo.prepareToRead(processor.fifo.getNumReady(),start,count,start2,count2);
         auto consume=[&](int first,int size){for(int i=0;i<size;++i){float l=processor.traceL[first+i],r=processor.traceR[first+i];samples[0][head]=l;samples[1][head]=r;scope[head%1024]={r-l,r+l};head=(head+1)%32768;}};
         consume(start,count);consume(start2,count2);processor.fifo.finishedRead(count+count2);
@@ -356,7 +361,7 @@ class Editor final : public juce::AudioProcessorEditor,
         slider.setComponentID(id);slider.setColour(juce::Slider::rotarySliderFillColourId,accent);
     }
 public:
-    explicit Editor(Processor& p) : AudioProcessorEditor(p),processor(p),exciterPanel(processor,theme),analogPanel(processor,theme),bassPanel(processor,theme),transientPanel(processor,theme),truePeakPanel(processor,theme),parallelPanel(processor,theme) {
+    explicit Editor(Processor& p) : AudioProcessorEditor(p),processor(p),exciterPanel(processor,theme),analogPanel(processor,theme),bassPanel(processor,theme),transientPanel(processor,theme),truePeakPanel(processor,theme),overviewPanel(processor,theme),parallelPanel(processor,theme) {
         theme.setColour(juce::ResizableWindow::backgroundColourId,background);
         theme.setColour(juce::Slider::textBoxOutlineColourId,juce::Colours::transparentBlack);
         theme.setColour(juce::Slider::textBoxBackgroundColourId,panel);
@@ -368,6 +373,15 @@ public:
         addChildComponent(bassPanel);
         addChildComponent(transientPanel);
         addChildComponent(truePeakPanel);
+        addChildComponent(overviewPanel);
+        addAndMakeVisible(consoleView);consoleView.setComponentID("view-console");
+        consoleView.onClick=[this]{showConsole();};
+        overviewPanel.onOpen=[this](int index){switch(index){
+            case 0:showLimiter(false);break;case 1:showModule(1);break;
+            case 2:showModule(2);break;case 3:showFinalTruePeak();break;
+            case 4:showAnalog();break;case 5:showBass();break;
+            case 6:showTransient();break;case 7:showModule(3);break;
+            case 8:showBrain();break;default:break;}};
         for(auto* button:{&dynamicView,&dynamicsView,&stereoView,&stabilizerView,&modulesButton})addAndMakeVisible(button);
         dynamicView.setComponentID("view-dynamic-eq");dynamicsView.setComponentID("view-dynamics");stereoView.setComponentID("view-stereo");stabilizerView.setComponentID("view-stabilizer");modulesButton.setComponentID("module-menu");
         dynamicView.onClick=[this]{showModule(0);};dynamicsView.onClick=[this]{showModule(1);};stereoView.onClick=[this]{showModule(2);};stabilizerView.onClick=[this]{showModule(3);};
@@ -454,7 +468,7 @@ public:
         brainApply.onClick=[this]{processor.applyBrainUI();refreshBrain();};
         brainApply.setTooltip("Apply only the reviewed proposal, then re-measure the full song. Disabled if audio settings changed since capture. Undo restores the previous state.");
         brainEq.setTooltip("Include EQ: replaces all 16 bands on Apply. Untick to preserve the current EQ.");brainLimiter.setTooltip("Include sample-peak limiter and move it after EQ. No true-peak guarantee.");
-        selectBand(0);showLimiter(false);if(routingChoice.getSelectedId()==2)showParallel();
+        selectBand(0);showLimiter(false);if(routingChoice.getSelectedId()==2)showParallel();showConsole();
         setResizable(true,true);setResizeLimits(750,550,2000,1400);setSize(1200,800);startTimerHz(30);
     }
     void choosePreset(bool save){
@@ -483,7 +497,7 @@ public:
         releaseLabel.setBounds(32+width,top,width-12,22);release.setBounds(32+width,top+22,width-16,113);
         bandChoice.setBounds(28,140,110,26);typeChoice.setBounds(148,140,155,26);fftChoice.setBounds(313,140,130,26);bandEnabled.setBounds(453,140,74,26);
         eqEnabled.setBounds(537,140,72,26);limiterEnabled.setBounds(getWidth()-114,136,90,26);
-        const int navWidth=(getWidth()-48)/8;int nav=0;for(auto* button:{&eqView,&dynamicView,&dynamicsView,&stereoView,&stabilizerView,&limiterView,&inspectorView,&brainView}){button->setBounds(24+nav*navWidth,48,navWidth-5,26);++nav;}
+        const int navWidth=(getWidth()-48)/9;int nav=0;for(auto* button:{&consoleView,&eqView,&dynamicView,&dynamicsView,&stereoView,&stabilizerView,&limiterView,&inspectorView,&brainView}){button->setBounds(24+nav*navWidth,48,navWidth-5,26);++nav;}
         modulesButton.setBounds(602,14,120,26);routingChoice.setBounds(448,14,134,26);
         for(auto& panel:modulePanels)panel->setBounds(0,134,getWidth(),getHeight()-154);
         parallelPanel.setBounds(0,134,getWidth(),getHeight()-154);
@@ -492,6 +506,7 @@ public:
         bassPanel.setBounds(0,134,getWidth(),getHeight()-154);
         transientPanel.setBounds(0,134,getWidth(),getHeight()-154);
         truePeakPanel.setBounds(0,134,getWidth(),getHeight()-154);
+        overviewPanel.setBounds(0,134,getWidth(),getHeight()-154);
 
     }
     bool isInterestedInDragSource(const SourceDetails& details) override {return details.description.toString().startsWith("module:");}
@@ -582,6 +597,7 @@ public:
             g.setColour(juce::Colours::whitesmoke);g.setFont(theme.font(modules.size()>3?12.f:16.f));g.drawText(std::array<const char*,6>{"Dynamic EQ","Dynamics","Stereo","Spectral EQ","Limiter","Stabilizer"}[kind],static_cast<int>(x)+34,90,static_cast<int>(width)-48,22,juce::Justification::left);
             g.setColour(muted);g.setFont(theme.font(10));g.drawText(on?std::array<const char*,6>{"3 detectors","Down / upward","4-band M/S","16 bands","5 ms lookahead","Adaptive tone"}[kind]:"Bypassed",static_cast<int>(x)+34,111,static_cast<int>(width)-48,16,juce::Justification::left);
         }
+        if(showingConsole){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
         if(moduleView>=0){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
         if(showingParallel||showingExciter||showingAnalog){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
         if(showingBrain){paintBrain(g);return;}
