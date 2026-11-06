@@ -319,11 +319,21 @@ class GuiSmoke final : private juce::Timer {
             std::cerr<<"Brain GUI Undo failed limiterDrive or gain16\n";return false;
         }
         // Screenshot-reported accessibility: entire LED+caption is a >=30px target.
-        for(const char* id:{"exciter-present","exciter-active",
-                            "true-peak-present","true-peak-enabled"}){
-            auto* toggle=dynamic_cast<juce::ToggleButton*>(editor->findChildWithID(id));
-            if(!toggle||toggle->getHeight()<30||toggle->getWidth()<100){
-                std::cerr<<"Tiny/unreachable toggle "<<id<<"\n";return false;
+        for(const auto group:std::array<std::pair<const char*,std::array<const char*,2>>,2>{{
+               {"harmonic-exciter-panel",{"exciter-present","exciter-active"}},
+               {"final-true-peak-panel",{"true-peak-present","true-peak-enabled"}}
+            }}){
+            auto* panel=editor->findChildWithID(group.first);
+            if(!panel){std::cerr<<"Status panel not found: "<<group.first<<"\n";return false;}
+            for(const char* id:group.second){
+                // JUCE findChildWithID addresses immediate children of the chosen
+                // component; it does not search arbitrary hidden grandchildren.
+                auto* toggle=dynamic_cast<juce::ToggleButton*>(panel->findChildWithID(id));
+                if(!toggle||toggle->getHeight()<30||toggle->getWidth()<100){
+                    std::cerr<<"Tiny/unreachable toggle "<<id<<": "<<
+                              (toggle?toggle->getWidth():-1)<<"x"<<
+                              (toggle?toggle->getHeight():-1)<<"\n";return false;
+                }
             }
         }
         // Full factory preset 0 through the actual NEW GUI button. Undo restores
