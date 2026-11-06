@@ -72,6 +72,17 @@ public:
      MasterLabGuiAssets::led_blue_on_png,MasterLabGuiAssets::led_blue_on_pngSize)};
  juce::Image redOn_{juce::ImageCache::getFromMemory(
      MasterLabGuiAssets::led_red_on_png,MasterLabGuiAssets::led_red_on_pngSize)};
+ juce::Image powderTile_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::powdercoat_tile_png,MasterLabGuiAssets::powdercoat_tile_pngSize)};
+ void paintPowderCoat(juce::Graphics& g,juce::Rectangle<int> area)const{
+  g.setColour(juce::Colour(0xffedf0f2));g.fillRect(area);
+  if(!powderTile_.isNull()){
+   juce::Graphics::ScopedSaveState save(g);
+   g.reduceClipRegion(area);
+   g.setTiledImageFill(powderTile_,area.getX(),area.getY(),1.f);
+   g.fillRect(area);
+  }
+ }
  void paintStatusLed(juce::Graphics& g,int x,int y,int size,bool warning)const{
   const auto& sprite=warning?redOn_:greenOn_;
   if(!sprite.isNull())
