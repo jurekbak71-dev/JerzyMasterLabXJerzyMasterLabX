@@ -72,6 +72,16 @@ public:
      MasterLabGuiAssets::led_blue_on_png,MasterLabGuiAssets::led_blue_on_pngSize)};
  juce::Image redOn_{juce::ImageCache::getFromMemory(
      MasterLabGuiAssets::led_red_on_png,MasterLabGuiAssets::led_red_on_pngSize)};
+ juce::Image grBezel_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::analog_gr_bezel_png,MasterLabGuiAssets::analog_gr_bezel_pngSize)};
+ void drawAnalogGrBezel(juce::Graphics& g,juce::Rectangle<float> rect) const{
+  if(!grBezel_.isNull())
+   g.drawImage(grBezel_,rect);
+  else{
+   g.setColour(juce::Colour(0xffaab5bc));g.fillRoundedRectangle(rect,12.f);
+   g.setColour(juce::Colour(0xffe8d7b6));g.fillRoundedRectangle(rect.reduced(13.f),8.f);
+  }
+ }
  juce::Image powderTile_{juce::ImageCache::getFromMemory(
      MasterLabGuiAssets::powdercoat_tile_png,MasterLabGuiAssets::powdercoat_tile_pngSize)};
  juce::Image blueRing_{juce::ImageCache::getFromMemory(
