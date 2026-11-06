@@ -89,9 +89,9 @@ public:
   const int sourceX=(frame%11)*sourceSide;
   const int sourceY=(frame/11)*sourceSide;
   g.setOpacity(slider.isEnabled()?1.f:0.4f);
-  g.drawImage(atlas,bounds,juce::Rectangle<float>(static_cast<float>(sourceX),
-                 static_cast<float>(sourceY),static_cast<float>(sourceSide),
-                 static_cast<float>(sourceSide)));
+  g.drawImage(atlas,juce::roundToInt(bounds.getX()),juce::roundToInt(bounds.getY()),
+              juce::roundToInt(bounds.getWidth()),juce::roundToInt(bounds.getHeight()),
+              sourceX,sourceY,sourceSide,sourceSide);
   g.setOpacity(1.f);
   if(slider.hasKeyboardFocus(true)){
    g.setColour(juce::Colour(0xff087bff).withAlpha(.8f));
