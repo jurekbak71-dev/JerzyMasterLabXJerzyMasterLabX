@@ -87,6 +87,12 @@ jobs:
           if-no-files-found: error
       - name: GUI reopen and resize smoke test
         run: ./build/Release/plugin_tests.exe --gui
+      - name: Upload Concept C real GUI screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: Concept-C-JUCE-GUI-screenshots
+          path: build-plugin/*-smoke.png
+          if-no-files-found: error
       - name: Download pluginval 1.0.3
         shell: pwsh
         run: |
