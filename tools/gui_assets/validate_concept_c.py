@@ -30,4 +30,15 @@ for size in (96,160):
 for size in (96,160):
     atlas=next(a for a in manifest["assets"] if a["name"]==f"knob_{size}_atlas.png")
     assert atlas["width"]==size*11 and atlas["height"]==size*10
+for size in (96,160):
+    with Image.open(p/f"led_wreath_{size}_atlas.png") as img:
+        def count_lit(frame):
+            ox=(frame%11)*size
+            oy=(frame//11)*size
+            crop=img.crop((ox,oy,ox+size,oy+size))
+            return sum(1 for red,green,blue,alpha in crop.getdata()
+                       if red<150 and green>155 and blue>185 and alpha>75)
+        n0,n50,n100=(count_lit(f) for f in (0,50,100))
+        assert n0==0 and n50>20 and n100>n50*1.35, (
+            "Wreath arc fails to increase with normalized APVTS value",size,n0,n50,n100)
 print("OK: 225 assets, 2x101 knob frames, 6 LED sprites, 1 powdercoat tile; dimensions/RGBA verified.")
