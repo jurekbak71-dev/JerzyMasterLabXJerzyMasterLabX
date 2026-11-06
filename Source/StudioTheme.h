@@ -51,11 +51,14 @@ public:
  }
  void drawButtonBackground(juce::Graphics& g,juce::Button& button,const juce::Colour&,bool hover,bool down) override {
   auto r=button.getLocalBounds().toFloat().reduced(.5f);const bool active=button.getToggleState(),primary=button.getComponentID()=="brain-apply"||button.getComponentID()=="brain-analyse";
-  const auto upper=juce::Colour(active?0xff35695f:(primary?0xff356a63:(hover||down?0xff3b5363:0xff344453)));
-  const auto lower=juce::Colour(active?0xff183d37:(primary?0xff21443e:0xff131b25));
-  g.setGradientFill(juce::ColourGradient(upper.withAlpha(button.isEnabled()?1.f:.35f),r.getX(),r.getY(),lower,r.getX(),r.getBottom(),false));
-  g.fillRoundedRectangle(r,5.f);
-  g.setColour(juce::Colour(active?0xffa2d8c8:0xff526b7b));g.drawRoundedRectangle(r,5.f,1.f);
+  const auto& face=(active||primary)?switchOn_:switchOff_;
+  if(!face.isNull()){
+   g.setOpacity(button.isEnabled()?1.f:.36f);
+   g.drawImage(face,r);
+   g.setOpacity(1.f);
+  }
+  else {g.setColour(juce::Colour(0xff152c3f));g.fillRoundedRectangle(r,5.f);}
+  if(hover||down){g.setColour(juce::Colour(0xff16c8ff).withAlpha(down?.45f:.23f));g.drawRoundedRectangle(r.reduced(1.f),5.f,1.5f);}
   if(button.hasKeyboardFocus(true)){g.setColour(juce::Colour(0xff73ddce));g.drawRoundedRectangle(r.reduced(2.f),4.f,1.3f);}
  }
  // Concept C rendered sprites: decoded once, shared by all APVTS-backed sliders.
@@ -84,8 +87,39 @@ public:
  }
  juce::Image powderTile_{juce::ImageCache::getFromMemory(
      MasterLabGuiAssets::powdercoat_tile_png,MasterLabGuiAssets::powdercoat_tile_pngSize)};
- juce::Image blueRing_{juce::ImageCache::getFromMemory(
-     MasterLabGuiAssets::ring_blue_on_png,MasterLabGuiAssets::ring_blue_on_pngSize)};
+ juce::Image ledRing96_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::led_wreath_96_atlas_png,MasterLabGuiAssets::led_wreath_96_atlas_pngSize)};
+ juce::Image ledRing160_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::led_wreath_160_atlas_png,MasterLabGuiAssets::led_wreath_160_atlas_pngSize)};
+ juce::Image glassScreen_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::glass_analyzer_png,MasterLabGuiAssets::glass_analyzer_pngSize)};
+ juce::Image glassReflection_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::glass_overlay_png,MasterLabGuiAssets::glass_overlay_pngSize)};
+ juce::Image glassReadout_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::glass_readout_png,MasterLabGuiAssets::glass_readout_pngSize)};
+ juce::Image moduleGlowOn_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::module_glow_on_png,MasterLabGuiAssets::module_glow_on_pngSize)};
+ juce::Image moduleGlowOff_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::module_glow_off_png,MasterLabGuiAssets::module_glow_off_pngSize)};
+ juce::Image switchOn_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::switch_on_png,MasterLabGuiAssets::switch_on_pngSize)};
+ juce::Image switchOff_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::switch_off_png,MasterLabGuiAssets::switch_off_pngSize)};
+ void paintGlassScreen(juce::Graphics& g,juce::Rectangle<float> rect)const{
+  if(!glassScreen_.isNull())g.drawImage(glassScreen_,rect);
+ }
+ void paintGlassReflection(juce::Graphics& g,juce::Rectangle<float> rect)const{
+  if(!glassReflection_.isNull()){g.setOpacity(.45f);g.drawImage(glassReflection_,rect);g.setOpacity(1.f);}
+ }
+ void paintModuleGlow(juce::Graphics& g,juce::Rectangle<float> rect,bool active)const{
+  const auto& img=active?moduleGlowOn_:moduleGlowOff_;
+  if(!img.isNull()){g.setOpacity(active?.85f:.25f);g.drawImage(img,rect);g.setOpacity(1.f);}
+ }
+ void paintSmallRedLed(juce::Graphics& g,int x,int y,int size,bool active)const{
+  const auto& img=active?redOn_:redOff_;
+  if(!img.isNull())g.drawImage(img,x,y,size,size,0,0,img.getWidth(),img.getHeight());
+ }
+
  void paintPowderCoat(juce::Graphics& g,juce::Rectangle<int> area)const{
   g.setColour(juce::Colour(0xffedf0f2));g.fillRect(area);
   if(!powderTile_.isNull()){
@@ -137,6 +171,18 @@ public:
                  static_cast<float>(cap+2),static_cast<float>(cap+2),1.f);
   }
  }
+ void drawLabel(juce::Graphics& g,juce::Label& label) override{
+  if(dynamic_cast<juce::Slider*>(label.getParentComponent())!=nullptr){
+   const auto area=label.getLocalBounds().toFloat();
+   if(!glassReadout_.isNull())g.drawImage(glassReadout_,area);
+   else {g.setColour(juce::Colour(0xff0a1e31));g.fillRoundedRectangle(area,4.f);}
+   g.setColour(label.isEnabled()?juce::Colour(0xffb5f1ff):juce::Colour(0xff607887));
+   g.setFont(font(juce::jmin(14.f,area.getHeight()*.65f)));
+   g.drawFittedText(label.getText(),label.getLocalBounds().reduced(3,0),label.getJustificationType(),1);
+   return;
+  }
+  juce::LookAndFeel_V4::drawLabel(g,label);
+ }
  void drawRotarySlider(juce::Graphics& g,int x,int y,int width,int height,
                        float position,float,float,juce::Slider& slider) override {
   if(width<24||height<24)return;
@@ -170,9 +216,16 @@ public:
               sourceX,sourceY,sourceSide,sourceSide);
   g.setOpacity(1.f);
   // Segmented electric-blue ring is pre-rendered RGBA, not an animated fake light.
-  if(slider.isEnabled()&&!blueRing_.isNull()){
-   g.setOpacity(.82f);
-   g.drawImage(blueRing_,bounds.expanded(shown*.065f));
+  const auto& wreath=large?ledRing160_:ledRing96_;
+  if(!wreath.isNull()){
+   // Same normalized frame as the knob: lit prefix is the physical value.
+   // Inactive controls keep their unlit ring, never a misleading active glow.
+   const int arcFrame=slider.isEnabled()?frame:0;
+   const int arcX=(arcFrame%11)*sourceSide,arcY=(arcFrame/11)*sourceSide;
+   g.setOpacity(slider.isEnabled()?1.f:.48f);
+   g.drawImage(wreath,juce::roundToInt(bounds.getX()),juce::roundToInt(bounds.getY()),
+               juce::roundToInt(bounds.getWidth()),juce::roundToInt(bounds.getHeight()),
+               arcX,arcY,sourceSide,sourceSide);
    g.setOpacity(1.f);
   }
   if(slider.hasKeyboardFocus(true)){
