@@ -59,5 +59,27 @@ int main(){
  // Deliberately undersized queue: data loss must invalidate the entire analysis.
  masterlab::MasterBrain tiny(2);tiny.prepare(48000);tiny.startUI(config);for(int i=0;i<200&&tiny.readUI().phase!=masterlab::BrainPhase::Analysing;++i)std::this_thread::sleep_for(std::chrono::milliseconds(2));
  std::array<float,4096> zeros{};tiny.capture(zeros.data(),zeros.data(),4096);for(int i=0;i<200&&tiny.readUI().phase!=masterlab::BrainPhase::Failed;++i)std::this_thread::sleep_for(std::chrono::milliseconds(2));check(tiny.readUI().phase==masterlab::BrainPhase::Failed,"queue overflow produced a usable partial result");
+ // NEW / factory preset zero must restore every declared host default,
+ // invalidate Brain proposals and remain one Undo transaction.
+ p.beginUiTransaction("Configure non-default test scene");
+ for(const char* id:{"gain16","limiterDrive","dynPunch","stereoLowWidth","analogDrive","bassSub"}){
+  auto* a=p.state.getParameter(id);
+  a->beginChangeGesture();a->setValueNotifyingHost(.87f);a->endChangeGesture();
+ }
+ p.finishUiTransaction();
+ const auto configured=values(p);
+ check(p.loadFactoryDefaultUI(),"NEW failed to execute");
+ check(p.brain.readUI().phase==masterlab::BrainPhase::Idle,
+       "NEW left an old Brain result or selected variant");
+ check(p.brainBaseline.empty()&&p.brainAuditionValues.empty()&&p.brainAuditionVariant==-1,
+       "NEW retained stale Brain state");
+ for(auto* parameter:p.getParameters())
+  check(std::abs(parameter->getValue()-parameter->getDefaultValue())<1.0e-6f,
+        "NEW did not reset all host parameters to factory defaults");
+ check(p.undo()&&values(p)==configured,"factory NEW is not a single Undo operation");
+ check(p.redo(),"factory NEW redo failed");
+ for(auto* parameter:p.getParameters())
+  check(std::abs(parameter->getValue()-parameter->getDefaultValue())<1.0e-6f,
+        "factory NEW redo did not restore all defaults");
  p.releaseResources();std::cout<<"Passed: real audio capture, exact duration, no callback C++ allocations, independent worker measurements, no automatic changes, revision, stale protection, single Undo, silence, cancel and overflow\n";
 }
