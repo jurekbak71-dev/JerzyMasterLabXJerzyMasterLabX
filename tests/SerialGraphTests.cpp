@@ -14,10 +14,26 @@ int main(){
   masterlab::DynamicsSettings dynamics;dynamics.enabled=true;dynamics.threshold=-24;dynamics.ratio=4;
   graph.parameters(2000,6,1,-1,true,true);graph.limiterParameters(4,120);graph.prepare(rate);legacy.parameters(2000,6,1,-1,true,true);legacy.limiterParameters(4,120);legacy.prepare(rate);
   std::array<float,257> l{},r{},trace{},ll{},rr{};
-  // Default topology preserves previous audio when new modules are absent.
-  for(int block=0;block<100;++block){for(int i=0;i<257;++i){l[i]=.15f*std::sin((block*257+i)*.11f);r[i]=.1f*std::cos((block*257+i)*.037f);}ll=l;rr=r;graph.process(l.data(),r.data(),257,false,trace.data());legacy.process(ll.data(),rr.data(),257);for(int i=0;i<257;++i)check(std::abs(l[i]-ll[i])<1e-6f&&std::abs(r[i]-rr[i])<1e-6f,"default topology changed legacy sound");}
+  // Compare against the legacy output delayed by the declared 128-sample
+  // final-stage FIFO. Preserve all sample values, not the old absolute timing.
+  std::array<std::array<float,masterlab::FinalTruePeak::latencySamples>,2> legacyDelay{};
+  size_t delayCursor=0;
+  for(int block=0;block<100;++block){
+   for(int i=0;i<257;++i){l[i]=.15f*std::sin((block*257+i)*.11f);r[i]=.1f*std::cos((block*257+i)*.037f);}
+   ll=l;rr=r;graph.process(l.data(),r.data(),257,false,trace.data());
+   legacy.process(ll.data(),rr.data(),257);
+   for(int i=0;i<257;++i){
+    const float expectedLeft=legacyDelay[0][delayCursor];
+    const float expectedRight=legacyDelay[1][delayCursor];
+    legacyDelay[0][delayCursor]=ll[i];
+    legacyDelay[1][delayCursor]=rr[i];
+    delayCursor=(delayCursor+1)%legacyDelay[0].size();
+    check(std::abs(l[i]-expectedLeft)<1e-6f&&std::abs(r[i]-expectedRight)<1e-6f,
+          "default topology changed latency-aligned legacy sound");
+   }
+  }
   graph.stereoSettings(stereo);graph.dynamicsSettings(dynamics);
-  for(int code=0;code<720;++code){graph.routing(code,false);graph.topology(code%2!=0,{true,true,true,true,true,true});for(int block=0;block<5;++block){for(int i=0;i<257;++i){l[i]=.2f*std::sin((code*1285+block*257+i)*.09f);r[i]=-.12f*std::cos((code*1285+block*257+i)*.031f);}audit=true;graph.process(l.data(),r.data(),257,false,trace.data());audit=false;for(int i=0;i<257;++i)check(std::isfinite(l[i])&&std::isfinite(r[i])&&std::abs(l[i])<4&&std::abs(r[i])<4,"switching route produced invalid audio");check(graph.latency()==static_cast<int>(std::ceil(rate*.005)),"route changed latency");}}
+  for(int code=0;code<720;++code){graph.routing(code,false);graph.topology(code%2!=0,{true,true,true,true,true,true});for(int block=0;block<5;++block){for(int i=0;i<257;++i){l[i]=.2f*std::sin((code*1285+block*257+i)*.09f);r[i]=-.12f*std::cos((code*1285+block*257+i)*.031f);}audit=true;graph.process(l.data(),r.data(),257,false,trace.data());audit=false;for(int i=0;i<257;++i)check(std::isfinite(l[i])&&std::isfinite(r[i])&&std::abs(l[i])<4&&std::abs(r[i])<4,"switching route produced invalid audio");check(graph.latency()==static_cast<int>(std::ceil(rate*.005))+masterlab::FinalTruePeak::latencySamples,"route changed latency");}}
   // A limiter before a compressor is measurably different from the reverse.
   masterlab::SerialGraph a,b;for(auto* g:{&a,&b}){g->parameters(2000,0,1,-6,false,true);g->dynamicsSettings(dynamics);g->limiterParameters(12,120);}
   a.prepare(rate,false,masterlab::encodeOrder({5,0,1,2,3,4}));b.prepare(rate,false,masterlab::encodeOrder({5,0,4,2,3,1}));double difference=0;

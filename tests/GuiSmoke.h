@@ -66,6 +66,21 @@ class GuiSmoke final : private juce::Timer {
         exciterPresent->setToggleState(false,juce::sendNotificationSync);
         if(actual("exciterPresent")!=0.f)return false;
         exciter->setVisible(false);
+        // Final limiter is a real DSP stage with APVTS automation, not decorative UI.
+        auto* truePeakPanel=editor->findChildWithID("final-true-peak-panel");
+        if(!truePeakPanel)return false;
+        auto* finalCeiling=dynamic_cast<juce::Slider*>(truePeakPanel->findChildWithID("truePeakCeiling"));
+        auto* finalRelease=dynamic_cast<juce::Slider*>(truePeakPanel->findChildWithID("truePeakRelease"));
+        auto* truePeakPresent=dynamic_cast<juce::Button*>(truePeakPanel->findChildWithID("true-peak-present"));
+        if(!finalCeiling||!finalRelease||!truePeakPresent)return false;
+        truePeakPanel->setVisible(true);
+        finalCeiling->setValue(-2.0,juce::sendNotificationSync);
+        finalRelease->setValue(200.0,juce::sendNotificationSync);
+        if(std::abs(actual("truePeakCeiling")+2.f)>.02f||std::abs(actual("truePeakRelease")-200.f)>.02f)return false;
+        truePeakPresent->setToggleState(true,juce::sendNotificationSync);
+        if(actual("truePeakPresent")!=1.f)return false;
+        truePeakPresent->setToggleState(false,juce::sendNotificationSync);
+        truePeakPanel->setVisible(false);
         // Transient Sculptor controls must bind to real host parameters.
         auto* transientPanel=editor->findChildWithID("transient-sculptor-panel");
         if(!transientPanel)return false;
