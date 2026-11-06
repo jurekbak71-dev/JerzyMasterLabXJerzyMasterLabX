@@ -1,11 +1,12 @@
 #pragma once
-// Phase 5C research engine. Experimental 4x bandlimited true-peak detector,
-// linked stereo look-ahead limiter. Not enabled in VST3 until full graph PDC.
+// Phase 5D: 4x bandlimited final-stage detector, stereo linked, fixed host PDC.
+// Monotone sliding-window peak queue replaces a 129-element scan per sample.
 // No heap allocation, locks or system calls in process().
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 namespace masterlab {
 struct FinalTruePeakSettings {
  bool enabled=false;
@@ -22,8 +23,14 @@ private:
  std::array<std::array<double,detectorTaps>,oversampling> kernel_{};
  std::array<std::array<float,detectorTaps>,2> history_{};
  std::array<std::array<float,latencySamples+1>,2> delay_{};
- std::array<float,latencySamples+1> maxima_{};
- int histPosition_=0,delayPosition_=0,maximumPosition_=0;
+ // Monotone deque: oldest peak at peakHead_, newest at tail-1.
+ // Ring capacity exceeds window length by one to distinguish full/empty.
+ static constexpr size_t peakQueueCapacity=latencySamples+2;
+ std::array<float,peakQueueCapacity> peakValues_{};
+ std::array<std::uint64_t,peakQueueCapacity> peakStamps_{};
+ size_t peakHead_=0,peakTail_=0;
+ std::uint64_t sampleClock_=0;
+ int histPosition_=0,delayPosition_=0;
  float gain_=1.f;
  double sampleRate_=48000.;
  FinalTruePeakSettings settings_{};
@@ -57,8 +64,8 @@ public:
   reset();
  }
  void reset()noexcept{
-  history_={};delay_={};maxima_={};
-  histPosition_=delayPosition_=maximumPosition_=0;
+  history_={};delay_={};peakValues_={};peakStamps_={};
+  histPosition_=delayPosition_=0;peakHead_=peakTail_=0;sampleClock_=0;
   gain_=1.f;reading_={};
  }
  FinalTruePeakReading reading()const noexcept{return reading_;}
@@ -92,10 +99,21 @@ public:
     peak=std::max(peak,static_cast<float>(std::abs(value)));
    }
    detected=std::max(detected,peak);
-   maxima_[maximumPosition_]=peak;
-   maximumPosition_=(maximumPosition_+1)%maxima_.size();
-   float futurePeak=0.f;
-   for(float maximum:maxima_)futurePeak=std::max(futurePeak,maximum);
+   // Sliding maximum of the most recent 129 peak estimates.
+   // Equal peaks evict older duplicates. No allocation or linear scan.
+   // Evict expired indices before insertion (inclusive 129-sample window).
+   while(peakHead_!=peakTail_ &&
+         sampleClock_-peakStamps_[peakHead_]>=latencySamples+1)
+    peakHead_=(peakHead_+1)%peakQueueCapacity;
+   while(peakHead_!=peakTail_){
+    const size_t back=(peakTail_+peakQueueCapacity-1)%peakQueueCapacity;
+    if(peakValues_[back]>peak)break;
+    peakTail_=back;
+   }
+   peakValues_[peakTail_]=peak;
+   peakStamps_[peakTail_]=sampleClock_++;
+   peakTail_=(peakTail_+1)%peakQueueCapacity;
+   const float futurePeak=peakValues_[peakHead_];
    // Extra headroom for reconstruction through changing gain.
    const float threshold=ceiling*.975f;
    const float desired=futurePeak>threshold?threshold/futurePeak:1.f;
