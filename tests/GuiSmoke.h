@@ -292,7 +292,15 @@ class GuiSmoke final : private juce::Timer {
             editor->setSize(size.x,size.y);if(!controlsFit())return false;auto image=editor->createComponentSnapshot(editor->getLocalBounds());if(!image.isValid())return false;
             if(iteration==0&&size.x==1000){auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/brain-smoke.png");juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return false;}
         }
-        apply->onClick();if(apply->isEnabled())return false;dynamic_cast<juce::Button*>(editor->findChildWithID("undo"))->onClick();
+        auto* a=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-audition-a"));
+        auto* b=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-audition-b"));
+        if(!a||!b||!a->isVisible()||!b->isVisible()||!a->isEnabled()||!b->isEnabled())
+            return false;
+        a->onClick();if(!report->getText().contains("Audition A is live"))return false;
+        b->onClick();if(!report->getText().contains("Audition B is live")||!apply->isEnabled())return false;
+        apply->onClick();
+        if(!report->getText().contains("APPLIED")||apply->isEnabled())return false;
+        dynamic_cast<juce::Button*>(editor->findChildWithID("undo"))->onClick();
         for(int i=0;i<processor.getParameters().size();++i)if(processor.getParameters()[i]->getValue()!=brainBefore[static_cast<size_t>(i)])return false;
         if(actual("limiterDrive")!=driveBefore||actual("gain16")!=gainBefore)return false;
         eq->onClick();if(!frequency->isVisible()||drive->isVisible()||release->isVisible())return false;
