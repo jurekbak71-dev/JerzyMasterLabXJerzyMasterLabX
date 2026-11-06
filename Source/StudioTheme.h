@@ -38,8 +38,16 @@ public:
   if(box.hasKeyboardFocus(true)){g.setColour(juce::Colour(0xff73ddce));g.drawRoundedRectangle(.5f,.5f,w-1.f,h-1.f,h*.48f,1);}
  }
  void drawToggleButton(juce::Graphics& g,juce::ToggleButton& b,bool hover,bool)override{
-  const float y=b.getHeight()*.5f;g.setColour(juce::Colour(b.getToggleState()?0xff64cbbb:0xff424650));g.fillRoundedRectangle(0,y-7,25,14,7);
-  g.setColour(juce::Colours::white.withAlpha(b.isEnabled()?1.f:.4f));g.fillEllipse(b.getToggleState()?13.f:3.f,y-4,8,8);g.setFont(font(12.f));g.setColour(juce::Colour(hover?0xffeff5f5:0xffbdc5d0));g.drawText(b.getButtonText(),32,0,b.getWidth()-32,b.getHeight(),juce::Justification::left);
+  // State comes from the real JUCE button / APVTS attachment; PNGs are decorative only.
+  auto& lamp=b.hasKeyboardFocus(true)?blueOn_:(b.getToggleState()?greenOn_:greenOff_);
+  if(!lamp.isNull()){
+   const int side=juce::jmin(27,b.getHeight());
+   g.setOpacity(b.isEnabled()?1.f:.3f);
+   g.drawImage(lamp,0,(b.getHeight()-side)/2,side,side,0,0,lamp.getWidth(),lamp.getHeight());
+   g.setOpacity(1.f);
+  }
+  g.setFont(font(12.f));g.setColour(juce::Colour(hover?0xff101c28:0xff25394c).withAlpha(b.isEnabled()?1.f:.5f));
+  g.drawText(b.getButtonText(),32,0,b.getWidth()-32,b.getHeight(),juce::Justification::left);
  }
  void drawButtonBackground(juce::Graphics& g,juce::Button& button,const juce::Colour&,bool hover,bool down) override {
   auto r=button.getLocalBounds().toFloat().reduced(.5f);const bool active=button.getToggleState(),primary=button.getComponentID()=="brain-apply"||button.getComponentID()=="brain-analyse";
