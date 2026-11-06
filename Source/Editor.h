@@ -126,6 +126,16 @@ class Editor final : public juce::AudioProcessorEditor,
             const auto& f=snapshot.features;const auto& p=snapshot.proposal;
             report+="\nINPUT: "+lufsText(f.integrated)+" LUFS-I   |   peak "+dbText(f.peak)+" dBFS   |   correlation "+juce::String(f.correlation,3)+"\n";
             report+="Captured "+juce::String(f.seconds,1)+" s. Target "+juce::String(snapshot.config.targetLufs,1)+" LUFS.\n";
+            if(!f.detail.sectionLevelsDb.empty()){
+                report+="\nWHOLE-TRACK SECTIONS (chronological 3-second RMS, dBFS):\n";
+                for(size_t section=0;section<f.detail.sectionLevelsDb.size();++section){
+                    const int from=static_cast<int>(section)*3;
+                    report+=juce::String(from)+"-"+juce::String(juce::jmin(from+3,static_cast<int>(f.seconds)))+
+                            "s: "+juce::String(f.detail.sectionLevelsDb[section],1)+" dBFS";
+                    report+=(section%3==2?"\n":"  |  ");
+                }
+                report+="\nLarge differences between sections can be intentional arrangements, not automatic errors.\n";
+            }
             if(p.previewVerified)report+="\nDSP PREVIEW: "+juce::String(p.previewLufs,1)+" LUFS | Peak "+juce::String(20*std::log10(std::max(1e-9f,p.previewPeak)),1)+" dBFS | section spread "+juce::String(p.previewSectionSpread,1)+" dB | limiter GR p95 "+juce::String(p.previewGr95,1)+" dB\n";
             if(p.valid){report+="\nPROPOSED EQ (low to high): ";for(float gain:p.gains)report+=juce::String(gain,1)+" dB   ";report+="\nLimiter drive: "+juce::String(p.drive,1)+" dB. Estimated EQ level change: "+juce::String(p.eqEstimate,1)+" dB.\n";}
             if(p.targetShares[0]>0){
