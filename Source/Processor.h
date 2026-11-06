@@ -199,17 +199,32 @@ public:
   for(size_t i=0;i<16;++i){size_t offset=i==0?0:7+(i-1)*3;config.existingEq[i]={parameters[offset]->load(),parameters[offset+1]->load(),parameters[offset+2]->load(),static_cast<int>(parameters[54+i*2]->load()),parameters[55+i*2]->load()>.5f};}
   brain.startUI(config);
  }
- bool brainStaleUI()const {
+ juce::String brainStaleReasonUI() const {
   const auto& expected=brainAuditionVariant>=0?brainAuditionValues:brainBaseline;
-  if(expected.size()!=parameters.size())return true;
-  for(size_t i=0;i<parameters.size();++i)
-   if(std::abs(parameters[i]->load()-expected[i])>1.0e-5f)return true;
-  return false;
+  if(expected.size()!=parameters.size())return "missing analysis/audition baseline";
+  for(size_t i=0;i<parameters.size();++i){
+   const auto id=masterlab::parameterId(i);
+   auto* parameter=state.getParameter(id);
+   if(!parameter)return "unknown parameter "+juce::String(id);
+   const float current=parameters[i]->load();
+   const float expectedValue=expected[i];
+   // Compare in normalized JUCE coordinates, not with a fixed tolerance in Hz,
+   // dB, ms or skewed frequency units. The previous raw 1e-5 threshold falsely
+   // marked live GUI attachments stale after setValueNotifyingHost round trips.
+   const float delta=std::abs(parameter->convertTo0to1(current)-
+                              parameter->convertTo0to1(expectedValue));
+   if(!std::isfinite(delta)||delta>2.0e-5f)
+    return juce::String(id)+" changed: "+juce::String(expectedValue,6)+
+           " -> "+juce::String(current,6)+" (norm delta "+juce::String(delta,7)+")";
+  }
+  return {};
  }
+ bool brainStaleUI()const {return brainStaleReasonUI().isNotEmpty();}
  bool auditionBrainUI(int variant){
   auto snapshot=brain.readUI();
   if(snapshot.phase!=masterlab::BrainPhase::Ready||brainStaleUI()){
-   brainActionMessage="Cannot audition: finish analysis or reanalyse after a manual edit.";return false;
+   brainActionMessage="Cannot audition: "+brainStaleReasonUI()+
+      " (or analysis not finished).";return false;
   }
   if(variant<0||variant>1||(variant==1&&!snapshot.alternateReady))return false;
   if(brainAuditionVariant==variant)return true;
