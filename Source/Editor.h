@@ -541,7 +541,7 @@ public:
         else AudioProcessorEditor::mouseWheelMove(event,wheel);
     }
     void paint(juce::Graphics& g) override {
-        g.fillAll(background);
+        theme.paintPowderCoat(g,getLocalBounds());
         // Hardware-inspired chassis: a distinct faceplate, not a legacy colour swap.
         g.setGradientFill(juce::ColourGradient(juce::Colour(0xfff8fafb),0.f,0.f,
                                               juce::Colour(0xffc8d0d8),0.f,80.f,false));
