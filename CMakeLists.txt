@@ -145,7 +145,7 @@ if(MASTERLAB_PLUGIN)
  if(NOT MASTERLAB_GUI_VALIDATE_RESULT EQUAL 0)
    message(FATAL_ERROR "Concept C resource validation failed: ${MASTERLAB_GUI_VALIDATE_ERROR}")
  endif()
- juce_add_binary_data(MasterLabGuiAssets NAMESPACE MasterLabGuiAssets SOURCES
+ juce_add_binary_data(MasterLabGuiAssets HEADER_NAME ConceptCImages.h NAMESPACE MasterLabGuiAssets SOURCES
    "${MASTERLAB_GUI_ASSET_DIR}/knob_96_atlas.png"
    "${MASTERLAB_GUI_ASSET_DIR}/knob_160_atlas.png"
    "${MASTERLAB_GUI_ASSET_DIR}/led_green_on.png"
