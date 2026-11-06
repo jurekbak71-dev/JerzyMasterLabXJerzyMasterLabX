@@ -157,7 +157,8 @@ if(MASTERLAB_PLUGIN)
    "${MASTERLAB_GUI_ASSET_DIR}/ring_blue_on.png"
    "${MASTERLAB_GUI_ASSET_DIR}/ring_green_on.png"
    "${MASTERLAB_GUI_ASSET_DIR}/ring_red_on.png"
-   "${MASTERLAB_GUI_ASSET_DIR}/powdercoat_tile.png")
+   "${MASTERLAB_GUI_ASSET_DIR}/powdercoat_tile.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/analog_gr_bezel.png")
  target_link_libraries(JerzyMasterLabX PUBLIC MasterLabFonts MasterLabGuiAssets)
  add_test(NAME concept_c_asset_pack
    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/gui_assets/validate_concept_c.py" "${MASTERLAB_GUI_ASSET_DIR}")
