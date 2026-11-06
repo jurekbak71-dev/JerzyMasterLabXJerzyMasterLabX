@@ -42,14 +42,75 @@ public:
   g.setColour(juce::Colour(active?0xff31504d:(primary?0xff315b55:(hover||down?0xff353b45:0xff242830))).withAlpha(button.isEnabled()?1.f:.35f));g.fillRoundedRectangle(r,r.getHeight()*.5f);
   if(button.hasKeyboardFocus(true)){g.setColour(juce::Colour(0xff73ddce));g.drawRoundedRectangle(r,r.getHeight()*.5f,1);}
  }
- void drawRotarySlider(juce::Graphics& g,int x,int y,int width,int height,float position,float start,float end,juce::Slider&) override {
-  const float radius=std::min(width,height)*.5f-10,cx=x+width*.5f,cy=y+height*.5f;
-  auto point=[&](float angle,float r){return juce::Point<float>(cx+std::sin(angle)*r,cy-std::cos(angle)*r);};
+ void drawRotarySlider(juce::Graphics& g,int x,int y,int width,int height,
+                       float position,float start,float end,juce::Slider& slider) override {
+  // Pure vector-rendered metal knob: bevelled chassis, radial scale, moving
+  // index pointer. Parameter automation remains owned by JUCE/APVTS.
+  const float size=static_cast<float>(std::min(width,height));
+  if(size<24.f)return;
+  const float cx=x+width*.5f,cy=y+height*.5f-2.f;
+  const float ring=std::max(11.f,size*.5f-13.f);
+  const float body=ring*.74f;
+  const float angle=start+(end-start)*juce::jlimit(0.f,1.f,position);
+  const auto accent=slider.findColour(juce::Slider::rotarySliderFillColourId);
+  const auto metal=juce::Colour(0xff606b77);
+  auto polar=[&](float theta,float radius){
+   return juce::Point<float>(cx+std::sin(theta)*radius,cy-std::cos(theta)*radius);
+  };
 
-  juce::Path track;track.addCentredArc(cx,cy,radius,radius,0,start,end,true);g.setColour(juce::Colour(0xff343a43));g.strokePath(track,juce::PathStrokeType(4));
-  juce::Path active;active.addCentredArc(cx,cy,radius,radius,0,start,start+(end-start)*position,true);g.setColour(juce::Colour(0xff82dfcd));g.strokePath(active,juce::PathStrokeType(4,juce::PathStrokeType::curved,juce::PathStrokeType::rounded));
-  float inner=std::max(4.f,radius-8);g.setGradientFill(juce::ColourGradient(juce::Colour(0xff373e48),cx,cy-inner,juce::Colour(0xff171b23),cx,cy+inner,false));g.fillEllipse(cx-inner,cy-inner,inner*2,inner*2);
-  g.setColour(juce::Colour(0xff4a535f));g.drawEllipse(cx-inner,cy-inner,inner*2,inner*2,.6f);
-  auto p1=point(start+(end-start)*position,inner*.45f),p2=point(start+(end-start)*position,inner*.83f);g.setColour(juce::Colour(0xffe3f7f2));g.drawLine({p1,p2},2.5f);
+  // Deep, softly offset shadow (no bitmap allocations or DSP work).
+  g.setColour(juce::Colours::black.withAlpha(.35f));
+  g.fillEllipse(cx-body-3.f,cy-body+5.f,2.f*body+6.f,2.f*body+6.f);
+  g.setColour(juce::Colour(0xff0a1018));
+  g.fillEllipse(cx-ring-3.f,cy-ring-3.f,2.f*ring+6.f,2.f*ring+6.f);
+
+  // Brushed circular bezel and restrained scale marks.
+  g.setColour(juce::Colour(0xff52606c));
+  g.drawEllipse(cx-ring-2.f,cy-ring-2.f,2.f*ring+4.f,2.f*ring+4.f,1.f);
+  g.setColour(juce::Colour(0xff17202a));
+  g.fillEllipse(cx-ring,cy-ring,2.f*ring,2.f*ring);
+  for(int tick=0;tick<=10;++tick){
+   const float theta=start+(end-start)*(tick/10.f);
+   g.setColour(juce::Colour(tick%5==0?0xffbdc8d0:0xff657783));
+   const auto a=polar(theta,ring*.91f);
+   const auto b=polar(theta,ring*(tick%5==0?.78f:.83f));
+   g.drawLine({a,b},tick%5==0?1.7f:1.f);
+  }
+  juce::Path background;
+  background.addCentredArc(cx,cy,ring*.98f,ring*.98f,0,start,end,true);
+  g.setColour(juce::Colour(0xff293640));
+  g.strokePath(background,juce::PathStrokeType(4.f,juce::PathStrokeType::curved,
+                                             juce::PathStrokeType::rounded));
+  juce::Path progress;
+  progress.addCentredArc(cx,cy,ring*.98f,ring*.98f,0,start,angle,true);
+  g.setColour(accent.withAlpha(slider.isEnabled()?1.f:.32f));
+  g.strokePath(progress,juce::PathStrokeType(4.f,juce::PathStrokeType::curved,
+                                           juce::PathStrokeType::rounded));
+  // Machined 3D knob cap with a directional light source.
+  g.setGradientFill(juce::ColourGradient(metal.brighter(.34f),cx-body,cy-body,
+                                      juce::Colour(0xff161b24),cx+body,cy+body,false));
+  g.fillEllipse(cx-body,cy-body,2.f*body,2.f*body);
+  g.setColour(juce::Colour(0xffa3b2bf).withAlpha(.5f));
+  g.drawEllipse(cx-body+1.f,cy-body+1.f,2.f*body-2.f,2.f*body-2.f,1.3f);
+  const float inset=body*.79f;
+  g.setGradientFill(juce::ColourGradient(juce::Colour(0xff303c49),cx-inset,cy-inset,
+                                       juce::Colour(0xff111821),cx+inset,cy+inset,false));
+  g.fillEllipse(cx-inset,cy-inset,2.f*inset,2.f*inset);
+  g.setColour(juce::Colour(0xffd9e3ea).withAlpha(.22f));
+  g.drawEllipse(cx-inset+1.f,cy-inset+1.f,2.f*inset-2.f,2.f*inset-2.f,1.f);
+
+  // Pointer: two-stage illuminated machined index; no baked-in state.
+  auto p1=polar(angle,inset*.26f),p2=polar(angle,inset*.81f);
+  g.setColour(juce::Colours::black.withAlpha(.55f));
+  g.drawLine({p1.translated(1.f,1.f),p2.translated(1.f,1.f)},4.5f);
+  g.setColour(accent.brighter(.35f));
+  g.drawLine({p1,p2},3.f);
+  g.setColour(juce::Colour(0xffe9f5fa));
+  g.fillEllipse(cx-2.2f,cy-2.2f,4.4f,4.4f);
+  if(slider.hasKeyboardFocus(true)){
+   g.setColour(accent.withAlpha(.7f));
+   g.drawEllipse(cx-ring-5.f,cy-ring-5.f,2.f*ring+10.f,2.f*ring+10.f,1.4f);
+  }
  }
+
 };
