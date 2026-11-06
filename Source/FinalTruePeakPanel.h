@@ -58,6 +58,13 @@ public:
   g.drawVerticalLine(juce::jmax(10,getWidth()-11),0.f,static_cast<float>(getHeight()));
   g.setColour(juce::Colour(0xffb3e2ce));g.setFont(juce::Font(juce::FontOptions(23.f)));
   g.drawText("FINAL TRUE-PEAK",24,56,getWidth()-48,37,juce::Justification::left);
+  // A red warning light is driven strictly by a measured sample clipping condition.
+  // Inter-sample conformity remains separately audited, not inferred here.
+  const bool sampleClip=reading_.outputSamplePeak>1.f;
+  theme_.paintStatusLed(g,juce::jmax(24,getWidth()-195),56,25,sampleClip);
+  g.setColour(juce::Colour(sampleClip?0xffff5969:0xff63e28d));g.setFont(12.f);
+  g.drawText(sampleClip?"SAMPLE CLIP":"OUTPUT OK",juce::jmax(24,getWidth()-166),56,130,25,
+             juce::Justification::left);
   // Live, mechanically styled gain reduction meter; sourced from DSP
   // telemetry rather than a decorative animation.
   if(getWidth()>=870){
