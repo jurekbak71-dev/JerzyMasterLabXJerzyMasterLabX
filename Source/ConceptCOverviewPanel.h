@@ -23,6 +23,8 @@ class ConceptCOverviewPanel final : public juce::Component {
     bool haveTelemetry_=false;
     std::array<float,256> spectrum_{};
     bool haveSpectrum_=false;
+    std::array<float,256> eqCurveDb_{};
+    bool haveEqCurve_=false;
     static constexpr std::array<const char*,9> titles_{{
         "SPECTRAL EQ", "DYNAMICS", "STEREO ARCHITECT", "FINAL TRUE-PEAK",
         "ANALOG COLOR", "BASS ARCHITECT", "TRANSIENT SCULPTOR", "STABILIZER", "MASTER BRAIN"
@@ -126,6 +128,7 @@ public:
     ~ConceptCOverviewPanel()override{setLookAndFeel(nullptr);}
     void update(const Processor::ResponseFrame& frame){telemetry_=frame;haveTelemetry_=true;repaint();}
     void updateSpectrum(const std::array<float,256>& bins){spectrum_=bins;haveSpectrum_=true;repaint();}
+    void updateEqCurve(const std::array<float,256>& curve){eqCurveDb_=curve;haveEqCurve_=true;repaint();}
     bool hasMeasuredSpectrum() const noexcept{return haveSpectrum_;}
     int connectedControlCount() const noexcept{return static_cast<int>(controls_.size());}
     void resized()override{
@@ -194,6 +197,18 @@ public:
         }else{
             g.setColour(juce::Colour(0xff7294aa));g.setFont(theme_.font(10.f));
             g.drawText("Waiting for audio / FFT",plot.toNearestInt(),juce::Justification::centred);
+        }
+        if(haveEqCurve_){
+            juce::Path eq;
+            for(size_t i=0;i<eqCurveDb_.size();++i){
+                const float x=plotX+plotW*static_cast<float>(i)/(eqCurveDb_.size()-1);
+                const float y=plotY+plotH*juce::jlimit(0.f,1.f,.5f-eqCurveDb_[i]/24.f);
+                if(i==0)eq.startNewSubPath(x,y);else eq.lineTo(x,y);
+            }
+            juce::Graphics::ScopedSaveState clip(g);
+            g.reduceClipRegion(plot.toNearestInt());
+            g.setColour(juce::Colour(0xffff4056));
+            g.strokePath(eq,juce::PathStrokeType(1.8f));
         }
         const float statX=plot.getRight()+18.f;
         const float statW=juce::jmax(80.f,pane.getRight()-statX-13.f);
