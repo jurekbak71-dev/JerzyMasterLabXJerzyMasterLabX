@@ -124,10 +124,24 @@ public:
  juce::Image switchOff_{juce::ImageCache::getFromMemory(
      MasterLabGuiAssets::switch_off_png,MasterLabGuiAssets::switch_off_pngSize)};
  void paintGlassScreen(juce::Graphics& g,juce::Rectangle<float> rect)const{
+  // Soft multi-pass bloom OUTSIDE the LCD rim; the glass interior stays dark.
+  for(int layer=7;layer>=1;--layer){
+   g.setColour(juce::Colour(0xff00b9ff).withAlpha(.012f+(7-layer)*.004f));
+   g.drawRoundedRectangle(rect.expanded(static_cast<float>(layer)*.65f),
+                          11.f+layer*.45f,1.35f);
+  }
   if(!glassScreen_.isNull())g.drawImage(glassScreen_,rect);
+  g.setColour(juce::Colour(0xff06cfff).withAlpha(.85f));
+  g.drawRoundedRectangle(rect.reduced(2.f),10.f,1.15f);
+  g.setColour(juce::Colour(0xff7deaff).withAlpha(.34f));
+  g.drawLine(rect.getX()+18.f,rect.getY()+4.f,
+             rect.getRight()-18.f,rect.getY()+4.f,1.2f);
  }
  void paintGlassReflection(juce::Graphics& g,juce::Rectangle<float> rect)const{
-  if(!glassReflection_.isNull()){g.setOpacity(.45f);g.drawImage(glassReflection_,rect);g.setOpacity(1.f);}
+  if(!glassReflection_.isNull()){
+   // The generated overlay is already translucent. Never overpaint telemetry.
+   g.setOpacity(.50f);g.drawImage(glassReflection_,rect);g.setOpacity(1.f);
+  }
  }
  void paintModuleGlow(juce::Graphics& g,juce::Rectangle<float> rect,bool active)const{
   const auto& img=active?moduleGlowOn_:moduleGlowOff_;
@@ -199,8 +213,12 @@ public:
    g.drawFittedText(label.getText(),label.getLocalBounds().reduced(3,0),label.getJustificationType(),1);
    // Transparent optical layer above live text, never hardcode parameter values.
    if(!glassReadoutReflection_.isNull()){
-    g.setOpacity(.33f);g.drawImage(glassReadoutReflection_,area);g.setOpacity(1.f);
+    g.setOpacity(.45f);g.drawImage(glassReadoutReflection_,area);g.setOpacity(1.f);
    }
+   // Lit LCD underline, separated from live value text.
+   g.setColour(juce::Colour(0xff02c8ff).withAlpha(label.isEnabled()?.77f:.18f));
+   g.drawLine(area.getX()+4.f,area.getBottom()-2.f,
+              area.getRight()-4.f,area.getBottom()-2.f,1.f);
    return;
   }
   juce::LookAndFeel_V4::drawLabel(g,label);
