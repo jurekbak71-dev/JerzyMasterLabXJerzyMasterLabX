@@ -614,15 +614,15 @@ public:
         for(size_t i=0;i<modules.size();++i){int kind=modules[i];const float width=(getWidth()-48.f)/modules.size(),x=24+i*width;const bool active=(kind<3||kind==5)?moduleView==(kind==5?3:kind):(!showingParallel&&!showingBrain&&!showingInspector&&moduleView<0&&(kind==3?!showingLimiter:showingLimiter));const bool on=processor.state.getRawParameterValue(std::array<const char*,6>{"dynamicEqOn","dynamicsOn","stereoOn","eq","lim","stabilizerOn"}[kind])->load()>.5f;
             const auto colour=kind==4?curve:accent;
             const juce::Rectangle<float> slot(x+1.f,84.f,width-10.f,48.f);
-            g.setGradientFill(juce::ColourGradient(active?juce::Colour(0xff394c57):juce::Colour(0xff252e39),
-                                                     x,84.f,juce::Colour(0xff101821),x,132.f,false));
+            g.setGradientFill(juce::ColourGradient(active?juce::Colour(0xfff9fbfc):juce::Colour(0xffedf0f3),
+                                                     x,84.f,juce::Colour(0xffc7d2dc),x,132.f,false));
             g.fillRoundedRectangle(slot,5.f);
-            g.setColour(active?colour:juce::Colour(0xff3a4a55));g.drawRoundedRectangle(slot,5.f,active?1.6f:.8f);
-            if(chainDragging&&chainHover==kind){g.setColour(accent);g.drawRoundedRectangle(slot,5.f,2.f);}
-            g.setColour(juce::Colour(0xff070d12));g.fillEllipse(x+12.f,101.f,13.f,13.f);
-            g.setColour(on?colour:juce::Colour(0xff45515b));g.fillEllipse(x+15.f,104.f,7.f,7.f);
-            g.setColour(juce::Colours::whitesmoke);g.setFont(theme.font(modules.size()>3?12.f:16.f));g.drawText(std::array<const char*,6>{"Dynamic EQ","Dynamics","Stereo","Spectral EQ","Limiter","Stabilizer"}[kind],static_cast<int>(x)+34,90,static_cast<int>(width)-48,22,juce::Justification::left);
-            g.setColour(muted);g.setFont(theme.font(10));g.drawText(on?std::array<const char*,6>{"3 detectors","Down / upward","4-band M/S","16 bands","5 ms lookahead","Adaptive tone"}[kind]:"Bypassed",static_cast<int>(x)+34,111,static_cast<int>(width)-48,16,juce::Justification::left);
+            g.setColour(active?juce::Colour(0xff087cff):juce::Colour(0xff96a8b5));
+            g.drawRoundedRectangle(slot,5.f,active?1.8f:.8f);
+            if(chainDragging&&chainHover==kind){g.setColour(juce::Colour(0xff086bff));g.drawRoundedRectangle(slot,5.f,2.f);}
+            theme.paintPowerLed(g,juce::roundToInt(x+10.f),98,22,on);
+            g.setColour(juce::Colour(0xff172936));g.setFont(theme.font(modules.size()>3?12.f:16.f));g.drawText(std::array<const char*,6>{"Dynamic EQ","Dynamics","Stereo","Spectral EQ","Limiter","Stabilizer"}[kind],static_cast<int>(x)+34,90,static_cast<int>(width)-48,22,juce::Justification::left);
+            g.setColour(juce::Colour(0xff566b7b));g.setFont(theme.font(10));g.drawText(on?std::array<const char*,6>{"3 detectors","Down / upward","4-band M/S","16 bands","5 ms lookahead","Adaptive tone"}[kind]:"Bypassed",static_cast<int>(x)+34,111,static_cast<int>(width)-48,16,juce::Justification::left);
         }
         if(showingConsole){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
         if(moduleView>=0){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
