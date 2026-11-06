@@ -21,6 +21,8 @@ class ConceptCOverviewPanel final : public juce::Component {
     std::vector<std::unique_ptr<juce::TextButton>> openButtons_;
     Processor::ResponseFrame telemetry_{};
     bool haveTelemetry_=false;
+    std::array<float,256> spectrum_{};
+    bool haveSpectrum_=false;
     static constexpr std::array<const char*,9> titles_{{
         "SPECTRAL EQ", "DYNAMICS", "STEREO ARCHITECT", "FINAL TRUE-PEAK",
         "ANALOG COLOR", "BASS ARCHITECT", "TRANSIENT SCULPTOR", "STABILIZER", "MASTER BRAIN"
@@ -113,6 +115,7 @@ public:
     }
     ~ConceptCOverviewPanel()override{setLookAndFeel(nullptr);}
     void update(const Processor::ResponseFrame& frame){telemetry_=frame;haveTelemetry_=true;repaint();}
+    void updateSpectrum(const std::array<float,256>& bins){spectrum_=bins;haveSpectrum_=true;repaint();}
     void resized()override{
         for(size_t i=0;i<openButtons_.size();++i){
             auto r=card(static_cast<int>(i));
@@ -142,26 +145,73 @@ public:
         g.drawText("MASTER MONITOR / LIVE DSP",static_cast<int>(pane.getX()+18),
                    static_cast<int>(pane.getY()+10),static_cast<int>(pane.getWidth()-36),24,
                    juce::Justification::left);
-        const int left=static_cast<int>(pane.getX()+17),right=static_cast<int>(pane.getRight()-17);
-        const int colWidth=(right-left)/4;
+        // Analyzer is fed with the same real FFT amplitude bins as the legacy editor.
+        const float plotX=pane.getX()+18.f,plotY=pane.getY()+41.f;
+        const float plotW=juce::jmax(80.f,pane.getWidth()*.59f-26.f);
+        const float plotH=juce::jmax(34.f,pane.getHeight()-69.f);
+        const juce::Rectangle<float> plot(plotX,plotY,plotW,plotH);
+        g.setColour(juce::Colour(0xff0c1825));g.fillRoundedRectangle(plot,4.f);
+        for(int tick=1;tick<4;++tick){
+            const float y=plotY+tick*plotH/4.f;
+            g.setColour(juce::Colour(0xff273c4e));g.drawHorizontalLine(static_cast<int>(y),plotX,plotX+plotW);
+        }
+        if(haveSpectrum_){
+            juce::Path p;
+            for(size_t i=0;i<spectrum_.size();++i){
+                const float dbValue=juce::Decibels::gainToDecibels(juce::jmax(0.f,spectrum_[i]),-100.f);
+                const float normalized=juce::jlimit(0.f,1.f,(dbValue+90.f)/90.f);
+                const float x=plotX+plotW*static_cast<float>(i)/(spectrum_.size()-1);
+                const float y=plotY+plotH*(1.f-normalized);
+                if(i==0)p.startNewSubPath(x,y);else p.lineTo(x,y);
+            }
+            juce::Graphics::ScopedSaveState clip(g);
+            g.reduceClipRegion(plot.toNearestInt());
+            g.setColour(juce::Colour(0xff047cff).withAlpha(.22f));
+            juce::Path area=p;area.lineTo(plot.getRight(),plot.getBottom());
+            area.lineTo(plot.getX(),plot.getBottom());area.closeSubPath();g.fillPath(area);
+            g.setColour(juce::Colour(0xff3bbcff));g.strokePath(p,juce::PathStrokeType(1.5f));
+        }else{
+            g.setColour(juce::Colour(0xff7294aa));g.setFont(theme_.font(10.f));
+            g.drawText("Waiting for audio / FFT",plot.toNearestInt(),juce::Justification::centred);
+        }
+        const float statX=plot.getRight()+18.f;
+        const float statW=juce::jmax(80.f,pane.getRight()-statX-13.f);
+        const float statY=pane.getY()+41.f;
+        const float cellW=statW*.5f,cellH=juce::jmax(24.f,(pane.getHeight()-61.f)*.5f);
         const std::array<juce::String,4> values{{
             haveTelemetry_?db(telemetry_.inputReading.peak)+" dBFS":"--",
             haveTelemetry_?db(telemetry_.outputReading.peak)+" dBFS":"--",
             haveTelemetry_?juce::String(telemetry_.outputLufs.integrated,1)+" LUFS":"--",
             haveTelemetry_?juce::String(telemetry_.truePeak.gainReductionDb,2)+" dB":"--"
         }};
-        const std::array<const char*,4> labels{{"INPUT SAMPLE PEAK","OUTPUT SAMPLE PEAK","INTEGRATED LOUDNESS","TRUE-PEAK GAIN REDUCTION"}};
+        const std::array<const char*,4> labels{{
+            "INPUT PEAK","OUTPUT PEAK","LOUDNESS I","TRUE-PEAK GR"
+        }};
         for(int c=0;c<4;++c){
-            int x=left+c*colWidth;
-            g.setColour(juce::Colour(0xff90a9b9));g.setFont(theme_.font(9.f));
-            g.drawFittedText(labels[static_cast<size_t>(c)],x,static_cast<int>(pane.getY()+42),
-                             colWidth-8,17,juce::Justification::left,1);
-            g.setColour(juce::Colour(c==3?0xff32e670:0xffecf5fb));g.setFont(theme_.font(18.f));
-            g.drawFittedText(values[static_cast<size_t>(c)],x,static_cast<int>(pane.getY()+60),
-                             colWidth-8,35,juce::Justification::left,1);
+            const int x=juce::roundToInt(statX+(c%2)*cellW);
+            const int y=juce::roundToInt(statY+(c/2)*cellH);
+            const int w=juce::roundToInt(cellW-8.f);
+            g.setColour(juce::Colour(0xff9ab1c3));g.setFont(theme_.font(8.f));
+            g.drawFittedText(labels[static_cast<size_t>(c)],x,y,w,13,juce::Justification::left,1);
+            g.setColour(juce::Colour(c==3?0xff38e87a:0xffedf7ff));
+            g.setFont(theme_.font(juce::jmin(16.f,cellH*.38f)));
+            g.drawFittedText(values[static_cast<size_t>(c)],x,y+14,w,
+                             juce::jmax(13,juce::roundToInt(cellH*.48f)),juce::Justification::left,1);
         }
-        g.setColour(juce::Colour(0xff90a9b9));g.setFont(theme_.font(9.f));
-        g.drawText("LIVE / SAMPLE PEAK / LUFS / GAIN REDUCTION",
-                   left,static_cast<int>(pane.getBottom()-24),right-left,17,juce::Justification::left);
+        g.setColour(juce::Colour(0xff7d9aaf));g.setFont(theme_.font(8.f));
+        g.drawText("20 Hz                                  FREQUENCY (LOG)                                  20 kHz",
+                   static_cast<int>(plotX),static_cast<int>(plot.getBottom()+3.f),
+                   static_cast<int>(plotW),13,juce::Justification::centred);
+        // Master Brain is guided analysis, not a fake AI or a passive empty card.
+        auto brain=card(8);
+        g.setColour(juce::Colour(0xff2c4f67));
+        g.fillRoundedRectangle(brain.getX()+13.f,brain.getY()+67.f,brain.getWidth()-26.f,
+                               juce::jmax(12.f,brain.getHeight()-83.f),5.f);
+        g.setColour(juce::Colour(0xff91d8ff));g.setFont(theme_.font(9.f));
+        g.drawFittedText("ANALYSE  /  REVIEW  /  APPLY",
+                         static_cast<int>(brain.getX()+18.f),static_cast<int>(brain.getY()+75.f),
+                         static_cast<int>(brain.getWidth()-36.f),
+                         juce::jmax(16,static_cast<int>(brain.getHeight()-97.f)),
+                         juce::Justification::centred,2);
     }
 };
