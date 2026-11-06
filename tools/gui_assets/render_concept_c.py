@@ -69,9 +69,14 @@ def led(size, color, active=True):
     return im.resize((size,size),Image.Resampling.LANCZOS)
 
 for size in (96,160):
+    atlas = Image.new("RGBA",(size*11,size*10),(0,0,0,0))
     for i in range(101):
-        save(knob(size,i),f"knob_{size}_{i:03}.png","knob_frame",
+        frame = knob(size,i)
+        save(frame,f"knob_{size}_{i:03}.png","knob_frame",
              frame=i,frames=101,pivot=[size/2,size/2],range_degrees=270)
+        atlas.alpha_composite(frame,((i%11)*size,(i//11)*size))
+    save(atlas,f"knob_{size}_atlas.png","knob_atlas",
+         frame_size=size,frames=101,columns=11,rows=10)
 for color in ("green","red","blue"):
     for state in ("on","off"):
         save(led(96,PALETTE[color],state=="on"),
