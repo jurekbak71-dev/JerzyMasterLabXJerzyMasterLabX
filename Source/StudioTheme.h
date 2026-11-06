@@ -1,6 +1,7 @@
 #pragma once
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <BinaryData.h>
+#include <ConceptCImages.h>
 
 class StudioTheme final : public juce::LookAndFeel_V4 {
 juce::Typeface::Ptr face=juce::Typeface::createSystemTypefaceFor(BinaryData::Manrope_ttf,BinaryData::Manrope_ttfSize);
@@ -49,74 +50,52 @@ public:
   g.setColour(juce::Colour(active?0xffa2d8c8:0xff526b7b));g.drawRoundedRectangle(r,5.f,1.f);
   if(button.hasKeyboardFocus(true)){g.setColour(juce::Colour(0xff73ddce));g.drawRoundedRectangle(r.reduced(2.f),4.f,1.3f);}
  }
+ // Concept C rendered sprites: decoded once, shared by all APVTS-backed sliders.
+ // The knob indicator is part of each immutable pre-rendered frame, not vector paint.
+ juce::Image knob96_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::knob_96_atlas_png,MasterLabGuiAssets::knob_96_atlas_pngSize)};
+ juce::Image knob160_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::knob_160_atlas_png,MasterLabGuiAssets::knob_160_atlas_pngSize)};
+ juce::Image greenOn_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::led_green_on_png,MasterLabGuiAssets::led_green_on_pngSize)};
+ juce::Image greenOff_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::led_green_off_png,MasterLabGuiAssets::led_green_off_pngSize)};
+ juce::Image blueOn_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::led_blue_on_png,MasterLabGuiAssets::led_blue_on_pngSize)};
  void drawRotarySlider(juce::Graphics& g,int x,int y,int width,int height,
-                       float position,float start,float end,juce::Slider& slider) override {
-  // Pure vector-rendered metal knob: bevelled chassis, radial scale, moving
-  // index pointer. Parameter automation remains owned by JUCE/APVTS.
-  const float size=static_cast<float>(std::min(width,height));
-  if(size<24.f)return;
-  const float cx=x+width*.5f,cy=y+height*.5f-2.f;
-  const float ring=std::max(11.f,size*.5f-13.f);
-  const float body=ring*.74f;
-  const float angle=start+(end-start)*juce::jlimit(0.f,1.f,position);
-  const auto accent=slider.findColour(juce::Slider::rotarySliderFillColourId);
-  const auto metal=juce::Colour(0xff606b77);
-  auto polar=[&](float theta,float radius){
-   return juce::Point<float>(cx+std::sin(theta)*radius,cy-std::cos(theta)*radius);
-  };
-
-  // Deep, softly offset shadow (no bitmap allocations or DSP work).
-  g.setColour(juce::Colours::black.withAlpha(.35f));
-  g.fillEllipse(cx-body-3.f,cy-body+5.f,2.f*body+6.f,2.f*body+6.f);
-  g.setColour(juce::Colour(0xff0a1018));
-  g.fillEllipse(cx-ring-3.f,cy-ring-3.f,2.f*ring+6.f,2.f*ring+6.f);
-
-  // Brushed circular bezel and restrained scale marks.
-  g.setColour(juce::Colour(0xff52606c));
-  g.drawEllipse(cx-ring-2.f,cy-ring-2.f,2.f*ring+4.f,2.f*ring+4.f,1.f);
-  g.setColour(juce::Colour(0xff17202a));
-  g.fillEllipse(cx-ring,cy-ring,2.f*ring,2.f*ring);
-  for(int tick=0;tick<=10;++tick){
-   const float theta=start+(end-start)*(tick/10.f);
-   g.setColour(juce::Colour(tick%5==0?0xffbdc8d0:0xff657783));
-   const auto a=polar(theta,ring*.91f);
-   const auto b=polar(theta,ring*(tick%5==0?.78f:.83f));
-   g.drawLine({a,b},tick%5==0?1.7f:1.f);
+                       float position,float,float,juce::Slider& slider) override {
+  if(width<24||height<24)return;
+  const auto side=static_cast<float>(std::min(width,height));
+  const auto frame=juce::jlimit(0,100,juce::roundToInt(juce::jlimit(0.f,1.f,position)*100.f));
+  const bool large=side>=124.f;
+  const auto& atlas=large?knob160_:knob96_;
+  const int sourceSide=large?160:96;
+  if(atlas.isNull())return;
+  // Reserve an edge for the separately rendered LED housing.
+  const float shown=std::min(160.f,side*.92f);
+  const float dx=x+(width-shown)*.5f;
+  const float dy=y+(height-shown)*.5f;
+  auto bounds=juce::Rectangle<float>(dx,dy,shown,shown);
+  const auto& led=!slider.isEnabled()?greenOff_:
+                  slider.hasKeyboardFocus(true)?blueOn_:greenOn_;
+  if(!led.isNull()) {
+   const auto margin=shown*.02f;
+   auto ring=bounds.expanded(margin);
+   g.setOpacity(slider.isEnabled()?0.90f:0.35f);
+   g.drawImage(led,ring,juce::Rectangle<float>(0.f,0.f,
+                 static_cast<float>(led.getWidth()),static_cast<float>(led.getHeight())));
+   g.setOpacity(1.f);
   }
-  juce::Path background;
-  background.addCentredArc(cx,cy,ring*.98f,ring*.98f,0,start,end,true);
-  g.setColour(juce::Colour(0xff293640));
-  g.strokePath(background,juce::PathStrokeType(4.f,juce::PathStrokeType::curved,
-                                             juce::PathStrokeType::rounded));
-  juce::Path progress;
-  progress.addCentredArc(cx,cy,ring*.98f,ring*.98f,0,start,angle,true);
-  g.setColour(accent.withAlpha(slider.isEnabled()?1.f:.32f));
-  g.strokePath(progress,juce::PathStrokeType(4.f,juce::PathStrokeType::curved,
-                                           juce::PathStrokeType::rounded));
-  // Machined 3D knob cap with a directional light source.
-  g.setGradientFill(juce::ColourGradient(metal.brighter(.34f),cx-body,cy-body,
-                                      juce::Colour(0xff161b24),cx+body,cy+body,false));
-  g.fillEllipse(cx-body,cy-body,2.f*body,2.f*body);
-  g.setColour(juce::Colour(0xffa3b2bf).withAlpha(.5f));
-  g.drawEllipse(cx-body+1.f,cy-body+1.f,2.f*body-2.f,2.f*body-2.f,1.3f);
-  const float inset=body*.79f;
-  g.setGradientFill(juce::ColourGradient(juce::Colour(0xff303c49),cx-inset,cy-inset,
-                                       juce::Colour(0xff111821),cx+inset,cy+inset,false));
-  g.fillEllipse(cx-inset,cy-inset,2.f*inset,2.f*inset);
-  g.setColour(juce::Colour(0xffd9e3ea).withAlpha(.22f));
-  g.drawEllipse(cx-inset+1.f,cy-inset+1.f,2.f*inset-2.f,2.f*inset-2.f,1.f);
-
-  // Pointer: two-stage illuminated machined index; no baked-in state.
-  auto p1=polar(angle,inset*.26f),p2=polar(angle,inset*.81f);
-  g.setColour(juce::Colours::black.withAlpha(.55f));
-  g.drawLine({p1.translated(1.f,1.f),p2.translated(1.f,1.f)},4.5f);
-  g.setColour(accent.brighter(.35f));
-  g.drawLine({p1,p2},3.f);
-  g.setColour(juce::Colour(0xffe9f5fa));
-  g.fillEllipse(cx-2.2f,cy-2.2f,4.4f,4.4f);
+  const int sourceX=(frame%11)*sourceSide;
+  const int sourceY=(frame/11)*sourceSide;
+  g.setOpacity(slider.isEnabled()?1.f:0.4f);
+  g.drawImage(atlas,bounds,juce::Rectangle<float>(static_cast<float>(sourceX),
+                 static_cast<float>(sourceY),static_cast<float>(sourceSide),
+                 static_cast<float>(sourceSide)));
+  g.setOpacity(1.f);
   if(slider.hasKeyboardFocus(true)){
-   g.setColour(accent.withAlpha(.7f));
-   g.drawEllipse(cx-ring-5.f,cy-ring-5.f,2.f*ring+10.f,2.f*ring+10.f,1.4f);
+   g.setColour(juce::Colour(0xff087bff).withAlpha(.8f));
+   g.drawEllipse(bounds.expanded(1.5f),1.5f);
   }
  }
 
