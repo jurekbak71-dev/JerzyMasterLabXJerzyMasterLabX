@@ -47,7 +47,15 @@ public:
   }
  }
  void paint(juce::Graphics& g)override{
-  g.fillAll(juce::Colour(0xff121c1f));
+  g.fillAll(juce::Colour(0xffedf0f2));
+  // Concept C powder-coated sheet-metal side rails and inset dark instrument panel.
+  const float panelWidth=juce::jmax(1.f,static_cast<float>(getWidth())-20.f);
+  g.setGradientFill(juce::ColourGradient(juce::Colour(0xff344553),10.f,0.f,
+                                        juce::Colour(0xff111b25),10.f,static_cast<float>(getHeight()),false));
+  g.fillRect(10.f,0.f,panelWidth,static_cast<float>(getHeight()));
+  g.setColour(juce::Colour(0xff96a7b6));
+  g.drawVerticalLine(10,0.f,static_cast<float>(getHeight()));
+  g.drawVerticalLine(juce::jmax(10,getWidth()-11),0.f,static_cast<float>(getHeight()));
   g.setColour(juce::Colour(0xffb3e2ce));g.setFont(juce::Font(juce::FontOptions(23.f)));
   g.drawText("FINAL TRUE-PEAK",24,56,getWidth()-48,37,juce::Justification::left);
   // Live, mechanically styled gain reduction meter; sourced from DSP
