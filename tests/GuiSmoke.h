@@ -318,6 +318,33 @@ class GuiSmoke final : private juce::Timer {
         if(actual("limiterDrive")!=driveBefore||actual("gain16")!=gainBefore){
             std::cerr<<"Brain GUI Undo failed limiterDrive or gain16\n";return false;
         }
+        // Screenshot-reported accessibility: entire LED+caption is a >=30px target.
+        for(const char* id:{"exciter-present","exciter-active",
+                            "true-peak-present","true-peak-enabled"}){
+            auto* toggle=dynamic_cast<juce::ToggleButton*>(editor->findChildWithID(id));
+            if(!toggle||toggle->getHeight()<30||toggle->getWidth()<100){
+                std::cerr<<"Tiny/unreachable toggle "<<id<<"\n";return false;
+            }
+        }
+        // Full factory preset 0 through the actual NEW GUI button. Undo restores
+        // every parameter to the exact state immediately before the reset.
+        auto* factory=dynamic_cast<juce::Button*>(editor->findChildWithID("factory-default"));
+        if(!factory||factory->getHeight()<30||factory->getWidth()<48){
+            std::cerr<<"NEW factory control is missing or too small\n";return false;
+        }
+        parameter("gain16")->setValueNotifyingHost(.84f);
+        std::vector<float> beforeFactory;
+        for(auto* param:processor.getParameters())beforeFactory.push_back(param->getValue());
+        factory->onClick();
+        for(auto* param:processor.getParameters())
+            if(std::abs(param->getValue()-param->getDefaultValue())>1.0e-6f){
+                std::cerr<<"NEW did not restore factory parameter defaults\n";return false;
+            }
+        dynamic_cast<juce::Button*>(editor->findChildWithID("undo"))->onClick();
+        for(int i=0;i<processor.getParameters().size();++i)
+            if(std::abs(processor.getParameters()[i]->getValue()-beforeFactory[static_cast<size_t>(i)])>1.0e-6f){
+                std::cerr<<"NEW Undo did not restore state at parameter "<<i<<"\n";return false;
+            }
         eq->onClick();if(!frequency->isVisible()||drive->isVisible()||release->isVisible())return false;
         return true;
     }
