@@ -133,6 +133,15 @@ public:
  }
  void cancelRT()noexcept {active.store(0);cancelled.store(nextGeneration.load());}
  void cancelUI(){cancelRT();std::scoped_lock lock(mutex);active.store(0);snapshot.phase=BrainPhase::Cancelled;snapshot.proposal={};snapshot.message="Analysis cancelled. No parameters changed.";}
+ // User-initiated NEW/DEFAULT: invalidate proposals without touching the realtime
+ // FIFO or requiring a host transport stop. Stored presets remain untouched.
+ void clearUI(){
+  cancelRT();std::scoped_lock lock(mutex);
+  active.store(0);
+  snapshot=BrainSnapshot{};
+  snapshot.message="Factory default loaded. Play audio and analyse to create a new proposal.";
+ }
+
  void reviseUI(BrainConfig config){
   std::scoped_lock lock(mutex);if(snapshot.phase==BrainPhase::Pending||snapshot.phase==BrainPhase::Analysing||snapshot.phase==BrainPhase::Validating)return;
   config=cleanBrainConfig(config);config.dynamicsMode=snapshot.config.dynamicsMode;config.existingEq=snapshot.config.existingEq;config.existingEqEnabled=snapshot.config.existingEqEnabled;config.hasBaseline=snapshot.config.hasBaseline;config.baseline=snapshot.config.baseline;
