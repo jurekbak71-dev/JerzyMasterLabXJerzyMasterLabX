@@ -15,7 +15,9 @@ public:
  juce::UndoManager undoManager{1000000,100};
  juce::AudioProcessorValueTreeState state;
  masterlab::MasterBrain brain;
- std::vector<float> brainBaseline;
+ std::vector<float> brainBaseline,brainAuditionValues;
+ int brainAuditionVariant=-1;
+ juce::String brainActionMessage{"No Brain proposal applied yet."};
  masterlab::SerialGraph engine;
  masterlab::LimiterMeter limiterMeter;
  masterlab::WindowMeter inputMeter,outputMeter;
@@ -189,19 +191,91 @@ public:
   }finishUiTransaction();
  }
  void startBrainUI(masterlab::BrainConfig config){
+  brainAuditionVariant=-1;brainAuditionValues.clear();
+  brainActionMessage="Analysis started; parameters unchanged.";
   brainBaseline.clear();for(auto* parameter:parameters)brainBaseline.push_back(parameter->load());
   config.hasBaseline=true;for(size_t i=0;i<parameters.size();++i)config.baseline[i]=parameters[i]->load();
   config.existingEqEnabled=parameters[4]->load()>.5f&&parameters[86]->load()>.5f;config.dynamicsMode=static_cast<int>(parameters[100]->load());
   for(size_t i=0;i<16;++i){size_t offset=i==0?0:7+(i-1)*3;config.existingEq[i]={parameters[offset]->load(),parameters[offset+1]->load(),parameters[offset+2]->load(),static_cast<int>(parameters[54+i*2]->load()),parameters[55+i*2]->load()>.5f};}
   brain.startUI(config);
  }
- bool brainStaleUI()const {if(brainBaseline.size()!=parameters.size())return true;for(size_t i=0;i<parameters.size();++i)if(parameters[i]->load()!=brainBaseline[i])return true;return false;}
+ bool brainStaleUI()const {
+  const auto& expected=brainAuditionVariant>=0?brainAuditionValues:brainBaseline;
+  if(expected.size()!=parameters.size())return true;
+  for(size_t i=0;i<parameters.size();++i)
+   if(std::abs(parameters[i]->load()-expected[i])>1.0e-5f)return true;
+  return false;
+ }
+ bool auditionBrainUI(int variant){
+  auto snapshot=brain.readUI();
+  if(snapshot.phase!=masterlab::BrainPhase::Ready||brainStaleUI()){
+   brainActionMessage="Cannot audition: finish analysis or reanalyse after a manual edit.";return false;
+  }
+  if(variant<0||variant>1||(variant==1&&!snapshot.alternateReady))return false;
+  if(brainAuditionVariant==variant)return true;
+  const auto& proposal=variant==snapshot.selectedVariant?snapshot.proposal:snapshot.alternateProposal;
+  if(!proposal.valid||!proposal.previewVerified||proposal.changes.empty())return false;
+  for(const auto& [id,value]:proposal.changes){
+   auto* p=state.getParameter(id);
+   if(!p||!std::isfinite(value)||value<p->getNormalisableRange().start||
+      value>p->getNormalisableRange().end)return false;
+  }
+  // Undo the last audition before switching. Undo on B then restores
+  // the pre-Brain state, not variant A.
+  if(brainAuditionVariant>=0){
+   if(!undo())return false;
+   brainAuditionVariant=-1;brainAuditionValues.clear();
+  }
+  if(brainStaleUI()||!brain.selectVariantUI(variant))return false;
+  beginUiTransaction(variant==0?"Master Brain audition A":"Master Brain audition B");
+  for(const auto& [id,value]:proposal.changes){
+   auto* p=state.getParameter(id);
+   p->beginChangeGesture();p->setValueNotifyingHost(p->convertTo0to1(value));p->endChangeGesture();
+  }
+  finishUiTransaction();
+  brainAuditionVariant=variant;brainAuditionValues.clear();
+  for(auto* parameter:parameters)brainAuditionValues.push_back(parameter->load());
+  brainActionMessage=variant==0?"Audition A is live in the DSP. Apply to keep it.":
+                                   "Audition B is live in the DSP. Apply to keep it.";
+  return true;
+ }
  bool applyBrainUI(){
-  auto result=brain.readUI();if(result.phase!=masterlab::BrainPhase::Ready||!result.proposal.valid||brainStaleUI())return false;
-  for(const auto& [id,value]:result.proposal.changes){auto* parameter=state.getParameter(id);if(!parameter||!std::isfinite(value)||value<parameter->getNormalisableRange().start||value>parameter->getNormalisableRange().end)return false;}
+  auto result=brain.readUI();
+  if(result.phase!=masterlab::BrainPhase::Ready||!result.proposal.valid){
+   brainActionMessage="Apply blocked: no valid ready proposal. Analyse first.";return false;
+  }
+  if(brainStaleUI()){
+   brainActionMessage="Apply blocked: parameters changed after analysis. Reanalyse.";return false;
+  }
+  if(brainAuditionVariant>=0){
+   if(brainAuditionVariant!=result.selectedVariant)return false;
+   brain.markAppliedUI();brainActionMessage="APPLIED: auditioned variant retained in DSP; Undo restores pre-Brain parameters.";
+   return true;
+  }
+  if(result.proposal.changes.empty()){
+   brainActionMessage="Apply blocked: proposal contains no changes.";return false;
+  }
+  bool changed=false;
+  for(const auto& [id,value]:result.proposal.changes){
+   auto* parameter=state.getParameter(id);
+   if(!parameter||!std::isfinite(value)||value<parameter->getNormalisableRange().start||
+      value>parameter->getNormalisableRange().end){
+    brainActionMessage="Apply blocked: invalid parameter "+juce::String(id);return false;
+   }
+   changed|=std::abs(state.getRawParameterValue(id)->load()-value)>1.0e-5f;
+  }
+  if(!changed){
+   brainActionMessage="Proposal already matches current parameters; no audible change.";return false;
+  }
   beginUiTransaction("Master Brain proposal");
-  for(const auto& [id,value]:result.proposal.changes){auto* parameter=state.getParameter(id);parameter->beginChangeGesture();parameter->setValueNotifyingHost(parameter->convertTo0to1(value));parameter->endChangeGesture();}
-  finishUiTransaction();brain.markAppliedUI();return true;
+  for(const auto& [id,value]:result.proposal.changes){
+   auto* parameter=state.getParameter(id);parameter->beginChangeGesture();
+   parameter->setValueNotifyingHost(parameter->convertTo0to1(value));parameter->endChangeGesture();
+  }
+  finishUiTransaction();brain.markAppliedUI();
+  brainActionMessage="APPLIED: "+juce::String(static_cast<int>(result.proposal.changes.size()))+
+                      " parameter assignments; Undo restores previous values.";
+  return true;
  }
  bool hasEditor()const override{return true;}juce::AudioProcessorEditor* createEditor()override;
 };
