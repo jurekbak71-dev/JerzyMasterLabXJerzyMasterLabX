@@ -348,7 +348,15 @@ class Editor final : public juce::AudioProcessorEditor,
             fft->performFrequencyOnlyForwardTransform(fftLeft.data());fft->performFrequencyOnlyForwardTransform(fftRight.data());
             double now=juce::Time::getMillisecondCounterHiRes();float release=lastAnalysis>0?static_cast<float>(std::exp(-(now-lastAnalysis)/150.)):0;lastAnalysis=now;
             for(int i=0;i<=size/2;++i){float level=masterlab::stereoSpectrumAmplitude(fftLeft[i],fftRight[i],size);spectrum[i]=level>spectrum[i]?level:release*spectrum[i]+(1-release)*level;}
-            if(modulePanels[2]){std::array<float,512> bins{};for(size_t i=0;i<bins.size();++i){float hz=20*std::pow(static_cast<float>(sampleRate()*.5)/20,i/511.f),position=std::clamp(hz*size/static_cast<float>(sampleRate()),0.f,static_cast<float>(size/2-1));int bin=static_cast<int>(position);bins[i]=spectrum[bin]+(position-bin)*(spectrum[bin+1]-spectrum[bin]);}modulePanels[2]->updateSpectrum(bins);}
+            if(modulePanels[2]){std::array<float,512> bins{};for(size_t i=0;i<bins.size();++i){float hz=20*std::pow(static_cast<float>(sampleRate()*.5)/20,i/511.f),position=std::clamp(hz*size/static_cast<float>(sampleRate()),0.f,static_cast<float>(size/2-1));int bin=static_cast<int>(position);bins[i]=spectrum[bin]+(position-bin)*(spectrum[bin+1]-spectrum[bin]);}modulePanels[2]->updateSpectrum(bins);
+                std::array<float,256> consoleBins{};
+                for(size_t n=0;n<consoleBins.size();++n){
+                    const float pos=static_cast<float>(n)*511.f/255.f;
+                    const int ix=juce::jlimit(0,510,static_cast<int>(pos));
+                    consoleBins[n]=bins[static_cast<size_t>(ix)]*(1.f-(pos-ix))+
+                                   bins[static_cast<size_t>(ix+1)]*(pos-ix);
+                }
+                overviewPanel.updateSpectrum(consoleBins);}
 
         }
         repaint();
