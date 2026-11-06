@@ -52,6 +52,9 @@ class ConceptCOverviewPanel final : public juce::Component {
         c->slider.setComponentID(juce::String("console-")+id);
         c->slider.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
         c->slider.setTextBoxStyle(juce::Slider::TextBoxBelow,false,78,20);
+        c->slider.setColour(juce::Slider::textBoxTextColourId,juce::Colour(0xff182e3c));
+        c->slider.setColour(juce::Slider::textBoxBackgroundColourId,juce::Colour(0xffe8edf0));
+        c->slider.setColour(juce::Slider::textBoxOutlineColourId,juce::Colour(0xffa2b0bc));
         c->slider.setColour(juce::Slider::rotarySliderFillColourId,juce::Colour(0xff087dff));
         addAndMakeVisible(c->caption);addAndMakeVisible(c->slider);
         c->attachment=std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
@@ -99,7 +102,8 @@ public:
             for(int c=0;c<3;++c)addControl(card,c,topLabels[static_cast<size_t>(card)][static_cast<size_t>(c)],
                                            topIds[static_cast<size_t>(card)][static_cast<size_t>(c)]);
         const std::array<const char*,4> bottomIds{{"analogDrive","bassSub","transientAttackLow","stabilizerAmount"}};
-        for(int i=0;i<4;++i)addControl(i+4,0,"MAIN CONTROL",bottomIds[static_cast<size_t>(i)]);
+        const std::array<const char*,4> bottomLabels{{"DRIVE","SUB","LOW ATTACK","AMOUNT"}};
+        for(int i=0;i<4;++i)addControl(i+4,0,bottomLabels[static_cast<size_t>(i)],bottomIds[static_cast<size_t>(i)]);
         for(int i=0;i<9;++i){
             auto b=std::make_unique<juce::TextButton>("OPEN");
             b->setComponentID("console-open-"+juce::String(i));
@@ -118,7 +122,7 @@ public:
             const auto r=card(p->card);
             const float cell=p->card<4?(r.getWidth()-22.f)/3.f:r.getWidth()-22.f;
             const float x=r.getX()+11.f+p->column*cell;
-            const float y=r.getY()+(p->card<4?61.f:54.f);
+            const float y=r.getY()+(p->card<4?70.f:72.f);
             const float h=juce::jmax(35.f,r.getBottom()-y-9.f);
             p->caption.setBounds(static_cast<int>(x),static_cast<int>(y-15.f),
                                  static_cast<int>(cell),17);
@@ -157,7 +161,7 @@ public:
                              colWidth-8,35,juce::Justification::left,1);
         }
         g.setColour(juce::Colour(0xff90a9b9));g.setFont(theme_.font(9.f));
-        g.drawText("Real measured output / no fake transport or unimplemented features",
+        g.drawText("LIVE / SAMPLE PEAK / LUFS / GAIN REDUCTION",
                    left,static_cast<int>(pane.getBottom()-24),right-left,17,juce::Justification::left);
     }
 };
