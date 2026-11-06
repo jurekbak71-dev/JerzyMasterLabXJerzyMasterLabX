@@ -47,7 +47,7 @@ class MasterBrain final : private juce::Thread {
      }else{
       const std::uint64_t part=N/4;
       for(std::uint64_t region=0;region<4;++region){
-       const std::uint64_t start=(target-N)*region/3;
+       const std::uint64_t start=(target-part)*region/3;
        if(count>=start&&count<start+part){
         size_t dst=static_cast<size_t>(region*part+count-start);
         previewLeft[dst]=l;previewRight[dst]=r;break;
