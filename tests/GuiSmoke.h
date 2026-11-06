@@ -170,8 +170,11 @@ class GuiSmoke final : private juce::Timer {
             auto* console=dynamic_cast<juce::Button*>(editor->findChildWithID("view-console"));
             if(!console){std::cerr<<"Concept C console navigation missing\n";return false;}
             console->onClick();
-            auto* overview=editor->findChildWithID("concept-c-overview");
+            auto* overview=dynamic_cast<ConceptCOverviewPanel*>(editor->findChildWithID("concept-c-overview"));
             if(!overview||!overview->isVisible())return false;
+            if(overview->connectedControlCount()!=16||!overview->hasMeasuredSpectrum()){
+                std::cerr<<"Concept C real APVTS knobs or measured FFT missing\n";return false;
+            }
             editor->setSize(1000,700);
             auto image=editor->createComponentSnapshot(editor->getLocalBounds());
             if(!image.isValid())return false;
