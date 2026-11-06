@@ -65,7 +65,7 @@ int main(){
  for(double rate:{44100.,48000.,96000.,192000.}){
   source->setNonRealtime(false);target->setNonRealtime(true);
   for(auto* processor:{source.get(),target.get()}){processor->setRateAndBufferSizeDetails(rate,32);processor->prepareToPlay(rate,32);}
-  if(source->getLatencySamples()!=static_cast<int>(std::ceil(rate*.005))||source->getLatencySamples()!=target->getLatencySamples()){std::cerr<<"restored PDC mismatch";return 1;}
+  if(source->getLatencySamples()!=static_cast<int>(std::ceil(rate*.005))+masterlab::FinalTruePeak::latencySamples||source->getLatencySamples()!=target->getLatencySamples()){std::cerr<<"restored PDC mismatch";return 1;}
   for(int size:{1,257,4097}){
    juce::AudioBuffer<float> live(2,size),offline(2,size);
    for(int i=0;i<size;++i){live.setSample(0,i,.02f*std::sin(i*.17f));live.setSample(1,i,.017f*std::cos(i*.11f));}offline.makeCopyOf(live);
