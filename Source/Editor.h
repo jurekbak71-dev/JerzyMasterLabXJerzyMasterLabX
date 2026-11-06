@@ -498,11 +498,11 @@ public:
         undoButton.setTooltip("Undo the last parameter transaction. Host automation may also be recorded while it runs.");
         redoButton.setTooltip("Redo an undone transaction.");
         presetButton.onClick=[this]{
-            juce::PopupMenu menu;menu.addItem(0,"0  Default / NEW");menu.addSeparator();menu.addItem(1,"Load preset...");menu.addItem(2,"Save preset...");
+            juce::PopupMenu menu;menu.addItem(3,"0  Default / NEW");menu.addSeparator();menu.addItem(1,"Load preset...");menu.addItem(2,"Save preset...");
             auto safe=juce::Component::SafePointer<Editor>(this);
             menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(presetButton),[safe](int selection){
                 if(!safe)return;
-                if(selection==0){safe->endDrag();safe->processor.loadFactoryDefaultUI();safe->refreshBrain();safe->repaint();}
+                if(selection==3){safe->endDrag();safe->processor.loadFactoryDefaultUI();safe->refreshBrain();safe->repaint();}
                 else if(selection==1||selection==2)safe->choosePreset(selection==2);
             });
         };
