@@ -39,7 +39,7 @@ public:
  ~TransientSculptorPanel()override{setLookAndFeel(nullptr);}
  void update(const Processor::ResponseFrame& f){reading_=f.transient;repaint();}
  void resized()override{
-  present_.setBounds(24,16,120,28);enabled_.setBounds(156,16,110,28);
+  present_.setBounds(24,12,130,34);enabled_.setBounds(162,12,116,34);
   const int columns=std::max(4,std::min(8,getWidth()/145));
   const int width=(getWidth()-48)/columns;
   for(size_t i=0;i<knobs_.size();++i){
