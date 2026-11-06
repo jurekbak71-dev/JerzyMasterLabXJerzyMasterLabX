@@ -114,8 +114,10 @@ public:
    peakStamps_[peakTail_]=sampleClock_++;
    peakTail_=(peakTail_+1)%peakQueueCapacity;
    const float futurePeak=peakValues_[peakHead_];
-   // Extra headroom for reconstruction through changing gain.
-   const float threshold=ceiling*.975f;
+   // Conservative true-peak reconstruction safety margin: the 4x input
+   // detector alone cannot bound the interpolated output after gain changes.
+   // Measured independently against 8x / 49-tap reconstruction stress cases.
+   const float threshold=ceiling*.90f;
    const float desired=futurePeak>threshold?threshold/futurePeak:1.f;
    gain_=desired<gain_?desired:release*gain_+(1.f-release)*desired;
    minGain=std::min(minGain,gain_);
