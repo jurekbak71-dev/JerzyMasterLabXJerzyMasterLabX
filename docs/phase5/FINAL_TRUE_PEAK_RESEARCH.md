@@ -26,3 +26,12 @@ The existing limiter is part of the legacy six-family routing graph; Harmonic Ex
 5. Optional final section GUI and true-peak monitoring, append-only schema 16, no old parameter renumbering; end-to-end Windows x64 pluginval and FL Studio test.
 
 Prior verified merge: PR #14 commit 8209ad00e64d140b626ad5bc1d826250234b2d66.
+
+## 2026-11-06 — VST3 integration candidate (unverified)
+The same branch now additionally contains a host-exposed final stage, **schema 16 / 226 parameters**, with append-only IDs `truePeakPresent`, `truePeakOn`, `truePeakCeiling`, `truePeakRelease`, `truePeakDrive`. The JUCE inspector is available under `+ Modules → Open Final True-Peak (post chain)`. `truePeakPresent=false` by factory default and by schema 1–15 migration.
+
+**Fixed latency decision**: this prototype always processes through the 128-sample delayed stage, even when the final limiter is off. Host PDC is now `legacy_engine_latency + 128`, and host-bypass dry FIFO uses that same total. There is no dynamic PDC during automation, and other existing graph module alignments continue to operate at legacy engine latency before the final stage. The output timing of legacy projects has changed by +128 samples, but the host is explicitly told to compensate. This is an intentional experimental tradeoff requiring FL Studio verification; it is **not** a claim of bit-identical sample timing or automatic seamless compatibility in all hosts.
+
+A new serial/parallel graph regression and GUI smoke check are registered. CI and external FL Studio confirmation are mandatory before merging the updated pull request. The output intersample compliance claim is still under evaluation and should not be represented as certified.
+
+This later update supersedes only the preceding 'NOT YET IN VST3' statements; remaining detector / ISP / CPU validation caveats continue to apply.
