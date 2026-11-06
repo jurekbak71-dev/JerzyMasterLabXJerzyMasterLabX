@@ -115,6 +115,8 @@ class Editor final : public juce::AudioProcessorEditor,
         if(snapshot.alternateReady&&snapshot.phase==masterlab::BrainPhase::Ready){
             const auto& alt=snapshot.alternateProposal;
             report+="A/B: selected "+juce::String(snapshot.selectedVariant==0?"A":"B")+
+                    " | A style "+juce::String(masterlab::brainStyles[snapshot.config.style])+
+                    " / B style "+juce::String(masterlab::brainStyles[snapshot.config.style==2?0:2])+
                     " | current "+juce::String(snapshot.proposal.previewLufs,1)+
                     " LUFS, GR "+juce::String(snapshot.proposal.previewGr95,1)+
                     " dB | alternate "+juce::String(alt.previewLufs,1)+
