@@ -7,7 +7,7 @@ from PIL import Image
 p=Path(sys.argv[1] if len(sys.argv)>1 else "assets/gui-concept-c")
 manifest=json.loads((p/"manifest.json").read_text(encoding="utf-8"))
 assert manifest["kit"]=="masterlabx-concept-c"
-assert len(manifest["assets"])==211, "Expected 202 knob frames + 2 atlases + 6 LED states + 1 tile"
+assert len(manifest["assets"])==214, "Expected 202 knob frames + 2 atlases + 6 LEDs + 3 rings + 1 tile"
 seen=set()
 for a in manifest["assets"]:
     name=a["name"]
@@ -27,4 +27,4 @@ for size in (96,160):
 for size in (96,160):
     atlas=next(a for a in manifest["assets"] if a["name"]==f"knob_{size}_atlas.png")
     assert atlas["width"]==size*11 and atlas["height"]==size*10
-print("OK: 211 assets, 2x101 knob frames, 6 LED sprites, 1 powdercoat tile; dimensions/RGBA verified.")
+print("OK: 214 assets, 2x101 knob frames, 6 LED sprites, 1 powdercoat tile; dimensions/RGBA verified.")
