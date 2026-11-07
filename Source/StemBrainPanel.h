@@ -26,7 +26,7 @@ class StemBrainPanel final : public juce::Component,private juce::Timer {
  juce::File resultDir_;
  juce::String status_{"Choose WAV to separate with HTDemucs, or import aligned real stems."};
  static juce::File engineDirectory(){
-  return juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
+  return juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory)
          .getChildFile("JerzyMasterLabX").getChildFile("StemEngine");
  }
  void showStatus(const juce::String& s){
@@ -50,7 +50,7 @@ class StemBrainPanel final : public juce::Component,private juce::Timer {
   const auto exe=engine.getChildFile("stems-split.exe");
   const auto model=engine.getChildFile("models").getChildFile("htdemucs-42M-v1.0-F16.gguf");
   if(!exe.existsAsFile()||!model.existsAsFile()){
-   showStatus("HTDemucs native runtime/model missing. Run INSTALL_STEM_ENGINE.cmd from the plugin ZIP once.");
+   showStatus("HTDemucs native runtime/model missing. Install the complete MasterLabX package using INSTALL_MASTERLABX.cmd.");
    return;
   }
   resultDir_=song.getParentDirectory().getChildFile(song.getFileNameWithoutExtension()+"_MasterLabX_stems");
