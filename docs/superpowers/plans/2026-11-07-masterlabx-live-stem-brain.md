@@ -37,11 +37,11 @@
 **Create after reconciling existing architecture:** `Source/LiveStemEngine.h`, `Source/LiveStemEngine.cpp`, `Source/LiveStemBackend.h`, `tests/LiveStemEngineTests.cpp`, `tools/live_stem_benchmark.cpp`.
 
 ### Task A1: callback-safe buffering, bypass and timebase
-- [ ] Capture actual `processBlock` entry/exit graph and `prepareToPlay` / transport handling; document exact points in code.
-- [ ] Write failing tests for variable-sized audio blocks, mono/stereo, seek/loop, start/stop, worker starvation and zero input; prove RED.
-- [ ] Implement fixed-capacity ring input/output with sample-based timestamps, discontinuity generation counter and no heap allocation/lock in callback. Expose interfaces that do not allocate on the audio thread.
-- [ ] Verify GREEN under sanitizers where supported; record peak callback time and allocations.
-- [ ] Commit separately.
+- [x] Capture actual `processBlock` entry/exit graph and `prepareToPlay` / transport handling; document exact points in code.
+- [x] Write failing tests for variable-sized audio blocks, mono/stereo, seek/loop, start/stop, worker starvation and zero input; prove RED.
+- [x] Implement fixed-capacity ring input/output with sample-based timestamps, discontinuity generation counter and no heap allocation/lock in callback. Expose interfaces that do not allocate on the audio thread.
+- [x] Verify GREEN under sanitizers where supported; record peak callback time and allocations.
+- [x] Commit separately.
 
 ### Task A2: neural backend feasibility gate
 - [ ] Benchmark current bundled HTDemucs GGUF/F16 native runtime in sliding-window mode: 44.1/48 kHz, CPU-only, CPU multi-core, GPU if explicitly supported; measure algorithmic lookahead, end-to-end latency, throughput (real-time factor), transient quality and reconstruction residual.
@@ -117,3 +117,13 @@
 
 ## Status
 **2026-11-07:** research and architecture audit started; this plan documents intended work only. No new live streaming DSP implementation or passing tests are claimed.
+
+## Execution checkpoint (2026-11-07)
+A1 implemented in 6e42247, with Linux ASan/UBSan and zero-allocation tests;
+A2 measurement harness in c5e4e21. Windows code commit c5e4e21 passes 45/45 CTest,
+GUI, pluginval 5, neural smoke and packaging (run 42387405624). See
+`docs/testing/2026-11-07-live-stem-a1.md` and
+`docs/testing/2026-11-07-live-stem-a2.md` for exact behavior, limitations and
+raw evidence. A2 backend selection remains open: native full-context HTDemucs
+requires 27.71–48.34 s for 2 s audio on measured Windows configuration. A3/B–F are
+not complete. No FL Studio test or live installer is claimed.
