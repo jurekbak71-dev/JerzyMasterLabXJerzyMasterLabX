@@ -201,16 +201,28 @@ public:
  }
  bool applyStemVariantUI(int variant){
   auto bank=stemRemix.snapshot();if(!bank||variant<0||variant>1)return false;
-  // Conservative source-relative rebalance: avoid amplifying artifacts.
-  // B has +1.5 dB lead-vocal prominence and -1 dB drums, not fake source AI.
-  const std::array<float,4> offsets=variant==0?
-     std::array<float,4>{0.f,0.f,0.f,0.f}:
-     std::array<float,4>{-1.f,0.f,-.5f,1.5f};
+  // Measured, conservative stem-balancing rules. They are deliberately
+  // transparent DSP heuristics, not a claim to reconstruct the original mix.
+  std::array<float,4> offsets{};
+  auto relativeDb=[&](int a,int b){
+   return 20.f*std::log10(std::max(1.e-7f,bank->rms[static_cast<size_t>(a)])/
+                         std::max(1.e-7f,bank->rms[static_cast<size_t>(b)]));
+  };
+  if(relativeDb(0,3)>7.f)offsets[0]-=1.f; // drums masking vocal
+  if(relativeDb(1,0)>5.f)offsets[1]-=1.5f; // bass masking kick
+  if(relativeDb(2,3)>7.f)offsets[2]-=1.f; // backing masking lead
+  if(relativeDb(3,2)<-8.f)offsets[3]+=1.f; // buried voice
+  for(int i=0;i<4;++i){
+   if(bank->peak[static_cast<size_t>(i)]>=.998f)offsets[static_cast<size_t>(i)]-=.75f;
+  }
+  if(variant==1){
+   offsets[0]-=.75f;offsets[2]-=.5f;offsets[3]+=1.5f;
+  }
   beginUiTransaction(variant==0?"Stem Brain natural balance":"Stem Brain vocal-forward");
   for(int i=0;i<4;++i){
    const auto id=juce::String(masterlab::stemParameterIds[1+5*i]);
    auto* param=state.getParameter(id);
-   const float amount=std::clamp(offsets[static_cast<size_t>(i)],-6.f,6.f);
+   const float amount=std::clamp(offsets[static_cast<size_t>(i)],-3.f,3.f);
    param->beginChangeGesture();param->setValueNotifyingHost(param->convertTo0to1(amount));
    param->endChangeGesture();
   }
