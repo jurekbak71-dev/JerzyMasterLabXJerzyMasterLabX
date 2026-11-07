@@ -79,4 +79,18 @@ static void seekDuringInference(){
  for(int block=1;block<3;++block){l.fill(.25f);r.fill(.25f);engine.process(l.data(),r.data(),256,{1000+block*256,true,false,true});waitFor(worker,3+block*2);}
  for(float x:l)CHECK(x==.5f);
 }
-int main(){varyingSamples();failuresRecover();seekDuringInference();std::cout<<"LiveStemWorker: off-audio inference, varying previous-hop alignment, blocked seek, exception/nonfinite recovery and shutdown passed\n";}
+static void wakeAndStopWithoutPolling(){
+ LiveStemEngine engine;CHECK(engine.prepare(44100,512,1));
+ const auto started=std::chrono::steady_clock::now();
+ {
+  LiveStemWorker worker(engine,std::make_unique<Fixture>());
+  // Give worker an opportunity to block on atomic::wait.
+  std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  std::array<float,256> left{},right{};left.fill(.125f);right.fill(.125f);
+  engine.process(left.data(),right.data(),256,{0,true,false,true});
+  waitFor(worker,2);
+ }
+ const auto elapsed=std::chrono::steady_clock::now()-started;
+ CHECK(elapsed<std::chrono::seconds(2));
+}
+int main(){varyingSamples();failuresRecover();seekDuringInference();wakeAndStopWithoutPolling();std::cout<<"LiveStemWorker: off-audio inference, varying previous-hop alignment, blocked seek, exception/nonfinite recovery and shutdown passed\n";}
