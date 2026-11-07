@@ -256,10 +256,10 @@ if(MASTERLAB_PLUGIN)
    target_compile_definitions(JerzyMasterLabX PUBLIC MASTERLAB_LIVE_STEM_PLUGIN=1)
    # ONNX Runtime's binary must live beside the real VST3 DLL on Windows.
    if(WIN32)
-     add_custom_command(TARGET JerzyMasterLabX POST_BUILD
+     add_custom_command(TARGET JerzyMasterLabX_VST3 POST_BUILD
        COMMAND ${CMAKE_COMMAND} -E copy_if_different
        "${MASTERLAB_ORT_ROOT}/lib/onnxruntime.dll"
-       "$<TARGET_FILE_DIR:JerzyMasterLabX>/onnxruntime.dll")
+       "$<TARGET_FILE_DIR:JerzyMasterLabX_VST3>/onnxruntime.dll")
    endif()
  endif()
  target_compile_definitions(JerzyMasterLabX PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
