@@ -168,6 +168,27 @@ class GuiSmoke final : private juce::Timer {
     }
     bool capture(){
         if(iteration==0){
+            auto* stemTab=dynamic_cast<juce::Button*>(editor->findChildWithID("view-stem-brain"));
+            if(!stemTab||stemTab->getWidth()<90){std::cerr<<"Missing new Stem Brain workspace\n";return false;}
+            stemTab->onClick();
+            auto* stemPanel=editor->findChildWithID("stem-brain-panel");
+            if(!stemPanel||!stemPanel->isVisible())return false;
+            for(const char* id:{"stem-separate","stem-import","stem-diagnose","stem-variant-a","stem-variant-b"}){
+                auto* button=dynamic_cast<juce::Button*>(stemPanel->findChildWithID(id));
+                if(!button||button->getHeight()<30){
+                    std::cerr<<"Missing/broken genuine stem GUI control "<<id<<"\n";return false;
+                }
+            }
+            editor->setSize(1000,700);
+            {
+                auto shot=editor->createComponentSnapshot(editor->getLocalBounds());
+                if(!shot.isValid())return false;
+                auto output=juce::File::getCurrentWorkingDirectory()
+                            .getChildFile("build-plugin/stem-brain-smoke.png");
+                output.getParentDirectory().createDirectory();
+                juce::FileOutputStream stream(output);stream.truncate();
+                if(!juce::PNGImageFormat{}.writeImageToStream(shot,stream))return false;
+            }
             auto* console=dynamic_cast<juce::Button*>(editor->findChildWithID("view-console"));
             if(!console){std::cerr<<"Concept C console navigation missing\n";return false;}
             console->onClick();
