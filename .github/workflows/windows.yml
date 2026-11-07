@@ -22,6 +22,19 @@ jobs:
         run: cmake --build build --config Release --parallel 2
       - name: DSP tests
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Measure live callback boundary (no neural model)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build/live-stem-evidence | Out-Null
+          & ./build/Release/live_stem_benchmark.exe | Out-File -Encoding utf8 build/live-stem-evidence/boundary-windows.csv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors | Format-List | Out-File build/live-stem-evidence/cpu.txt
+          Write-Output 'Boundary timing excludes inference. This is not evidence of live AI separation.'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Live-Stem-callback-boundary-evidence
+          path: build/live-stem-evidence/
+          if-no-files-found: error
       - name: Measure adversarial true-peak and CPU on Windows x64
         shell: pwsh
         run: |
