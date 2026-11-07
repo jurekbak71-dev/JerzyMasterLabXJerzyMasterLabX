@@ -139,4 +139,35 @@ static void impossibleFutureDoesNotHideValidOutput() {
  CHECK(e.pushOutput(out));out.position=in.position;out.channels[0]=out.channels[1]=.5f;CHECK(e.pushOutput(out));
  l=r=.25f;e.process(&l,&r,1,{1,true,false,true});CHECK(l==.5f&&r==.5f);CHECK(e.statistics().invalidFrames==1);
 }
-int main(){variableBlocksAndMono();transportAndStaleResults();alignedOutputAndStarvation();silenceInvalidAndBoundedQueues();noCallbackAllocationsAndReset();recoveryDuringFade();concurrentWorkerAcrossSeeks();finiteFallbackAtExtremeAmplitude();impossibleFutureDoesNotHideValidOutput();std::cout<<"LiveStemEngineTests OK\n";}
+static float runFourStemMixer(const LiveStemControls& controls){
+ LiveStemEngine e; CHECK(e.prepare(44100,1,1));
+ float value=0.f;
+ for(int i=0;i<5000;++i){
+  float l=1.f,r=1.f;
+  e.process(&l,&r,1,{i,true,false,true},controls);
+  value=l;
+  StereoLiveFrame in{};
+  CHECK(e.popInput(in));
+  SeparatedLiveFrame out{};
+  out.position=in.position;out.epoch=in.epoch;
+  for(std::size_t s=0;s<4;++s){out.channels[s*2]=.25f;out.channels[s*2+1]=.25f;}
+  CHECK(e.pushOutput(out));
+ }
+ return value;
+}
+static void independentStemMixerControls(){
+ LiveStemControls controls{};
+ CHECK(std::abs(runFourStemMixer(controls)-1.f)<.005f);
+ controls.mute[3]=true; // mute VOCALS only
+ CHECK(std::abs(runFourStemMixer(controls)-.75f)<.005f);
+ controls.mute[3]=false;
+ controls.solo[1]=true; // only BASS
+ CHECK(std::abs(runFourStemMixer(controls)-.25f)<.005f);
+ controls.solo[1]=false;
+ controls.gainLinear[0]=2.f; // DRUMS +6.02 dB
+ CHECK(std::abs(runFourStemMixer(controls)-1.25f)<.005f);
+ controls.gainLinear[0]=1.f;
+ controls.width[0]=0.f; // midside centre remains unchanged for mono
+ CHECK(std::abs(runFourStemMixer(controls)-1.f)<.005f);
+}
+int main(){variableBlocksAndMono();transportAndStaleResults();alignedOutputAndStarvation();silenceInvalidAndBoundedQueues();noCallbackAllocationsAndReset();recoveryDuringFade();concurrentWorkerAcrossSeeks();finiteFallbackAtExtremeAmplitude();impossibleFutureDoesNotHideValidOutput();independentStemMixerControls();std::cout<<"LiveStemEngineTests OK\n";}
