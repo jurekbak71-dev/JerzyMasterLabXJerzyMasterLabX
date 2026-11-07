@@ -36,6 +36,11 @@ public:
     std::uint32_t currentEpoch() const noexcept { return publishedEpoch_.load(std::memory_order_acquire); }
     // Approximate queue depth, read by its single worker consumer only.
     std::size_t pendingInputFrames() const noexcept { return input_.size(); }
+    // Producer notifies at most once per audio block. A waiting worker can
+    // sleep without timer polling; stop() increments the same sequence.
+    std::uint32_t inputWakeSequence() const noexcept { return wakeSequence_.load(std::memory_order_acquire); }
+    void waitForInput(std::uint32_t observed) const noexcept { wakeSequence_.wait(observed,std::memory_order_acquire); }
+    void wakeInput() noexcept { wakeSequence_.fetch_add(1,std::memory_order_release); wakeSequence_.notify_one(); }
 private:
     struct DryFrame { float left{}, right{}; std::uint64_t position{}; std::uint32_t epoch{}; };
     LiveStemQueue<StereoLiveFrame, queueCapacity> input_;
@@ -45,6 +50,7 @@ private:
     std::uint64_t position_{};
     std::uint32_t epoch_{1};
     std::atomic<std::uint32_t> publishedEpoch_{1};
+    std::atomic<std::uint32_t> wakeSequence_{0};
     std::int64_t expectedHost_{};
     bool initialized_{}, wasActive_{}, hadPosition_{}, wasNonRealtime_{};
     bool havePending_{}, starving_{};
