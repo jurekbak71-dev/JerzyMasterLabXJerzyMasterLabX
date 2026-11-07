@@ -74,11 +74,14 @@ void LiveStemEngine::process(float* left, float* right, std::size_t count, LiveS
                       static_cast<std::uint64_t>(t.samplePosition);
     expectedHost_ = count > room ? std::numeric_limits<std::int64_t>::max() :
         static_cast<std::int64_t>(static_cast<std::uint64_t>(t.samplePosition) + count);
+    bool enqueued = false;
     for (std::size_t i = 0; i < count; ++i, ++position_) {
         const float l = std::isfinite(left[i]) ? left[i] : 0.f;
         const float r = right ? (std::isfinite(right[i]) ? right[i] : 0.f) : l;
-        if (active && !input_.tryPush({l,r,position_,epoch_}))
-            droppedInput_.fetch_add(1, std::memory_order_relaxed);
+        if (active) {
+            if (input_.tryPush({l,r,position_,epoch_})) enqueued = true;
+            else droppedInput_.fetch_add(1, std::memory_order_relaxed);
+        }
         dry_[dryAt_] = {l,r,position_,epoch_};
         const auto read = (dryAt_ + 1) % drySize_;
         const auto delayed = dry_[read];
@@ -123,6 +126,9 @@ void LiveStemEngine::process(float* left, float* right, std::size_t count, LiveS
             invalidFrames_.fetch_add(1, std::memory_order_relaxed);
         }
     }
+    // One wakeup per block instead of a 100-us timed sleep in the worker.
+    // This is lock-free; its real-time cost must still be measured in CI.
+    if (enqueued) wakeInput();
 }
 
 LiveStemStatistics LiveStemEngine::statistics() const noexcept {
