@@ -13,6 +13,7 @@ bool LiveStemEngine::prepare(double rate, std::size_t latency, std::size_t fade)
     auto dry = std::make_unique<DryFrame[]>(latency + 1);
     dry_ = std::move(dry);
     latency_ = latency; fade_ = fade; drySize_ = latency + 1;
+    toneCoefficient_ = static_cast<float>(1.0-std::exp(-2.0*3.141592653589793*1800.0/rate));
     // Both queue owners must be stopped here; never do this in reset/process.
     StereoLiveFrame in{}; while (input_.tryPop(in)) {}
     SeparatedLiveFrame out{}; while (output_.tryPop(out)) {}
@@ -25,11 +26,14 @@ void LiveStemEngine::newEpoch() noexcept {
     ++epoch_; position_ = 0; dryAt_ = 0;
     wetMix_ = 0; lastCorrection_.fill(0); recoveryHold_.fill(0); starving_ = false; fadeRemaining_ = 0;
     havePending_ = false;
+    for(auto& pair:toneLowpass_)pair.fill(0.f);
+    smoothedGain_.fill(1.f);
     publishedEpoch_.store(epoch_,std::memory_order_release);
 }
 void LiveStemEngine::reset() noexcept { newEpoch(); initialized_ = false; }
 
-bool LiveStemEngine::findOutput(std::uint64_t wanted, std::array<float,2>& sum) noexcept {
+bool LiveStemEngine::findOutput(std::uint64_t wanted, std::array<float,2>& sum,
+                                const LiveStemControls& controls) noexcept {
     // Fixed work budget per sample, even when a worker returns a stale backlog.
     for (int attempt = 0; attempt < 8; ++attempt) {
         if (!havePending_) havePending_ = output_.tryPop(pending_);
@@ -45,11 +49,36 @@ bool LiveStemEngine::findOutput(std::uint64_t wanted, std::array<float,2>& sum) 
         if (pending_.position > wanted) return false;
         havePending_ = false;
         std::array<double,2> total{};
-        for (std::size_t c = 0; c < 8; ++c) {
-            if (!std::isfinite(pending_.channels[c])) {
-                invalidFrames_.fetch_add(1, std::memory_order_relaxed); return false;
+        const bool anySolo = std::any_of(controls.solo.begin(), controls.solo.end(),
+                                        [](bool b){return b;});
+        for (std::size_t stem=0; stem<4; ++stem) {
+            if (!std::isfinite(controls.gainLinear[stem]) ||
+                !std::isfinite(controls.tone[stem]) ||
+                !std::isfinite(controls.width[stem]) ||
+                controls.gainLinear[stem]<0.f || controls.gainLinear[stem]>8.f ||
+                std::abs(controls.tone[stem])>1.f ||
+                controls.width[stem]<0.f || controls.width[stem]>2.f) {
+                invalidFrames_.fetch_add(1, std::memory_order_relaxed);return false;
             }
-            total[c % 2] += pending_.channels[c];
+            float stereo[2];
+            for (std::size_t channel=0;channel<2;++channel) {
+                const float input=pending_.channels[stem*2+channel];
+                if (!std::isfinite(input)) {
+                    invalidFrames_.fetch_add(1,std::memory_order_relaxed);return false;
+                }
+                auto& smooth=toneLowpass_[stem][channel];
+                smooth+=toneCoefficient_*(input-smooth);
+                stereo[channel]=input+controls.tone[stem]*(input-smooth);
+            }
+            // Smooth gain changes over ~15 ms at 44.1 kHz rather than
+            // generating a click when the host automates a fader or mute.
+            const bool audible=!controls.mute[stem]&&(!anySolo||controls.solo[stem]);
+            const float target=audible?controls.gainLinear[stem]:0.f;
+            smoothedGain_[stem]+=(target-smoothedGain_[stem])*.0015f;
+            const double mid=(static_cast<double>(stereo[0])+stereo[1])*.5;
+            const double side=(static_cast<double>(stereo[0])-stereo[1])*.5*controls.width[stem];
+            total[0]+=(mid+side)*smoothedGain_[stem];
+            total[1]+=(mid-side)*smoothedGain_[stem];
         }
         for (std::size_t c = 0; c < 2; ++c) {
             if (std::abs(total[c]) > std::numeric_limits<float>::max()) {
@@ -62,9 +91,12 @@ bool LiveStemEngine::findOutput(std::uint64_t wanted, std::array<float,2>& sum) 
     return false;
 }
 
-void LiveStemEngine::process(float* left, float* right, std::size_t count, LiveStemTransport t) noexcept {
+void LiveStemEngine::process(float* left, float* right, std::size_t count,
+                             LiveStemTransport t, const LiveStemControls& controls) noexcept {
     if (!dry_ || !left || count == 0) return;
     const bool active = t.playing || t.nonRealtime;
+    if(initialized_ && wasRemixEnabled_!=controls.enabled) newEpoch();
+    wasRemixEnabled_=controls.enabled;
     if (initialized_ && (active != wasActive_ || t.nonRealtime != wasNonRealtime_ ||
         t.hasPosition != hadPosition_ || (active && t.hasPosition && t.samplePosition != expectedHost_)))
         newEpoch();
@@ -78,7 +110,7 @@ void LiveStemEngine::process(float* left, float* right, std::size_t count, LiveS
     for (std::size_t i = 0; i < count; ++i, ++position_) {
         const float l = std::isfinite(left[i]) ? left[i] : 0.f;
         const float r = right ? (std::isfinite(right[i]) ? right[i] : 0.f) : l;
-        if (active) {
+        if (active && controls.enabled) {
             if (input_.tryPush({l,r,position_,epoch_})) enqueued = true;
             else droppedInput_.fetch_add(1, std::memory_order_relaxed);
         }
@@ -90,7 +122,8 @@ void LiveStemEngine::process(float* left, float* right, std::size_t count, LiveS
                            delayed.position == position_ - latency_;
         std::array<float,2> dry{ready ? delayed.left : 0.f, ready ? delayed.right : 0.f};
         std::array<float,2> wet{};
-        bool available = active && ready && findOutput(position_ - latency_, wet);
+        bool available = active && controls.enabled && ready &&
+                         findOutput(position_ - latency_, wet, controls);
         if (available) {
             for (std::size_t c=0;c<2;++c)
                 if (!std::isfinite(wet[c]-dry[c])) available=false;
