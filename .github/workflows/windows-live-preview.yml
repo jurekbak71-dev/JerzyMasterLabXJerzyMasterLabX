@@ -71,6 +71,7 @@ jobs:
           Copy-Item 'install/INSTALL_MASTERLABX_LIVE.cmd' "$stage/INSTALL_MASTERLABX_LIVE.cmd"
           Copy-Item 'install/install_masterlabx_live.ps1' "$stage/install_masterlabx_live.ps1"
           Copy-Item 'docs/LIVE_PREVIEW_WINDOWS.md' "$stage/README-LIVE.md"
+          New-Item -ItemType Directory -Force "$stage/licenses" | Out-Null
           Copy-Item 'licenses/StemgenRT' "$stage/licenses/StemgenRT" -Recurse -Force
           $models=Get-ChildItem $stage -Recurse -Filter *.onnx -File
           if($models){throw 'Model weights must NOT be bundled in the CI artifact'}
