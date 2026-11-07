@@ -31,7 +31,7 @@ jobs:
           New-Item -ItemType Directory -Force build | Out-Null
           Invoke-WebRequest https://github.com/microsoft/onnxruntime/releases/download/v1.26.0/onnxruntime-win-x64-1.26.0.zip -OutFile build/ort.zip
           Expand-Archive build/ort.zip -DestinationPath build
-          python -m pip install --disable-pip-version-check psutil==7.1.3
+          python -m pip install --disable-pip-version-check psutil==7.1.3 numpy==2.5.4
       - name: Build native adapter and worker tests
         shell: pwsh
         run: |
@@ -41,6 +41,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Regression and actual neural waveform parity
         run: ctest --test-dir build-native -C Release --output-on-failure
+      - name: Independent quality-metric oracles
+        run: python tests/test_stemgenrt_quality.py
       - name: Measure native neural inference and paced callback path
         shell: pwsh
         run: |

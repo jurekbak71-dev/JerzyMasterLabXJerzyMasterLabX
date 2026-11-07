@@ -16,6 +16,7 @@ void LiveStemWorker::run(std::stop_token stop){
  StereoLiveFrame frame{};std::size_t filled=0;std::uint32_t epoch=0;
  std::uint64_t next=0,start=0;
  bool resetRequired=true;
+ auto previousEnd=Clock::now();
  while(!stop.stop_requested()){
   if(!engine_.popInput(frame)){std::this_thread::sleep_for(std::chrono::microseconds(100));continue;}
   if(frame.epoch!=engine_.currentEpoch()){discardedFrames_.fetch_add(1,std::memory_order_relaxed);resetRequired=true;continue;}
@@ -27,6 +28,9 @@ void LiveStemWorker::run(std::stop_token stop){
   input[0][filled]=frame.left;input[1][filled]=frame.right;++filled;next=frame.position+1;
   if(filled<128)continue;
   filled=0;const auto begin=Clock::now();bool valid=false;
+  const auto between=static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(begin-previousEnd).count());
+  maxBetweenNs_.store(std::max(maxBetweenNs_.load(std::memory_order_relaxed),between),std::memory_order_relaxed);
+  maxBacklog_.store(std::max(maxBacklog_.load(std::memory_order_relaxed),static_cast<std::uint64_t>(engine_.pendingInputFrames())),std::memory_order_relaxed);
   try{valid=backend_->process(input,output);}catch(...){failures_.fetch_add(1,std::memory_order_relaxed);resetRequired=true;}
   const auto ns=static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now()-begin).count());
   totalNs_.fetch_add(ns,std::memory_order_relaxed);maxNs_.store(std::max(maxNs_.load(std::memory_order_relaxed),ns),std::memory_order_relaxed);
@@ -42,10 +46,12 @@ void LiveStemWorker::run(std::stop_token stop){
   }
   // Publication after output allows control/test observers to wait for a complete hop.
   hops_.fetch_add(1,std::memory_order_release);
+  previousEnd=Clock::now();
  }
 }
 LiveStemWorkerStatistics LiveStemWorker::statistics()const noexcept{
  return {hops_.load(std::memory_order_acquire),outputFrames_.load(std::memory_order_relaxed),failures_.load(std::memory_order_relaxed),
- discardedFrames_.load(std::memory_order_relaxed),totalNs_.load(std::memory_order_relaxed),maxNs_.load(std::memory_order_relaxed)};
+ discardedFrames_.load(std::memory_order_relaxed),totalNs_.load(std::memory_order_relaxed),maxNs_.load(std::memory_order_relaxed),
+ maxBetweenNs_.load(std::memory_order_relaxed),maxBacklog_.load(std::memory_order_relaxed)};
 }
 }

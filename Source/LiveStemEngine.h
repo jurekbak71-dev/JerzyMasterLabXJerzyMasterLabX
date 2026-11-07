@@ -34,6 +34,8 @@ public:
     LiveStemStatistics statistics() const noexcept;
     std::size_t latencySamples() const noexcept { return latency_; }
     std::uint32_t currentEpoch() const noexcept { return publishedEpoch_.load(std::memory_order_acquire); }
+    // Approximate queue depth, read by its single worker consumer only.
+    std::size_t pendingInputFrames() const noexcept { return input_.size(); }
 private:
     struct DryFrame { float left{}, right{}; std::uint64_t position{}; std::uint32_t epoch{}; };
     LiveStemQueue<StereoLiveFrame, queueCapacity> input_;

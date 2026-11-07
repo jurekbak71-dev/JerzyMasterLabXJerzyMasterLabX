@@ -37,7 +37,7 @@ int main(int argc,char** argv){try{
  const int hops=argc>2?std::stoi(argv[2]):1000;
  const int seconds=argc>3?std::stoi(argv[3]):10;
  if(hops<100||seconds<1||seconds>600)return 2;
- std::cout<<"kind,block,latency_samples,hops,mean_us,p99_us,max_us,inference_rtf,missing_frames,worker_drops,worker_failures,callback_p99_us,callback_late_over_1ms,max_reconstruction_error\n";
+ std::cout<<"kind,block,latency_samples,hops,mean_us,p99_us,max_us,inference_rtf,missing_frames,worker_drops,worker_failures,callback_p99_us,callback_late_over_1ms,max_reconstruction_error,max_between_inference_us,max_input_backlog_frames,max_callback_lateness_us,stale_output_frames,invalid_output_frames\n";
  for(bool parallel:{false,true}){
   masterlab::StemgenRtBackend backend(argv[1],parallel);
   masterlab::LiveStemHop input{},previous{};masterlab::SeparatedStemHop output{};
@@ -51,23 +51,25 @@ int main(int argc,char** argv){try{
    previous=input;
   }
   std::sort(duration.begin(),duration.end());
-  std::cout<<(parallel?"neural_three_workers":"neural_one_worker")<<",128,128,"<<hops<<','<<total/hops<<','<<duration[duration.size()*99/100]<<','<<duration.back()<<','<<total/1.e6/(hops*128./44100)<<",NA,NA,NA,NA,NA,"<<maxError<<std::endl;
+  std::cout<<(parallel?"neural_three_workers":"neural_one_worker")<<",128,128,"<<hops<<','<<total/hops<<','<<duration[duration.size()*99/100]<<','<<duration.back()<<','<<total/1.e6/(hops*128./44100)<<",NA,NA,NA,NA,NA,"<<maxError<<",NA,NA,NA,NA,NA"<<std::endl;
  }
  for(std::size_t block:{128u,256u,512u}){
   masterlab::LiveStemEngine engine;if(!engine.prepare(44100,4096,220))return 1;
   masterlab::LiveStemWorker worker(engine,std::make_unique<masterlab::StemgenRtBackend>(argv[1],true));
   std::vector<float> l(block),r(block);std::vector<double> callbacks;
-  const auto samples=static_cast<std::uint64_t>(44100*seconds);std::uint64_t late=0;
+  const auto samples=static_cast<std::uint64_t>(44100*seconds);std::uint64_t late=0;double maxLateness=0;
   const auto origin=Clock::now();
   for(std::uint64_t at=0;at<samples;at+=block){
    const auto due=origin+std::chrono::nanoseconds(static_cast<std::int64_t>(1.e9*at/44100));sleepUntil(due);
-   if(Clock::now()-due>std::chrono::milliseconds(1))++late;
+   const auto lateness=Clock::now()-due;
+   if(lateness>std::chrono::milliseconds(1))++late;
+   maxLateness=std::max(maxLateness,std::chrono::duration<double,std::micro>(lateness).count());
    for(std::size_t i=0;i<block;++i){l[i]=.2f*std::sin(float(at+i)*.017f);r[i]=.2f*std::sin(float(at+i)*.020f);}
    const auto begin=Clock::now();engine.process(l.data(),r.data(),block,{static_cast<std::int64_t>(at),true,false,true});
    callbacks.push_back(std::chrono::duration<double,std::micro>(Clock::now()-begin).count());
   }
   const auto w=worker.statistics();const auto e=engine.statistics();std::sort(callbacks.begin(),callbacks.end());
-  std::cout<<"paced_neural,"<<block<<",4096,"<<w.hops<<','<<(w.hops?w.totalInferenceNanoseconds/1000./w.hops:0)<<",NA,"<<w.maxInferenceNanoseconds/1000.<<','<<(w.hops?w.totalInferenceNanoseconds/1.e9/(w.hops*128./44100):0)<<','<<e.missingFrames<<','<<w.discardedFrames+e.droppedInput<<','<<w.failures<<','<<callbacks[callbacks.size()*99/100]<<','<<late<<",NA"<<std::endl;
+  std::cout<<"paced_neural,"<<block<<",4096,"<<w.hops<<','<<(w.hops?w.totalInferenceNanoseconds/1000./w.hops:0)<<",NA,"<<w.maxInferenceNanoseconds/1000.<<','<<(w.hops?w.totalInferenceNanoseconds/1.e9/(w.hops*128./44100):0)<<','<<e.missingFrames<<','<<w.discardedFrames+e.droppedInput<<','<<w.failures<<','<<callbacks[callbacks.size()*99/100]<<','<<late<<",NA,"<<w.maxBetweenInferenceNanoseconds/1000.<<','<<w.maxInputBacklogFrames<<','<<maxLateness<<','<<e.staleFrames<<','<<e.invalidFrames<<std::endl;
  }
  return 0;
 }catch(const std::exception& error){std::cerr<<error.what()<<'\n';return 1;}}
