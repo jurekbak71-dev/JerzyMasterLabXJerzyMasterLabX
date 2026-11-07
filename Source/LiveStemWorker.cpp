@@ -9,7 +9,10 @@ LiveStemWorker::LiveStemWorker(LiveStemEngine& engine,std::unique_ptr<LiveStemBa
  if(!backend_)throw std::invalid_argument("Missing live backend");
  thread_=std::jthread([this](std::stop_token stop){run(stop);});
 }
-LiveStemWorker::~LiveStemWorker()=default;
+LiveStemWorker::~LiveStemWorker(){
+ thread_.request_stop();
+ engine_.wakeInput(); // Release atomic::wait before jthread joins.
+}
 void LiveStemWorker::run(std::stop_token stop){
  using Clock=std::chrono::steady_clock;
  LiveStemHop input{};SeparatedStemHop output{};
@@ -18,7 +21,13 @@ void LiveStemWorker::run(std::stop_token stop){
  bool resetRequired=true;
  auto previousEnd=Clock::now();
  while(!stop.stop_requested()){
-  if(!engine_.popInput(frame)){std::this_thread::sleep_for(std::chrono::microseconds(100));continue;}
+  if(!engine_.popInput(frame)){
+   const auto observed=engine_.inputWakeSequence();
+   // Double-check after observing the notification generation; closes the
+   // check-then-sleep race when producer publishes just before we wait.
+   if(engine_.pendingInputFrames()==0&&!stop.stop_requested())engine_.waitForInput(observed);
+   continue;
+  }
   if(frame.epoch!=engine_.currentEpoch()){discardedFrames_.fetch_add(1,std::memory_order_relaxed);resetRequired=true;continue;}
   if(resetRequired||frame.epoch!=epoch||frame.position!=next){
    try{backend_->reset();}catch(...){failures_.fetch_add(1,std::memory_order_relaxed);continue;}
