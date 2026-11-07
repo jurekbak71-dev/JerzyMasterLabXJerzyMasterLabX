@@ -9,6 +9,7 @@
 #include "TransientSculptorPanel.h"
 #include "FinalTruePeakPanel.h"
 #include "ConceptCOverviewPanel.h"
+#include "StemBrainPanel.h"
 
 // Included after Processor. GUI work and FFT never run in the audio callback.
 class Editor final : public juce::AudioProcessorEditor,
@@ -21,6 +22,7 @@ class Editor final : public juce::AudioProcessorEditor,
     Processor& processor;
     StudioTheme theme;
     std::array<std::unique_ptr<ModulePanel>,4> modulePanels;
+    StemBrainPanel stemPanel;
     ExciterPanel exciterPanel;
     AnalogColorPanel analogPanel;
     BassArchitectPanel bassPanel;
@@ -28,7 +30,8 @@ class Editor final : public juce::AudioProcessorEditor,
     FinalTruePeakPanel truePeakPanel;
     ConceptCOverviewPanel overviewPanel;
     ParallelPanel parallelPanel;
-    juce::TextButton consoleView{"Console"};
+    juce::TextButton consoleView{"Console"},stemView{"Stem Brain"};
+    bool showingStem=false;
     bool showingConsole=false;
     juce::TextButton dynamicView{"Dynamic EQ"},dynamicsView{"Dynamics"},stereoView{"Stereo"},stabilizerView{"Stabilizer"},modulesButton{"+ Modules"};
     int moduleView=-1,chainDragKind=-1,chainHover=-1;bool chainDragging=false,showingParallel=false,showingExciter=false,showingAnalog=false,showingBass=false,showingTransient=false,showingTruePeak=false;
@@ -40,7 +43,12 @@ class Editor final : public juce::AudioProcessorEditor,
         return result;
     }
     int chainAt(float x)const {auto list=chainModules();if(list.empty()||x<24||x>getWidth()-24)return -1;size_t i=static_cast<size_t>((x-24)/((getWidth()-48.f)/list.size()));return i<list.size()?list[i]:-1;}
-    void hideModules(){showingConsole=false;overviewPanel.setVisible(false);showingTruePeak=false;truePeakPanel.setVisible(false);showingTransient=false;transientPanel.setVisible(false);showingBass=false;bassPanel.setVisible(false);showingAnalog=false;analogPanel.setVisible(false);showingExciter=false;exciterPanel.setVisible(false);moduleView=-1;for(auto& panel:modulePanels)if(panel)panel->setVisible(false);dynamicView.setToggleState(false,juce::dontSendNotification);dynamicsView.setToggleState(false,juce::dontSendNotification);stereoView.setToggleState(false,juce::dontSendNotification);stabilizerView.setToggleState(false,juce::dontSendNotification);}
+    void hideModules(){showingStem=false;stemPanel.setVisible(false);showingConsole=false;overviewPanel.setVisible(false);showingTruePeak=false;truePeakPanel.setVisible(false);showingTransient=false;transientPanel.setVisible(false);showingBass=false;bassPanel.setVisible(false);showingAnalog=false;analogPanel.setVisible(false);showingExciter=false;exciterPanel.setVisible(false);moduleView=-1;for(auto& panel:modulePanels)if(panel)panel->setVisible(false);dynamicView.setToggleState(false,juce::dontSendNotification);dynamicsView.setToggleState(false,juce::dontSendNotification);stereoView.setToggleState(false,juce::dontSendNotification);stabilizerView.setToggleState(false,juce::dontSendNotification);}
+    void showStemBrain(){
+        showInspector();
+        showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);
+        resetMetersButton.setVisible(false);showingStem=true;stemPanel.setVisible(true);repaint();
+    }
     void showConsole(){showInspector();showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);resetMetersButton.setVisible(false);showingConsole=true;overviewPanel.setVisible(true);repaint();}
     void showModule(int kind){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);moduleView=kind;modulePanels[static_cast<size_t>(kind)]->setVisible(true);std::array<juce::TextButton*,4>{&dynamicView,&dynamicsView,&stereoView,&stabilizerView}[static_cast<size_t>(kind)]->setToggleState(true,juce::dontSendNotification);repaint();}
     void toggleParameter(const char* id){auto* parameter=processor.state.getParameter(id);processor.beginUiTransaction("Module chain");parameter->beginChangeGesture();parameter->setValueNotifyingHost(parameter->getValue()>.5f?0.f:1.f);parameter->endChangeGesture();processor.finishUiTransaction();repaint();}
@@ -434,19 +442,22 @@ class Editor final : public juce::AudioProcessorEditor,
         slider.setComponentID(id);slider.setColour(juce::Slider::rotarySliderFillColourId,accent);
     }
 public:
-    explicit Editor(Processor& p) : AudioProcessorEditor(p),processor(p),exciterPanel(processor,theme),analogPanel(processor,theme),bassPanel(processor,theme),transientPanel(processor,theme),truePeakPanel(processor,theme),overviewPanel(processor,theme),parallelPanel(processor,theme) {
+    explicit Editor(Processor& p) : AudioProcessorEditor(p),processor(p),stemPanel(processor,theme),exciterPanel(processor,theme),analogPanel(processor,theme),bassPanel(processor,theme),transientPanel(processor,theme),truePeakPanel(processor,theme),overviewPanel(processor,theme),parallelPanel(processor,theme) {
         theme.setColour(juce::ResizableWindow::backgroundColourId,background);
         theme.setColour(juce::Slider::textBoxOutlineColourId,juce::Colours::transparentBlack);
         theme.setColour(juce::Slider::textBoxBackgroundColourId,panel);
         setLookAndFeel(&theme);
         for(int i=0;i<4;++i){modulePanels[i]=std::make_unique<ModulePanel>(processor,theme,i);modulePanels[i]->setComponentID("module-panel-"+juce::String(i));addChildComponent(*modulePanels[i]);}
         addChildComponent(parallelPanel);
+        addChildComponent(stemPanel);
         addChildComponent(exciterPanel);
         addChildComponent(analogPanel);
         addChildComponent(bassPanel);
         addChildComponent(transientPanel);
         addChildComponent(truePeakPanel);
         addChildComponent(overviewPanel);
+        addAndMakeVisible(stemView);stemView.setComponentID("view-stem-brain");
+        stemView.onClick=[this]{showStemBrain();};
         addAndMakeVisible(consoleView);consoleView.setComponentID("view-console");
         consoleView.onClick=[this]{showConsole();};
         overviewPanel.onOpen=[this](int index){switch(index){
@@ -569,6 +580,7 @@ public:
         resetMetersButton.setBounds(getWidth()-210,136,186,26);
         newButton.setBounds(211,13,52,30);presetButton.setBounds(267,13,89,30);
         undoButton.setBounds(360,13,40,30);redoButton.setBounds(404,13,40,30);
+        stemView.setBounds(getWidth()-542,48,100,26);
         eqView.setBounds(getWidth()-432,48,98,26);limiterView.setBounds(getWidth()-326,48,98,26);inspectorView.setBounds(getWidth()-220,48,98,26);brainView.setBounds(getWidth()-114,48,98,26);
         const int brainCell=(getWidth()-80)/4;
         for(int i=0;i<4;++i)brainLabels[static_cast<size_t>(i)].setBounds(40+i*brainCell,166,brainCell-12,20);
@@ -586,6 +598,7 @@ public:
         modulesButton.setBounds(602,14,120,26);routingChoice.setBounds(448,14,134,26);
         for(auto& panel:modulePanels)panel->setBounds(0,134,getWidth(),getHeight()-154);
         parallelPanel.setBounds(0,134,getWidth(),getHeight()-154);
+        stemPanel.setBounds(0,134,getWidth(),getHeight()-154);
         exciterPanel.setBounds(0,134,getWidth(),getHeight()-154);
         analogPanel.setBounds(0,134,getWidth(),getHeight()-154);
         bassPanel.setBounds(0,134,getWidth(),getHeight()-154);
@@ -682,7 +695,7 @@ public:
             g.setColour(juce::Colour(0xff172936));g.setFont(theme.font(modules.size()>3?12.f:16.f));g.drawText(std::array<const char*,6>{"Dynamic EQ","Dynamics","Stereo","Spectral EQ","Limiter","Stabilizer"}[kind],static_cast<int>(x)+34,90,static_cast<int>(width)-48,22,juce::Justification::left);
             g.setColour(juce::Colour(0xff566b7b));g.setFont(theme.font(10));g.drawText(on?std::array<const char*,6>{"3 detectors","Down / upward","4-band M/S","16 bands","5 ms lookahead","Adaptive tone"}[kind]:"Bypassed",static_cast<int>(x)+34,111,static_cast<int>(width)-48,16,juce::Justification::left);
         }
-        if(showingConsole){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
+        if(showingConsole||showingStem){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
         if(moduleView>=0){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
         if(showingParallel||showingExciter||showingAnalog){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
         if(showingBrain){paintBrain(g);return;}
