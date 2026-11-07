@@ -11,7 +11,7 @@
 #include "MasterBrain.h"
 #include "StemRemix.h"
 #include "StateValidation.h"
-class Processor final: public juce::AudioProcessor {
+class Processor final: public juce::AudioProcessor,private juce::AsyncUpdater {
 public:
  juce::UndoManager undoManager{1000000,100};
  juce::AudioProcessorValueTreeState state;
@@ -235,13 +235,28 @@ public:
   return masterlab::validateState(juce::ValueTree::fromXml(*xml),state,getParameters());
  }
  void setStateInformation(const void* data,int size)override{
-  auto validated=parseState(data,size);if(validated.isValid())state.replaceState(validated);
+  auto validated=parseState(data,size);
+  if(validated.isValid()){
+   state.replaceState(validated);
+   if(state.state.hasProperty("stemFolder"))triggerAsyncUpdate();
+   else stemRemix.unload();
+  }
+ }
+ void handleAsyncUpdate()override{
+  const auto folder=state.state["stemFolder"].toString();
+  if(folder.isNotEmpty()){
+   const auto current=stemRemix.snapshot();
+   if(!current||current->folder!=folder)
+    stemRemix.loadFolder(juce::File(folder));
+  }
  }
  // UI/control thread only. Snapshot flushes pending parameter values before transaction boundaries.
  void beginUiTransaction(const juce::String& name){state.copyState();undoManager.beginNewTransaction(name);}
  void finishUiTransaction(){state.copyState();undoManager.beginNewTransaction();}
- bool undo(){state.copyState();bool changed=undoManager.undo();undoManager.beginNewTransaction();return changed;}
- bool redo(){state.copyState();bool changed=undoManager.redo();undoManager.beginNewTransaction();return changed;}
+ bool undo(){state.copyState();bool changed=undoManager.undo();undoManager.beginNewTransaction();
+  if(changed&&state.state.hasProperty("stemFolder"))triggerAsyncUpdate();return changed;}
+ bool redo(){state.copyState();bool changed=undoManager.redo();undoManager.beginNewTransaction();
+  if(changed&&state.state.hasProperty("stemFolder"))triggerAsyncUpdate();return changed;}
  // Factory preset 0: reset every real host parameter to its declared JUCE
  // default. Preserve host state schema and saved .jmlx files. One Undo action.
  bool loadFactoryDefaultUI(){
@@ -249,11 +264,14 @@ public:
   bool changed=false;
   for(auto* p:hostParameters)
    changed|=std::abs(p->getValue()-p->getDefaultValue())>1.0e-6f;
+  changed|=stemRemix.snapshot()!=nullptr||state.state.hasProperty("stemFolder");
   brain.clearUI();
   brainBaseline.clear();brainAuditionValues.clear();brainAuditionVariant=-1;
   brainActionMessage="DEFAULT 0: factory settings restored.";
   if(!changed)return true;
   beginUiTransaction("NEW / DEFAULT 0");
+  cancelPendingUpdate();stemRemix.unload();
+  state.state.removeProperty("stemFolder",&undoManager);
   for(auto* p:hostParameters){
    if(std::abs(p->getValue()-p->getDefaultValue())<=1.0e-6f)continue;
    p->beginChangeGesture();
