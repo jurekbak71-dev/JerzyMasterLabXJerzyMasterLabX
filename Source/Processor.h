@@ -148,7 +148,7 @@ public:
   auto sample=stemRemix.fallbackPosition();bool running=true;
   if(auto* playhead=getPlayHead())if(auto pos=playhead->getPosition()){
    if(auto timeline=pos->getTimeInSamples())sample=*timeline;
-   if(auto playing=pos->getIsPlaying())running=*playing;
+   running=pos->getIsPlaying();
   }
   stemRemix.render(b,displayRate.load(),sample,running,control);
  }
