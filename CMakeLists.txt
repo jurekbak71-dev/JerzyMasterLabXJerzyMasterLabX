@@ -269,6 +269,15 @@ if(MASTERLAB_PLUGIN)
  target_include_directories(plugin_tests PRIVATE "${juce_SOURCE_DIR}/modules")
  target_compile_definitions(plugin_tests PRIVATE JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1)
  add_test(NAME plugin_state COMMAND plugin_tests)
+ if(MASTERLAB_LIVE_STEM_PLUGIN)
+   add_executable(live_plugin_integration tests/LivePluginIntegration.cpp)
+   target_link_libraries(live_plugin_integration PRIVATE JerzyMasterLabX)
+   target_include_directories(live_plugin_integration PRIVATE "${juce_SOURCE_DIR}/modules")
+   target_compile_definitions(live_plugin_integration PRIVATE JUCE_GLOBAL_MODULE_SETTINGS_INCLUDED=1)
+   # Run explicitly with the pinned noncommercial model-directory environment
+   # after the ordinary offline/legacy CTest suite; do not make all tests
+   # depend on a proprietary model being installed in ProgramData.
+ endif()
  add_executable(stereo_integration_tests tests/StereoIntegrationTests.cpp)
  target_link_libraries(stereo_integration_tests PRIVATE JerzyMasterLabX)
  target_include_directories(stereo_integration_tests PRIVATE "${juce_SOURCE_DIR}/modules")
