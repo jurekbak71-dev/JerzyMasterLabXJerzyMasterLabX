@@ -9,12 +9,14 @@
 #include "WindowMeter.h"
 #include "LoudnessMeter.h"
 #include "MasterBrain.h"
+#include "StemRemix.h"
 #include "StateValidation.h"
 class Processor final: public juce::AudioProcessor {
 public:
  juce::UndoManager undoManager{1000000,100};
  juce::AudioProcessorValueTreeState state;
  masterlab::MasterBrain brain;
+ masterlab::StemRemix stemRemix;
  std::vector<float> brainBaseline,brainAuditionValues;
  int brainAuditionVariant=-1;
  juce::String brainActionMessage{"No Brain proposal applied yet."};
@@ -52,7 +54,19 @@ public:
  for(int band=1;band<=16;++band){auto suffix=juce::String(band);
  p.add(std::make_unique<juce::AudioParameterChoice>("bandType"+suffix,"Band "+suffix+" filter type",juce::StringArray{"Bell","Low Shelf","High Shelf","High Pass 12 dB/oct","Low Pass 12 dB/oct","Notch"},0));
  p.add(std::make_unique<juce::AudioParameterBool>("bandEnabled"+suffix,"Band "+suffix+" enabled",true));}
- addModuleParameters(p);return p;}
+ addModuleParameters(p);addStemParameters(p);return p;}
+ static void addStemParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
+  p.add(std::make_unique<juce::AudioParameterChoice>("stemMode","Stem Brain source",
+      juce::StringArray{"Original DAW mix","Separated stems only","DAW mix plus stems"},0));
+  constexpr std::array<const char*,4> names{"Drums","Bass","Other","Vocals"};
+  for(const auto* name:names){const auto n=juce::String(name);const auto stem="stem"+n;
+   p.add(std::make_unique<juce::AudioParameterFloat>(stem+"Gain",n+" gain dB",-24.f,12.f,0.f));
+   p.add(std::make_unique<juce::AudioParameterFloat>(stem+"Tone",n+" tonal tilt",-1.f,1.f,0.f));
+   p.add(std::make_unique<juce::AudioParameterFloat>(stem+"Width",n+" stereo width",0.f,2.f,1.f));
+   p.add(std::make_unique<juce::AudioParameterBool>(stem+"Mute",n+" mute",false));
+   p.add(std::make_unique<juce::AudioParameterBool>(stem+"Solo",n+" solo",false));
+  }
+ }
  static void addModuleParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
   auto boolean=[&](const char* id,const char* name,bool initial){p.add(std::make_unique<juce::AudioParameterBool>(id,name,initial));};
   auto number=[&](const char* id,const char* name,float lo,float hi,float initial){p.add(std::make_unique<juce::AudioParameterFloat>(id,name,lo,hi,initial));};
@@ -113,13 +127,14 @@ public:
  Processor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,&undoManager,"MasterLab",layout()){state.state.setProperty("schemaVersion",16,nullptr);state.state.setProperty("eqInstanceId","eq-0001",nullptr);state.state.setProperty("limiterInstanceId","limiter-0001",nullptr);state.state.setProperty("dynamicEqInstanceId","dynamic-eq-0001",nullptr);state.state.setProperty("dynamicsInstanceId","dynamics-0001",nullptr);state.state.setProperty("stereoInstanceId","stereo-0001",nullptr);state.state.setProperty("stabilizerInstanceId","stabilizer-0001",nullptr);const char* ids[]={"frequency","gain","q","ceiling","eq","lim","order"};for(size_t i=0;i<7;++i)parameters[i]=state.getRawParameterValue(ids[i]);for(int k=2;k<=16;++k){int offset=7+(k-2)*3;const auto suffix=juce::String(k);parameters[offset]=state.getRawParameterValue("frequency"+suffix);parameters[offset+1]=state.getRawParameterValue("gain"+suffix);parameters[offset+2]=state.getRawParameterValue("q"+suffix);}
  parameters[52]=state.getRawParameterValue("limiterDrive");parameters[53]=state.getRawParameterValue("limiterRelease");
  for(int k=1;k<=16;++k){parameters[54+(k-1)*2]=state.getRawParameterValue("bandType"+juce::String(k));parameters[55+(k-1)*2]=state.getRawParameterValue("bandEnabled"+juce::String(k));}
- for(size_t i=0;i<masterlab::moduleParameterIds.size();++i)parameters[86+i]=state.getRawParameterValue(masterlab::moduleParameterIds[i]);}
+ for(size_t i=0;i<masterlab::moduleParameterIds.size();++i)parameters[86+i]=state.getRawParameterValue(masterlab::moduleParameterIds[i]);
+ for(size_t i=0;i<masterlab::stemParameterIds.size();++i)parameters[226+i]=state.getRawParameterValue(masterlab::stemParameterIds[i]);}
  const juce::String getName()const override{return "JerzyMasterLabX";}
  bool acceptsMidi()const override{return false;}bool producesMidi()const override{return false;}double getTailLengthSeconds()const override{return .1;}
  int getNumPrograms()override{return 1;}int getCurrentProgram()override{return 0;}void setCurrentProgram(int)override{}const juce::String getProgramName(int)override{return "Default";}void changeProgramName(int,const juce::String&)override{}
  bool isBusesLayoutSupported(const BusesLayout& l)const override{return l.getMainInputChannelSet()==juce::AudioChannelSet::stereo()&&l.getMainOutputChannelSet()==juce::AudioChannelSet::stereo();}
- void prepareToPlay(double sr,int)override{masterlab::configureGraph(engine,[&](size_t i){return parameters[i]->load();});engine.prepare(sr,parameters[6]->load()>.5f,static_cast<int>(parameters[138]->load()));displayRate.store(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000);limiterMeter.prepare(displayRate.load());inputMeter.prepare(displayRate.load());outputMeter.prepare(displayRate.load());inputLoudness.prepare(displayRate.load());outputLoudness.prepare(displayRate.load());brain.prepare(displayRate.load());updateModules();setLatencySamples(engine.latency());for(auto& channel:hostDryDelay)channel.assign(static_cast<size_t>(engine.latency()+1),0);hostDryPosition=0;hostBypassMix=0;hostBypassTarget=false;hostBypassStep=static_cast<float>(1/(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr*.02:960.));}
- void releaseResources()override{}void reset()override{brain.cancelRT();engine.reset();updateModules();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;}
+ void prepareToPlay(double sr,int)override{masterlab::configureGraph(engine,[&](size_t i){return parameters[i]->load();});engine.prepare(sr,parameters[6]->load()>.5f,static_cast<int>(parameters[138]->load()));displayRate.store(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000);limiterMeter.prepare(displayRate.load());inputMeter.prepare(displayRate.load());outputMeter.prepare(displayRate.load());inputLoudness.prepare(displayRate.load());outputLoudness.prepare(displayRate.load());brain.prepare(displayRate.load());stemRemix.reset();updateModules();setLatencySamples(engine.latency());for(auto& channel:hostDryDelay)channel.assign(static_cast<size_t>(engine.latency()+1),0);hostDryPosition=0;hostBypassMix=0;hostBypassTarget=false;hostBypassStep=static_cast<float>(1/(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr*.02:960.));}
+ void releaseResources()override{}void reset()override{brain.cancelRT();stemRemix.reset();engine.reset();updateModules();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;}
  void processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,false);}
  void processBlockBypassed(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,true);}
  void renderAudio(juce::AudioBuffer<float>& b,bool hostBypassed){
@@ -128,6 +143,15 @@ public:
  auto value=[&](size_t index){return parameters[index]->load();};
  masterlab::configureGraph(engine,value);
  hostBypassTarget=hostBypassed;
+ {std::array<float,21> control{};
+  for(size_t n=0;n<control.size();++n)control[n]=parameters[226+n]->load();
+  auto sample=stemRemix.fallbackPosition();bool running=true;
+  if(auto* playhead=getPlayHead())if(auto pos=playhead->getPosition()){
+   if(auto timeline=pos->getTimeInSamples())sample=*timeline;
+   if(auto playing=pos->getIsPlaying())running=*playing;
+  }
+  stemRemix.render(b,displayRate.load(),sample,running,control);
+ }
  if(hostDryDelay[0].empty()){b.clear();return;}
  for(int offset=0;offset<b.getNumSamples();){int length=std::min(128,b.getNumSamples()-offset);
   for(int i=0;i<length;++i){size_t read=(hostDryPosition+1)%hostDryDelay[0].size();for(int c=0;c<2;++c){inputScratch[c][i]=masterlab::clean(b.getSample(c,offset+i));hostDryDelay[c][hostDryPosition]=inputScratch[c][i];hostDryScratch[c][i]=hostDryDelay[c][read];}hostDryPosition=read;}
@@ -153,6 +177,40 @@ public:
  const auto reading=outputMeter.read();peak.store(reading.peak);rms.store(reading.rms);correlation.store(reading.correlation);
  int s1,n1,s2,n2;fifo.prepareToWrite(b.getNumSamples(),s1,n1,s2,n2);
  for(int j=0;j<n1;++j){traceL[s1+j]=b.getSample(0,j);traceR[s1+j]=b.getSample(1,j);}for(int j=0;j<n2;++j){traceL[s2+j]=b.getSample(0,n1+j);traceR[s2+j]=b.getSample(1,n1+j);}fifo.finishedWrite(n1+n2);
+ }
+ juce::String loadStemsUI(const juce::File& folder){
+  auto result=stemRemix.loadFolder(folder);
+  if(result.isEmpty()){
+   state.state.setProperty("stemFolder",folder.getFullPathName(),&undoManager);
+   auto* param=state.getParameter("stemMode");
+   beginUiTransaction("Stem Brain import");
+   param->beginChangeGesture();param->setValueNotifyingHost(param->convertTo0to1(1.f));
+   param->endChangeGesture();finishUiTransaction();
+  }
+  return result;
+ }
+ void clearStemsUI(){
+  stemRemix.unload();
+  auto* p=state.getParameter("stemMode");
+  p->beginChangeGesture();p->setValueNotifyingHost(p->convertTo0to1(0.f));p->endChangeGesture();
+  state.state.removeProperty("stemFolder",&undoManager);
+ }
+ bool applyStemVariantUI(int variant){
+  auto bank=stemRemix.snapshot();if(!bank||variant<0||variant>1)return false;
+  // Conservative source-relative rebalance: avoid amplifying artifacts.
+  // B has +1.5 dB lead-vocal prominence and -1 dB drums, not fake source AI.
+  const std::array<float,4> offsets=variant==0?
+     std::array<float,4>{0.f,0.f,0.f,0.f}:
+     std::array<float,4>{-1.f,0.f,-.5f,1.5f};
+  beginUiTransaction(variant==0?"Stem Brain natural balance":"Stem Brain vocal-forward");
+  for(int i=0;i<4;++i){
+   const auto id=juce::String(masterlab::stemParameterIds[1+5*i]);
+   auto* param=state.getParameter(id);
+   const float amount=std::clamp(offsets[static_cast<size_t>(i)],-6.f,6.f);
+   param->beginChangeGesture();param->setValueNotifyingHost(param->convertTo0to1(amount));
+   param->endChangeGesture();
+  }
+  finishUiTransaction();return true;
  }
  void getStateInformation(juce::MemoryBlock& dest)override{auto xml=state.copyState().createXml();copyXmlToBinary(*xml,dest);}
  juce::ValueTree parseState(const void* data,int size){
