@@ -27,6 +27,13 @@ inline juce::ValueTree validateState(const juce::ValueTree& candidate,
     canonical.setProperty("limiterInstanceId", "limiter-0001", nullptr);
     canonical.setProperty("dynamicEqInstanceId", "dynamic-eq-0001", nullptr);canonical.setProperty("dynamicsInstanceId", "dynamics-0001", nullptr);canonical.setProperty("stereoInstanceId", "stereo-0001", nullptr);
     canonical.setProperty("stabilizerInstanceId","stabilizer-0001",nullptr);
+    // Optional local file association only: preserve project linkage to
+    // non-embedded stems. Never trust the path as a command or URL.
+    if(candidate.hasProperty("stemFolder")){
+        const auto folder=candidate["stemFolder"].toString();
+        if(folder.length()>0&&folder.length()<=1024&&
+           !folder.containsAnyOf("\r\n"))canonical.setProperty("stemFolder",folder,nullptr);
+    }
     for (const auto& child : candidate) {
         if (!child.hasType("PARAM") || child.getNumChildren() != 0
             || child.getNumProperties() != 2 || !child.hasProperty("id")
