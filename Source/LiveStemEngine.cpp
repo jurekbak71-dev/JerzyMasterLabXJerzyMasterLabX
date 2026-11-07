@@ -25,6 +25,7 @@ void LiveStemEngine::newEpoch() noexcept {
     ++epoch_; position_ = 0; dryAt_ = 0;
     wetMix_ = 0; lastCorrection_.fill(0); recoveryHold_.fill(0); starving_ = false; fadeRemaining_ = 0;
     havePending_ = false;
+    publishedEpoch_.store(epoch_,std::memory_order_release);
 }
 void LiveStemEngine::reset() noexcept { newEpoch(); initialized_ = false; }
 

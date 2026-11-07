@@ -33,6 +33,7 @@ public:
     bool pushOutput(const SeparatedLiveFrame& frame) noexcept { return output_.tryPush(frame); }
     LiveStemStatistics statistics() const noexcept;
     std::size_t latencySamples() const noexcept { return latency_; }
+    std::uint32_t currentEpoch() const noexcept { return publishedEpoch_.load(std::memory_order_acquire); }
 private:
     struct DryFrame { float left{}, right{}; std::uint64_t position{}; std::uint32_t epoch{}; };
     LiveStemQueue<StereoLiveFrame, queueCapacity> input_;
@@ -41,6 +42,7 @@ private:
     std::size_t latency_{}, fade_{1}, drySize_{}, dryAt_{}, fadeRemaining_{};
     std::uint64_t position_{};
     std::uint32_t epoch_{1};
+    std::atomic<std::uint32_t> publishedEpoch_{1};
     std::int64_t expectedHost_{};
     bool initialized_{}, wasActive_{}, hadPosition_{}, wasNonRealtime_{};
     bool havePending_{}, starving_{};
