@@ -1,7 +1,7 @@
 // Real VST3 processor path, not just the standalone backend benchmark.
 // Requires pinned StemgenRT evaluation models available via
 // MASTERLAB_STEMGENRT_MODELS and MASTERLAB_LIVE_STEM_PLUGIN=1.
-#include "Processor.h"
+#include "../Source/Processor.h"
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <algorithm>
 #include <chrono>
