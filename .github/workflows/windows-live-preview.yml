@@ -1,6 +1,8 @@
 name: Windows LIVE Preview VST3 (noncommercial)
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [feat/phase5f-hybrid-3d-controls-20261106]
   push:
     branches: [feat/masterlabx-live-brain-20261107]
     paths:
