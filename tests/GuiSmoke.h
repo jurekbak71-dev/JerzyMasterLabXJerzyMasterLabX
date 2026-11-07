@@ -1,6 +1,7 @@
 #pragma once
 #include "../Source/ParallelPanel.h"
 #include "../Source/ModulePanel.h"
+#include "../Source/ConceptCOverviewPanel.h"
 
 // Runs the actual JUCE message loop: timer-driven DSP analysis must reach the editor.
 class GuiSmoke final : private juce::Timer {
@@ -11,7 +12,10 @@ class GuiSmoke final : private juce::Timer {
     void fail(const char* message){std::cerr<<message<<'\n';success=false;stopTimer();editor.reset();juce::MessageManager::getInstance()->stopDispatchLoop();}
     juce::RangedAudioParameter* parameter(const char* id){for(auto* p:processor.getParameters())if(auto* ranged=dynamic_cast<juce::RangedAudioParameter*>(p))if(ranged->paramID==id)return ranged;return nullptr;}
     float actual(const char* id){auto* p=parameter(id);return p->convertFrom0to1(p->getValue());}
-    void open(){editor.reset(processor.createEditor());editor->addToDesktop(0);editor->setVisible(true);phase=0;}
+    void open(){editor.reset(processor.createEditor());editor->addToDesktop(0);editor->setVisible(true);
+        // Legacy EQ interaction regression continues from its real page; console is tested separately.
+        if(auto* eq=dynamic_cast<juce::Button*>(editor->findChildWithID("view-eq")))eq->onClick();
+        phase=0;}
     void feed(int blocks){juce::AudioBuffer<float> buffer(2,256);juce::MidiBuffer midi;for(int block=0;block<blocks;++block){for(int i=0;i<256;++i,++sample){float envelope=.35f+1.65f*std::pow(.5f+.5f*std::sin(sample/48000.f*2.1f),3.f);buffer.setSample(0,i,envelope*.08f*std::sin(juce::MathConstants<float>::twoPi*1000*sample/48000.f)+envelope*.04f*std::sin(juce::MathConstants<float>::twoPi*3333*sample/48000.f));buffer.setSample(1,i,envelope*.08f*std::sin(juce::MathConstants<float>::twoPi*1000*sample/48000.f));}processor.processBlock(buffer,midi);}}
     bool gestures(){
         editor->setSize(1000,700);
@@ -163,6 +167,97 @@ class GuiSmoke final : private juce::Timer {
         return true;
     }
     bool capture(){
+        if(iteration==0){
+            auto* stemTab=dynamic_cast<juce::Button*>(editor->findChildWithID("view-stem-brain"));
+            if(!stemTab||stemTab->getWidth()<90){std::cerr<<"Missing new Stem Brain workspace\n";return false;}
+            stemTab->onClick();
+            auto* stemPanel=editor->findChildWithID("stem-brain-panel");
+            if(!stemPanel||!stemPanel->isVisible())return false;
+            for(const char* id:{"stem-separate","stem-import","stem-diagnose","stem-variant-a","stem-variant-b"}){
+                auto* button=dynamic_cast<juce::Button*>(stemPanel->findChildWithID(id));
+                if(!button||button->getHeight()<30){
+                    std::cerr<<"Missing/broken genuine stem GUI control "<<id<<"\n";return false;
+                }
+            }
+            editor->setSize(1000,700);
+            {
+                auto shot=editor->createComponentSnapshot(editor->getLocalBounds());
+                if(!shot.isValid())return false;
+                auto output=juce::File::getCurrentWorkingDirectory()
+                            .getChildFile("build-plugin/stem-brain-smoke.png");
+                output.getParentDirectory().createDirectory();
+                juce::FileOutputStream stream(output);stream.truncate();
+                if(!juce::PNGImageFormat{}.writeImageToStream(shot,stream))return false;
+            }
+            auto* console=dynamic_cast<juce::Button*>(editor->findChildWithID("view-console"));
+            if(!console){std::cerr<<"Concept C console navigation missing\n";return false;}
+            console->onClick();
+            auto* overview=dynamic_cast<ConceptCOverviewPanel*>(editor->findChildWithID("concept-c-overview"));
+            if(!overview||!overview->isVisible())return false;
+            if(overview->connectedControlCount()!=16||!overview->hasMeasuredSpectrum()){
+                std::cerr<<"Concept C real APVTS knobs or measured FFT missing\n";return false;
+            }
+            // A visible Concept C rotary must update the existing parameter, then restore it.
+            auto* consoleGain=dynamic_cast<juce::Slider*>(overview->findChildWithID("console-gain"));
+            if(!consoleGain)return false;
+            const double initialGain=consoleGain->getValue();
+            const double testGain=initialGain>0.5?initialGain*.63:initialGain+1.;
+            consoleGain->setValue(testGain,juce::sendNotificationSync);
+            if(std::abs(actual("gain")-static_cast<float>(consoleGain->getValue()))>.02f)
+                return false;
+            consoleGain->setValue(initialGain,juce::sendNotificationSync);
+            editor->setSize(1000,700);
+            auto image=editor->createComponentSnapshot(editor->getLocalBounds());
+            if(!image.isValid())return false;
+            // Assert real right-hand LCD telemetry remains dark: the old
+            // white polygon glare made pale readouts completely unreadable.
+            const auto lcdRight=image.getPixelAt(947,439);
+            if(lcdRight.getRed()>95||lcdRight.getGreen()>105||lcdRight.getBlue()>125){
+                std::cerr<<"Concept C LCD display still painted white: "
+                         <<int(lcdRight.getRed())<<"/"<<int(lcdRight.getGreen())
+                         <<"/"<<int(lcdRight.getBlue())<<"\n";return false;
+            }
+            int powderPixels=0,bluePixels=0;
+            for(int y=140;y<image.getHeight()-10;y+=2)
+                for(int x=15;x<image.getWidth()-15;x+=2){
+                    auto px=image.getPixelAt(x,y);
+                    if(px.getRed()>187&&px.getGreen()>190&&px.getBlue()>190)++powderPixels;
+                    if(px.getBlue()>130&&px.getBlue()>px.getRed()+45&&px.getBlue()>px.getGreen()+20)++bluePixels;
+                }
+            if(powderPixels<8000||bluePixels<100){
+                std::cerr<<"Concept C material or blue LED pixels missing (powder="
+                         <<powderPixels<<", blue="<<bluePixels<<")\n";return false;
+            }
+            const auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/console-smoke.png");
+            output.getParentDirectory().createDirectory();
+            juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();
+            if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return false;
+            // Store actual host-sized console renders for large and minimum supported viewport.
+            for(const auto dim:{juce::Point<int>{750,550},juce::Point<int>{1400,1000}}){
+                editor->setSize(dim.x,dim.y);
+                if(!controlsFit())return false;
+                auto visual=editor->createComponentSnapshot(editor->getLocalBounds());
+                if(!visual.isValid())return false;
+                const auto file=juce::File::getCurrentWorkingDirectory().getChildFile(
+                    "build-plugin/console-"+juce::String(dim.x)+"x"+juce::String(dim.y)+".png");
+                juce::FileOutputStream out(file);out.truncate();
+                if(!juce::PNGImageFormat{}.writeImageToStream(visual,out))return false;
+            }
+            editor->setSize(1000,700);
+            // Nine real OPEN actions must leave the overview and enter existing module pages.
+            for(int i=0;i<9;++i){
+                auto* button=dynamic_cast<juce::Button*>(overview->findChildWithID("console-open-"+juce::String(i)));
+                if(!button)return false;
+                button->onClick();
+                if(overview->isVisible()){
+                    std::cerr<<"Concept C OPEN failed for module "<<i<<"\n";return false;
+                }
+                console->onClick();
+                if(!overview->isVisible())return false;
+            }
+            auto* eq=dynamic_cast<juce::Button*>(editor->findChildWithID("view-eq"));
+            if(!eq)return false;eq->onClick();
+        }
         for(auto size:{juce::Point<int>(750,550),juce::Point<int>(1000,700),juce::Point<int>(2000,1400)}){
             editor->setSize(size.x,size.y);auto image=editor->createComponentSnapshot(editor->getLocalBounds());
             if(!image.isValid()||image.getWidth()!=size.x||image.getHeight()!=size.y)return false;
@@ -226,9 +321,69 @@ class GuiSmoke final : private juce::Timer {
             editor->setSize(size.x,size.y);if(!controlsFit())return false;auto image=editor->createComponentSnapshot(editor->getLocalBounds());if(!image.isValid())return false;
             if(iteration==0&&size.x==1000){auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/brain-smoke.png");juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return false;}
         }
-        apply->onClick();if(apply->isEnabled())return false;dynamic_cast<juce::Button*>(editor->findChildWithID("undo"))->onClick();
-        for(int i=0;i<processor.getParameters().size();++i)if(processor.getParameters()[i]->getValue()!=brainBefore[static_cast<size_t>(i)])return false;
-        if(actual("limiterDrive")!=driveBefore||actual("gain16")!=gainBefore)return false;
+        auto* a=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-audition-a"));
+        auto* b=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-audition-b"));
+        if(!a||!b||!a->isVisible()||!b->isVisible()||!a->isEnabled()||!b->isEnabled()){
+            std::cerr<<"Brain GUI A/B control state failed: A "<<(a&&a->isVisible())<<"/"<<(a&&a->isEnabled())
+                     <<" B "<<(b&&b->isVisible())<<"/"<<(b&&b->isEnabled())
+                     <<"\n"<<report->getText()<<"\n";return false;
+        }
+        a->onClick();
+        if(!report->getText().contains("Audition A is live")){
+            std::cerr<<"Brain GUI Audition A failed: "<<report->getText()<<"\n";return false;
+        }
+        b->onClick();
+        if(!report->getText().contains("Audition B is live")||!apply->isEnabled()){
+            std::cerr<<"Brain GUI Audition B failed: "<<report->getText()<<"\n";return false;
+        }
+        apply->onClick();
+        if(!report->getText().contains("APPLIED")||apply->isEnabled()){
+            std::cerr<<"Brain GUI Apply failed: "<<report->getText()<<"\n";return false;
+        }
+        dynamic_cast<juce::Button*>(editor->findChildWithID("undo"))->onClick();
+        for(int i=0;i<processor.getParameters().size();++i)if(processor.getParameters()[i]->getValue()!=brainBefore[static_cast<size_t>(i)]){
+            std::cerr<<"Brain GUI Undo failed parameter index "<<i<<"\n";return false;
+        }
+        if(actual("limiterDrive")!=driveBefore||actual("gain16")!=gainBefore){
+            std::cerr<<"Brain GUI Undo failed limiterDrive or gain16\n";return false;
+        }
+        // Screenshot-reported accessibility: entire LED+caption is a >=30px target.
+        for(const auto group:std::array<std::pair<const char*,std::array<const char*,2>>,2>{{
+               {"harmonic-exciter-panel",{"exciter-present","exciter-active"}},
+               {"final-true-peak-panel",{"true-peak-present","true-peak-enabled"}}
+            }}){
+            auto* panel=editor->findChildWithID(group.first);
+            if(!panel){std::cerr<<"Status panel not found: "<<group.first<<"\n";return false;}
+            for(const char* id:group.second){
+                // JUCE findChildWithID addresses immediate children of the chosen
+                // component; it does not search arbitrary hidden grandchildren.
+                auto* toggle=dynamic_cast<juce::ToggleButton*>(panel->findChildWithID(id));
+                if(!toggle||toggle->getHeight()<30||toggle->getWidth()<100){
+                    std::cerr<<"Tiny/unreachable toggle "<<id<<": "<<
+                              (toggle?toggle->getWidth():-1)<<"x"<<
+                              (toggle?toggle->getHeight():-1)<<"\n";return false;
+                }
+            }
+        }
+        // Full factory preset 0 through the actual NEW GUI button. Undo restores
+        // every parameter to the exact state immediately before the reset.
+        auto* factory=dynamic_cast<juce::Button*>(editor->findChildWithID("factory-default"));
+        if(!factory||factory->getHeight()<30||factory->getWidth()<48){
+            std::cerr<<"NEW factory control is missing or too small\n";return false;
+        }
+        parameter("gain16")->setValueNotifyingHost(.84f);
+        std::vector<float> beforeFactory;
+        for(auto* param:processor.getParameters())beforeFactory.push_back(param->getValue());
+        factory->onClick();
+        for(auto* param:processor.getParameters())
+            if(std::abs(param->getValue()-param->getDefaultValue())>1.0e-6f){
+                std::cerr<<"NEW did not restore factory parameter defaults\n";return false;
+            }
+        dynamic_cast<juce::Button*>(editor->findChildWithID("undo"))->onClick();
+        for(int i=0;i<processor.getParameters().size();++i)
+            if(std::abs(processor.getParameters()[i]->getValue()-beforeFactory[static_cast<size_t>(i)])>1.0e-6f){
+                std::cerr<<"NEW Undo did not restore state at parameter "<<i<<"\n";return false;
+            }
         eq->onClick();if(!frequency->isVisible()||drive->isVisible()||release->isVisible())return false;
         return true;
     }

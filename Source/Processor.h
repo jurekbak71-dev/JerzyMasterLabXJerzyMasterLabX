@@ -9,13 +9,17 @@
 #include "WindowMeter.h"
 #include "LoudnessMeter.h"
 #include "MasterBrain.h"
+#include "StemRemix.h"
 #include "StateValidation.h"
-class Processor final: public juce::AudioProcessor {
+class Processor final: public juce::AudioProcessor,private juce::AsyncUpdater {
 public:
  juce::UndoManager undoManager{1000000,100};
  juce::AudioProcessorValueTreeState state;
  masterlab::MasterBrain brain;
- std::vector<float> brainBaseline;
+ masterlab::StemRemix stemRemix;
+ std::vector<float> brainBaseline,brainAuditionValues;
+ int brainAuditionVariant=-1;
+ juce::String brainActionMessage{"No Brain proposal applied yet."};
  masterlab::SerialGraph engine;
  masterlab::LimiterMeter limiterMeter;
  masterlab::WindowMeter inputMeter,outputMeter;
@@ -50,7 +54,19 @@ public:
  for(int band=1;band<=16;++band){auto suffix=juce::String(band);
  p.add(std::make_unique<juce::AudioParameterChoice>("bandType"+suffix,"Band "+suffix+" filter type",juce::StringArray{"Bell","Low Shelf","High Shelf","High Pass 12 dB/oct","Low Pass 12 dB/oct","Notch"},0));
  p.add(std::make_unique<juce::AudioParameterBool>("bandEnabled"+suffix,"Band "+suffix+" enabled",true));}
- addModuleParameters(p);return p;}
+ addModuleParameters(p);addStemParameters(p);return p;}
+ static void addStemParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
+  p.add(std::make_unique<juce::AudioParameterChoice>("stemMode","Stem Brain source",
+      juce::StringArray{"Original DAW mix","Separated stems only","DAW mix plus stems"},0));
+  constexpr std::array<const char*,4> names{"Drums","Bass","Other","Vocals"};
+  for(const auto* name:names){const auto n=juce::String(name);const auto stem="stem"+n;
+   p.add(std::make_unique<juce::AudioParameterFloat>(stem+"Gain",n+" gain dB",-24.f,12.f,0.f));
+   p.add(std::make_unique<juce::AudioParameterFloat>(stem+"Tone",n+" tonal tilt",-1.f,1.f,0.f));
+   p.add(std::make_unique<juce::AudioParameterFloat>(stem+"Width",n+" stereo width",0.f,2.f,1.f));
+   p.add(std::make_unique<juce::AudioParameterBool>(stem+"Mute",n+" mute",false));
+   p.add(std::make_unique<juce::AudioParameterBool>(stem+"Solo",n+" solo",false));
+  }
+ }
  static void addModuleParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
   auto boolean=[&](const char* id,const char* name,bool initial){p.add(std::make_unique<juce::AudioParameterBool>(id,name,initial));};
   auto number=[&](const char* id,const char* name,float lo,float hi,float initial){p.add(std::make_unique<juce::AudioParameterFloat>(id,name,lo,hi,initial));};
@@ -108,16 +124,17 @@ public:
  void updateModules(){
   masterlab::configureModules(engine,[&](size_t i){return parameters[i]->load();});
  }
- Processor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,&undoManager,"MasterLab",layout()){state.state.setProperty("schemaVersion",16,nullptr);state.state.setProperty("eqInstanceId","eq-0001",nullptr);state.state.setProperty("limiterInstanceId","limiter-0001",nullptr);state.state.setProperty("dynamicEqInstanceId","dynamic-eq-0001",nullptr);state.state.setProperty("dynamicsInstanceId","dynamics-0001",nullptr);state.state.setProperty("stereoInstanceId","stereo-0001",nullptr);state.state.setProperty("stabilizerInstanceId","stabilizer-0001",nullptr);const char* ids[]={"frequency","gain","q","ceiling","eq","lim","order"};for(size_t i=0;i<7;++i)parameters[i]=state.getRawParameterValue(ids[i]);for(int k=2;k<=16;++k){int offset=7+(k-2)*3;const auto suffix=juce::String(k);parameters[offset]=state.getRawParameterValue("frequency"+suffix);parameters[offset+1]=state.getRawParameterValue("gain"+suffix);parameters[offset+2]=state.getRawParameterValue("q"+suffix);}
+ Processor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,&undoManager,"MasterLab",layout()){state.state.setProperty("schemaVersion",17,nullptr);state.state.setProperty("eqInstanceId","eq-0001",nullptr);state.state.setProperty("limiterInstanceId","limiter-0001",nullptr);state.state.setProperty("dynamicEqInstanceId","dynamic-eq-0001",nullptr);state.state.setProperty("dynamicsInstanceId","dynamics-0001",nullptr);state.state.setProperty("stereoInstanceId","stereo-0001",nullptr);state.state.setProperty("stabilizerInstanceId","stabilizer-0001",nullptr);const char* ids[]={"frequency","gain","q","ceiling","eq","lim","order"};for(size_t i=0;i<7;++i)parameters[i]=state.getRawParameterValue(ids[i]);for(int k=2;k<=16;++k){int offset=7+(k-2)*3;const auto suffix=juce::String(k);parameters[offset]=state.getRawParameterValue("frequency"+suffix);parameters[offset+1]=state.getRawParameterValue("gain"+suffix);parameters[offset+2]=state.getRawParameterValue("q"+suffix);}
  parameters[52]=state.getRawParameterValue("limiterDrive");parameters[53]=state.getRawParameterValue("limiterRelease");
  for(int k=1;k<=16;++k){parameters[54+(k-1)*2]=state.getRawParameterValue("bandType"+juce::String(k));parameters[55+(k-1)*2]=state.getRawParameterValue("bandEnabled"+juce::String(k));}
- for(size_t i=0;i<masterlab::moduleParameterIds.size();++i)parameters[86+i]=state.getRawParameterValue(masterlab::moduleParameterIds[i]);}
+ for(size_t i=0;i<masterlab::moduleParameterIds.size();++i)parameters[86+i]=state.getRawParameterValue(masterlab::moduleParameterIds[i]);
+ for(size_t i=0;i<masterlab::stemParameterIds.size();++i)parameters[226+i]=state.getRawParameterValue(masterlab::stemParameterIds[i]);}
  const juce::String getName()const override{return "JerzyMasterLabX";}
  bool acceptsMidi()const override{return false;}bool producesMidi()const override{return false;}double getTailLengthSeconds()const override{return .1;}
  int getNumPrograms()override{return 1;}int getCurrentProgram()override{return 0;}void setCurrentProgram(int)override{}const juce::String getProgramName(int)override{return "Default";}void changeProgramName(int,const juce::String&)override{}
  bool isBusesLayoutSupported(const BusesLayout& l)const override{return l.getMainInputChannelSet()==juce::AudioChannelSet::stereo()&&l.getMainOutputChannelSet()==juce::AudioChannelSet::stereo();}
- void prepareToPlay(double sr,int)override{masterlab::configureGraph(engine,[&](size_t i){return parameters[i]->load();});engine.prepare(sr,parameters[6]->load()>.5f,static_cast<int>(parameters[138]->load()));displayRate.store(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000);limiterMeter.prepare(displayRate.load());inputMeter.prepare(displayRate.load());outputMeter.prepare(displayRate.load());inputLoudness.prepare(displayRate.load());outputLoudness.prepare(displayRate.load());brain.prepare(displayRate.load());updateModules();setLatencySamples(engine.latency());for(auto& channel:hostDryDelay)channel.assign(static_cast<size_t>(engine.latency()+1),0);hostDryPosition=0;hostBypassMix=0;hostBypassTarget=false;hostBypassStep=static_cast<float>(1/(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr*.02:960.));}
- void releaseResources()override{}void reset()override{brain.cancelRT();engine.reset();updateModules();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;}
+ void prepareToPlay(double sr,int)override{masterlab::configureGraph(engine,[&](size_t i){return parameters[i]->load();});engine.prepare(sr,parameters[6]->load()>.5f,static_cast<int>(parameters[138]->load()));displayRate.store(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000);limiterMeter.prepare(displayRate.load());inputMeter.prepare(displayRate.load());outputMeter.prepare(displayRate.load());inputLoudness.prepare(displayRate.load());outputLoudness.prepare(displayRate.load());brain.prepare(displayRate.load());stemRemix.reset();updateModules();setLatencySamples(engine.latency());for(auto& channel:hostDryDelay)channel.assign(static_cast<size_t>(engine.latency()+1),0);hostDryPosition=0;hostBypassMix=0;hostBypassTarget=false;hostBypassStep=static_cast<float>(1/(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr*.02:960.));}
+ void releaseResources()override{}void reset()override{brain.cancelRT();stemRemix.reset();engine.reset();updateModules();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;}
  void processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,false);}
  void processBlockBypassed(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,true);}
  void renderAudio(juce::AudioBuffer<float>& b,bool hostBypassed){
@@ -126,6 +143,19 @@ public:
  auto value=[&](size_t index){return parameters[index]->load();};
  masterlab::configureGraph(engine,value);
  hostBypassTarget=hostBypassed;
+ {std::array<float,21> control{};
+  for(size_t n=0;n<control.size();++n)control[n]=parameters[226+n]->load();
+  auto sample=stemRemix.fallbackPosition();bool running=true;
+  if(auto* playhead=getPlayHead())if(auto pos=playhead->getPosition()){
+   if(auto timeline=pos->getTimeInSamples())sample=*timeline;
+   else if(auto seconds=pos->getTimeInSeconds())
+    sample=static_cast<std::int64_t>(*seconds*displayRate.load());
+   // FL Studio offline render may not mark the transport as "playing":
+   // never silence stems in offline WAV export solely because of that flag.
+   running=pos->getIsPlaying()||isNonRealtime();
+  }
+  stemRemix.render(b,displayRate.load(),sample,running,control);
+ }
  if(hostDryDelay[0].empty()){b.clear();return;}
  for(int offset=0;offset<b.getNumSamples();){int length=std::min(128,b.getNumSamples()-offset);
   for(int i=0;i<length;++i){size_t read=(hostDryPosition+1)%hostDryDelay[0].size();for(int c=0;c<2;++c){inputScratch[c][i]=masterlab::clean(b.getSample(c,offset+i));hostDryDelay[c][hostDryPosition]=inputScratch[c][i];hostDryScratch[c][i]=hostDryDelay[c][read];}hostDryPosition=read;}
@@ -152,6 +182,52 @@ public:
  int s1,n1,s2,n2;fifo.prepareToWrite(b.getNumSamples(),s1,n1,s2,n2);
  for(int j=0;j<n1;++j){traceL[s1+j]=b.getSample(0,j);traceR[s1+j]=b.getSample(1,j);}for(int j=0;j<n2;++j){traceL[s2+j]=b.getSample(0,n1+j);traceR[s2+j]=b.getSample(1,n1+j);}fifo.finishedWrite(n1+n2);
  }
+ juce::String loadStemsUI(const juce::File& folder){
+  auto result=stemRemix.loadFolder(folder);
+  if(result.isEmpty()){
+   state.state.setProperty("stemFolder",folder.getFullPathName(),&undoManager);
+   auto* param=state.getParameter("stemMode");
+   beginUiTransaction("Stem Brain import");
+   param->beginChangeGesture();param->setValueNotifyingHost(param->convertTo0to1(1.f));
+   param->endChangeGesture();finishUiTransaction();
+  }
+  return result;
+ }
+ void clearStemsUI(){
+  stemRemix.unload();
+  auto* p=state.getParameter("stemMode");
+  p->beginChangeGesture();p->setValueNotifyingHost(p->convertTo0to1(0.f));p->endChangeGesture();
+  state.state.removeProperty("stemFolder",&undoManager);
+ }
+ bool applyStemVariantUI(int variant){
+  auto bank=stemRemix.snapshot();if(!bank||variant<0||variant>1)return false;
+  // Measured, conservative stem-balancing rules. They are deliberately
+  // transparent DSP heuristics, not a claim to reconstruct the original mix.
+  std::array<float,4> offsets{};
+  auto relativeDb=[&](int a,int b){
+   return 20.f*std::log10(std::max(1.e-7f,bank->rms[static_cast<size_t>(a)])/
+                         std::max(1.e-7f,bank->rms[static_cast<size_t>(b)]));
+  };
+  if(relativeDb(0,3)>7.f)offsets[0]-=1.f; // drums masking vocal
+  if(relativeDb(1,0)>5.f)offsets[1]-=1.5f; // bass masking kick
+  if(relativeDb(2,3)>7.f)offsets[2]-=1.f; // backing masking lead
+  if(relativeDb(3,2)<-8.f)offsets[3]+=1.f; // buried voice
+  for(int i=0;i<4;++i){
+   if(bank->peak[static_cast<size_t>(i)]>=.998f)offsets[static_cast<size_t>(i)]-=.75f;
+  }
+  if(variant==1){
+   offsets[0]-=.75f;offsets[2]-=.5f;offsets[3]+=1.5f;
+  }
+  beginUiTransaction(variant==0?"Stem Brain natural balance":"Stem Brain vocal-forward");
+  for(int i=0;i<4;++i){
+   const auto id=juce::String(masterlab::stemParameterIds[1+5*i]);
+   auto* param=state.getParameter(id);
+   const float amount=std::clamp(offsets[static_cast<size_t>(i)],-3.f,3.f);
+   param->beginChangeGesture();param->setValueNotifyingHost(param->convertTo0to1(amount));
+   param->endChangeGesture();
+  }
+  finishUiTransaction();return true;
+ }
  void getStateInformation(juce::MemoryBlock& dest)override{auto xml=state.copyState().createXml();copyXmlToBinary(*xml,dest);}
  juce::ValueTree parseState(const void* data,int size){
   if(data==nullptr||size<=0||size>1024*1024)return {};
@@ -159,13 +235,53 @@ public:
   return masterlab::validateState(juce::ValueTree::fromXml(*xml),state,getParameters());
  }
  void setStateInformation(const void* data,int size)override{
-  auto validated=parseState(data,size);if(validated.isValid())state.replaceState(validated);
+  auto validated=parseState(data,size);
+  if(validated.isValid()){
+   state.replaceState(validated);
+   if(state.state.hasProperty("stemFolder"))triggerAsyncUpdate();
+   else stemRemix.unload();
+  }
+ }
+ void handleAsyncUpdate()override{
+  const auto folder=state.state["stemFolder"].toString();
+  if(folder.isNotEmpty()){
+   const auto current=stemRemix.snapshot();
+   if(!current||current->folder!=folder)
+    stemRemix.loadFolder(juce::File(folder));
+  }
  }
  // UI/control thread only. Snapshot flushes pending parameter values before transaction boundaries.
  void beginUiTransaction(const juce::String& name){state.copyState();undoManager.beginNewTransaction(name);}
  void finishUiTransaction(){state.copyState();undoManager.beginNewTransaction();}
- bool undo(){state.copyState();bool changed=undoManager.undo();undoManager.beginNewTransaction();return changed;}
- bool redo(){state.copyState();bool changed=undoManager.redo();undoManager.beginNewTransaction();return changed;}
+ bool undo(){state.copyState();bool changed=undoManager.undo();undoManager.beginNewTransaction();
+  if(changed&&state.state.hasProperty("stemFolder"))triggerAsyncUpdate();return changed;}
+ bool redo(){state.copyState();bool changed=undoManager.redo();undoManager.beginNewTransaction();
+  if(changed&&state.state.hasProperty("stemFolder"))triggerAsyncUpdate();return changed;}
+ // Factory preset 0: reset every real host parameter to its declared JUCE
+ // default. Preserve host state schema and saved .jmlx files. One Undo action.
+ bool loadFactoryDefaultUI(){
+  const auto hostParameters=getParameters();
+  bool changed=false;
+  for(auto* p:hostParameters)
+   changed|=std::abs(p->getValue()-p->getDefaultValue())>1.0e-6f;
+  changed|=stemRemix.snapshot()!=nullptr||state.state.hasProperty("stemFolder");
+  brain.clearUI();
+  brainBaseline.clear();brainAuditionValues.clear();brainAuditionVariant=-1;
+  brainActionMessage="DEFAULT 0: factory settings restored.";
+  if(!changed)return true;
+  beginUiTransaction("NEW / DEFAULT 0");
+  cancelPendingUpdate();stemRemix.unload();
+  state.state.removeProperty("stemFolder",&undoManager);
+  for(auto* p:hostParameters){
+   if(std::abs(p->getValue()-p->getDefaultValue())<=1.0e-6f)continue;
+   p->beginChangeGesture();
+   p->setValueNotifyingHost(p->getDefaultValue());
+   p->endChangeGesture();
+  }
+  finishUiTransaction();
+  resetMeterRequest.store(true);
+  return true;
+ }
  bool applyPreset(const void* data,int size){
   auto validated=parseState(data,size);if(!validated.isValid())return false;
   beginUiTransaction("Load preset");
@@ -189,19 +305,115 @@ public:
   }finishUiTransaction();
  }
  void startBrainUI(masterlab::BrainConfig config){
+  brainAuditionVariant=-1;brainAuditionValues.clear();
+  brainActionMessage="Analysis started; parameters unchanged.";
   brainBaseline.clear();for(auto* parameter:parameters)brainBaseline.push_back(parameter->load());
   config.hasBaseline=true;for(size_t i=0;i<parameters.size();++i)config.baseline[i]=parameters[i]->load();
   config.existingEqEnabled=parameters[4]->load()>.5f&&parameters[86]->load()>.5f;config.dynamicsMode=static_cast<int>(parameters[100]->load());
   for(size_t i=0;i<16;++i){size_t offset=i==0?0:7+(i-1)*3;config.existingEq[i]={parameters[offset]->load(),parameters[offset+1]->load(),parameters[offset+2]->load(),static_cast<int>(parameters[54+i*2]->load()),parameters[55+i*2]->load()>.5f};}
   brain.startUI(config);
  }
- bool brainStaleUI()const {if(brainBaseline.size()!=parameters.size())return true;for(size_t i=0;i<parameters.size();++i)if(parameters[i]->load()!=brainBaseline[i])return true;return false;}
+ juce::String brainStaleReasonUI() const {
+  const auto& expected=brainAuditionVariant>=0?brainAuditionValues:brainBaseline;
+  if(expected.size()!=parameters.size())return "missing analysis/audition baseline";
+  for(size_t i=0;i<parameters.size();++i){
+   const auto id=masterlab::parameterId(i);
+   auto* parameter=state.getParameter(id);
+   if(!parameter)return "unknown parameter "+juce::String(id);
+   const float current=parameters[i]->load();
+   const float expectedValue=expected[i];
+   // Compare in normalized JUCE coordinates, not with a fixed tolerance in Hz,
+   // dB, ms or skewed frequency units. The previous raw 1e-5 threshold falsely
+   // marked live GUI attachments stale after setValueNotifyingHost round trips.
+   const float delta=std::abs(parameter->convertTo0to1(current)-
+                              parameter->convertTo0to1(expectedValue));
+   if(!std::isfinite(delta)||delta>2.0e-5f)
+    return juce::String(id)+" changed: "+juce::String(expectedValue,6)+
+           " -> "+juce::String(current,6)+" (norm delta "+juce::String(delta,7)+")";
+  }
+  return {};
+ }
+ bool brainStaleUI()const {return brainStaleReasonUI().isNotEmpty();}
+ bool auditionBrainUI(int variant){
+  auto snapshot=brain.readUI();
+  if(snapshot.phase!=masterlab::BrainPhase::Ready||brainStaleUI()){
+   brainActionMessage="Cannot audition: "+brainStaleReasonUI()+
+      " (or analysis not finished).";return false;
+  }
+  if(variant<0||variant>1||(variant==1&&!snapshot.alternateReady))return false;
+  if(brainAuditionVariant==variant)return true;
+  const auto& proposal=variant==snapshot.selectedVariant?snapshot.proposal:snapshot.alternateProposal;
+  if(!proposal.valid||!proposal.previewVerified||proposal.changes.empty())return false;
+  for(const auto& [id,value]:proposal.changes){
+   auto* p=state.getParameter(id);
+   if(!p||!std::isfinite(value)||value<p->getNormalisableRange().start||
+      value>p->getNormalisableRange().end)return false;
+  }
+  // Undo the last audition before switching. Undo on B then restores
+  // the pre-Brain state, not variant A.
+  if(brainAuditionVariant>=0){
+   if(!undo()){
+    brainActionMessage="Audition switch: Undo manager could not revert the previous preview.";
+    return false;
+   }
+   brainAuditionVariant=-1;brainAuditionValues.clear();
+  }
+  if(brainStaleUI()){
+   brainActionMessage="Audition switch: previous preview was not fully reverted: "+
+                      brainStaleReasonUI();return false;
+  }
+  if(!brain.selectVariantUI(variant)){
+   brainActionMessage="Audition switch: requested recipe is not available.";return false;
+  }
+  beginUiTransaction(variant==0?"Master Brain audition A":"Master Brain audition B");
+  for(const auto& [id,value]:proposal.changes){
+   auto* p=state.getParameter(id);
+   p->beginChangeGesture();p->setValueNotifyingHost(p->convertTo0to1(value));p->endChangeGesture();
+  }
+  finishUiTransaction();
+  brainAuditionVariant=variant;brainAuditionValues.clear();
+  for(auto* parameter:parameters)brainAuditionValues.push_back(parameter->load());
+  brainActionMessage=variant==0?"Audition A is live in the DSP. Apply to keep it.":
+                                   "Audition B is live in the DSP. Apply to keep it.";
+  return true;
+ }
  bool applyBrainUI(){
-  auto result=brain.readUI();if(result.phase!=masterlab::BrainPhase::Ready||!result.proposal.valid||brainStaleUI())return false;
-  for(const auto& [id,value]:result.proposal.changes){auto* parameter=state.getParameter(id);if(!parameter||!std::isfinite(value)||value<parameter->getNormalisableRange().start||value>parameter->getNormalisableRange().end)return false;}
+  auto result=brain.readUI();
+  if(result.phase!=masterlab::BrainPhase::Ready||!result.proposal.valid){
+   brainActionMessage="Apply blocked: no valid ready proposal. Analyse first.";return false;
+  }
+  if(brainStaleUI()){
+   brainActionMessage="Apply blocked: parameters changed after analysis. Reanalyse.";return false;
+  }
+  if(brainAuditionVariant>=0){
+   if(brainAuditionVariant!=result.selectedVariant)return false;
+   brain.markAppliedUI();brainActionMessage="APPLIED: auditioned variant retained in DSP; Undo restores pre-Brain parameters.";
+   return true;
+  }
+  if(result.proposal.changes.empty()){
+   brainActionMessage="Apply blocked: proposal contains no changes.";return false;
+  }
+  bool changed=false;
+  for(const auto& [id,value]:result.proposal.changes){
+   auto* parameter=state.getParameter(id);
+   if(!parameter||!std::isfinite(value)||value<parameter->getNormalisableRange().start||
+      value>parameter->getNormalisableRange().end){
+    brainActionMessage="Apply blocked: invalid parameter "+juce::String(id);return false;
+   }
+   changed|=std::abs(state.getRawParameterValue(id)->load()-value)>1.0e-5f;
+  }
+  if(!changed){
+   brainActionMessage="Proposal already matches current parameters; no audible change.";return false;
+  }
   beginUiTransaction("Master Brain proposal");
-  for(const auto& [id,value]:result.proposal.changes){auto* parameter=state.getParameter(id);parameter->beginChangeGesture();parameter->setValueNotifyingHost(parameter->convertTo0to1(value));parameter->endChangeGesture();}
-  finishUiTransaction();brain.markAppliedUI();return true;
+  for(const auto& [id,value]:result.proposal.changes){
+   auto* parameter=state.getParameter(id);parameter->beginChangeGesture();
+   parameter->setValueNotifyingHost(parameter->convertTo0to1(value));parameter->endChangeGesture();
+  }
+  finishUiTransaction();brain.markAppliedUI();
+  brainActionMessage="APPLIED: "+juce::String(static_cast<int>(result.proposal.changes.size()))+
+                      " parameter assignments; Undo restores previous values.";
+  return true;
  }
  bool hasEditor()const override{return true;}juce::AudioProcessorEditor* createEditor()override;
 };

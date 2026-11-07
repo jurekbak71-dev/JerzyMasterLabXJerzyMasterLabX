@@ -48,7 +48,7 @@ public:
     ~AnalogColorPanel()override {setLookAndFeel(nullptr);}
     void update(const Processor::ResponseFrame& r){reading_=r.analog;repaint();}
     void resized()override {
-        included_.setBounds(24,16,120,28);enabled_.setBounds(156,16,110,28);
+        included_.setBounds(24,12,130,34);enabled_.setBounds(162,12,116,34);
         autoGain_.setBounds(278,16,182,28);mode_.setBounds(470,16,200,28);
         const int cols=std::max(3,std::min(6,getWidth()/145));
         const int width=std::max(110,(getWidth()-48)/cols);
@@ -58,7 +58,15 @@ public:
         }
     }
     void paint(juce::Graphics& g)override {
-        g.fillAll(juce::Colour(0xff14171b));g.setColour(juce::Colour(0xffe9bb89));
+        g.fillAll(juce::Colour(0xffedf0f2));
+  // Concept C powder-coated sheet-metal side rails and inset dark instrument panel.
+  const float panelWidth=juce::jmax(1.f,static_cast<float>(getWidth())-20.f);
+  g.setGradientFill(juce::ColourGradient(juce::Colour(0xff344553),10.f,0.f,
+                                        juce::Colour(0xff111b25),10.f,static_cast<float>(getHeight()),false));
+  g.fillRect(10.f,0.f,panelWidth,static_cast<float>(getHeight()));
+  g.setColour(juce::Colour(0xff96a7b6));
+  g.drawVerticalLine(10,0.f,static_cast<float>(getHeight()));
+  g.drawVerticalLine(juce::jmax(10,getWidth()-11),0.f,static_cast<float>(getHeight()));g.setColour(juce::Colour(0xffe9bb89));
         g.setFont(juce::Font(juce::FontOptions(22.f)));
         g.drawText("ANALOG COLOR",24,56,getWidth()-48,34,juce::Justification::left);
         g.setFont(13.f);g.setColour(juce::Colour(0xffc1b6ac));

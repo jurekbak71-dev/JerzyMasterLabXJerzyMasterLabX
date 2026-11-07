@@ -28,7 +28,10 @@ struct BrainProposal {
 inline constexpr std::array<const char*,9> brainGenres{"Rock","Punk","Post-Punk","Dark Wave","Electronic","Techno","Ambient","Pop","Acoustic"};
 inline constexpr std::array<const char*,4> brainStyles{"Transparent","Analog","Aggressive","Atmospheric"};
 inline BrainConfig cleanBrainConfig(BrainConfig c){
- c.genre=std::clamp(c.genre,0,8);c.style=std::clamp(c.style,0,3);if(c.seconds!=8&&c.seconds!=16&&c.seconds!=30&&c.seconds!=60)c.seconds=8;
+ c.genre=std::clamp(c.genre,0,8);c.style=std::clamp(c.style,0,3);
+ // Long-form sectional analysis, bounded to ten minutes of continuous DAW input.
+ if(c.seconds!=8&&c.seconds!=16&&c.seconds!=30&&c.seconds!=60&&
+    c.seconds!=120&&c.seconds!=180&&c.seconds!=300&&c.seconds!=600)c.seconds=8;
  c.targetLufs=std::clamp(clean(c.targetLufs),-24.f,-8.f);c.ceiling=std::clamp(clean(c.ceiling),-6.f,-.1f);c.intensity=std::clamp(clean(c.intensity),.25f,1.5f);return c;
 }
 inline void refineDetailedProposal(BrainProposal&,const BrainFeatures&,const BrainConfig&);
@@ -125,6 +128,41 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
  // Only change the full topology when all families are under Brain control.
  if(c.useEq&&c.useLimiter&&c.useStereo&&c.useDynamics&&c.useDynamicEq&&c.useStabilizer){add("chainOrder",0);p.reasons.push_back("Proposed order: Stabilizer, Dynamic EQ, Dynamics, Imager, EQ, Limiter; absent modules are skipped. Limiter is last. One instance per family is currently supported.");}
  refineDetailedProposal(p,f,c);
+ // Sectional whole-track diagnostics from every captured 3-second window.
+ if(f.detail.sectionLevelsDb.size()>1){
+  const auto& levels=f.detail.sectionLevelsDb;
+  float loudest=*std::max_element(levels.begin(),levels.end());
+  float quietest=*std::min_element(levels.begin(),levels.end());
+  int peakSection=static_cast<int>(std::max_element(levels.begin(),levels.end())-levels.begin());
+  int lowSection=static_cast<int>(std::min_element(levels.begin(),levels.end())-levels.begin());
+  p.reasons.push_back("Whole capture: "+std::to_string(levels.size())+
+    " consecutive ~3-second sections; loudest section near "+std::to_string(peakSection*3)+
+    "s ("+std::to_string(loudest)+" dB), quietest near "+std::to_string(lowSection*3)+
+    "s ("+std::to_string(quietest)+" dB).");
+  if(loudest-quietest>12.f)p.warnings.push_back(
+   "Large section-to-section level contrast (>12 dB): review quiet and loud parts before applying one master.");
+  if(f.detail.sectionJumpDb>9.f)p.warnings.push_back(
+   "Abrupt level transition between adjacent sections: review arrangements and limiter pumping.");
+ }
+ if(f.detail.windowSpreadDb<2.f&&f.peak>0.2f)p.warnings.push_back(
+  "Low short-window dynamic contrast: potential overcompression, verify perceived punch.");
+ if(f.correlation<-.15f)p.warnings.push_back(
+  "Strong negative stereo correlation: check phase and mono fold-down.");
+ // Quantitative comparison to authored genre tonal reference (not a copied song).
+ constexpr std::array<const char*,5> referenceBands{"sub 20-80 Hz","bass 80-250 Hz",
+                                      "mids 250 Hz-2 kHz","presence 2-6 kHz","air 6-20 kHz"};
+ p.reasons.push_back(std::string("GENRE REFERENCE: ")+brainGenres[c.genre]+
+  " tonal distribution from five authored octave-normalized weightings (not external copyrighted audio).");
+ for(size_t region=0;region<5;++region){
+  if(p.targetShares[region]<1e-5f)continue;
+  const float delta=10.f*std::log10(std::max(1e-5f,p.shares[region])/
+                                   std::max(1e-5f,p.targetShares[region]));
+  p.reasons.push_back(std::string(referenceBands[region])+": "+
+                      std::to_string(delta)+" dB relative to genre target.");
+  if(std::abs(delta)>6.f)
+   p.warnings.push_back(std::string("Large genre-reference deviation in ")+
+      referenceBands[region]+"; check whether this is an intentional arrangement or a mix issue.");
+ }
  p.valid=(c.useEq||c.useLimiter||c.useStereo||c.useDynamics||c.useDynamicEq||c.useStabilizer);return p;
 }
 }

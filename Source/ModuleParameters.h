@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <string>
 namespace masterlab {
-inline constexpr size_t parameterCount=226;
+inline constexpr size_t parameterCount=247;
 inline constexpr std::array<const char*,140> moduleParameterIds{
  "eqPresent","limPresent","stereoPresent","stereoOn","stereoLowWidth","stereoMidWidth","stereoHighWidth","stereoLowSplit","stereoHighSplit","stereoMonoBass","stereoMono","stereoBalance",
  "dynamicsPresent","dynamicsOn","dynamicsMode","dynThreshold","dynRatio","dynAttack","dynRelease","dynKnee","dynMakeup","dynMix","upwardAmount","upwardThreshold",
@@ -14,11 +14,18 @@ inline constexpr std::array<const char*,140> moduleParameterIds{
  "parallelCompensated","parallelTrimDynamicEq","parallelMixDynamicEq","parallelTrimDynamics","parallelMixDynamics","parallelTrimStereo","parallelMixStereo","parallelTrimEq","parallelMixEq","parallelTrimLimiter","parallelMixLimiter","parallelTrimStabilizer","parallelMixStabilizer","dynamicsIntensity","dynPunch","dynDelta","stabilizerIntensity",
  "exciterPresent","exciterOn","exciterAmountLow","exciterAmountMid","exciterAmountHigh","exciterAmountAir","exciterEven","exciterOdd","exciterDrive","exciterMix","exciterOutput",
  "analogPresent","analogOn","analogMode","analogDrive","analogBias","analogTone","analogDynamics","analogMix","analogOutput","analogAutoGain","exciterImpact","analogImpact","bassPresent","bassOn","bassSub","bassBody","bassHarmonics","bassMono","bassMix","bassOutput","transientPresent","transientOn","transientAttackLow","transientAttackMid","transientAttackHigh","transientSustainLow","transientSustainMid","transientSustainHigh","transientMix","transientOutput","truePeakPresent","truePeakOn","truePeakCeiling","truePeakRelease","truePeakDrive"};
+inline constexpr std::array<const char*,21> stemParameterIds{
+ "stemMode",
+ "stemDrumsGain","stemDrumsTone","stemDrumsWidth","stemDrumsMute","stemDrumsSolo",
+ "stemBassGain","stemBassTone","stemBassWidth","stemBassMute","stemBassSolo",
+ "stemOtherGain","stemOtherTone","stemOtherWidth","stemOtherMute","stemOtherSolo",
+ "stemVocalsGain","stemVocalsTone","stemVocalsWidth","stemVocalsMute","stemVocalsSolo"};
 inline std::string parameterId(size_t i){
  if(i<7)return std::array<const char*,7>{"frequency","gain","q","ceiling","eq","lim","order"}[i];
  if(i<52)return std::string(std::array<const char*,3>{"frequency","gain","q"}[(i-7)%3])+std::to_string(2+(i-7)/3);
  if(i<54)return i==52?"limiterDrive":"limiterRelease";
  if(i<86)return std::string(i%2==0?"bandType":"bandEnabled")+std::to_string(1+(i-54)/2);
- return moduleParameterIds[i-86];
+ if(i<226)return moduleParameterIds[i-86];
+ return stemParameterIds[i-226];
 }
 }

@@ -43,7 +43,7 @@ public:
  ~BassArchitectPanel()override{setLookAndFeel(nullptr);}
  void update(const Processor::ResponseFrame& r){reading_=r.bass;repaint();}
  void resized()override{
-  present_.setBounds(24,16,118,28);enabled_.setBounds(154,16,110,28);
+  present_.setBounds(24,12,130,34);enabled_.setBounds(162,12,116,34);
   const int cols=std::max(3,std::min(6,getWidth()/150));
   const int width=(getWidth()-48)/cols;
   for(size_t i=0;i<knobs_.size();++i){
@@ -53,7 +53,15 @@ public:
   }
  }
  void paint(juce::Graphics& g)override{
-  g.fillAll(juce::Colour(0xff101c27));
+  g.fillAll(juce::Colour(0xffedf0f2));
+  // Concept C powder-coated sheet-metal side rails and inset dark instrument panel.
+  const float panelWidth=juce::jmax(1.f,static_cast<float>(getWidth())-20.f);
+  g.setGradientFill(juce::ColourGradient(juce::Colour(0xff344553),10.f,0.f,
+                                        juce::Colour(0xff111b25),10.f,static_cast<float>(getHeight()),false));
+  g.fillRect(10.f,0.f,panelWidth,static_cast<float>(getHeight()));
+  g.setColour(juce::Colour(0xff96a7b6));
+  g.drawVerticalLine(10,0.f,static_cast<float>(getHeight()));
+  g.drawVerticalLine(juce::jmax(10,getWidth()-11),0.f,static_cast<float>(getHeight()));
   g.setColour(juce::Colour(0xff72d1ef));g.setFont(juce::Font(juce::FontOptions(23.f)));
   g.drawText("BASS ARCHITECT",24,56,getWidth()-48,35,juce::Justification::left);
   g.setColour(juce::Colour(0xffd0dfeb));g.setFont(13.f);

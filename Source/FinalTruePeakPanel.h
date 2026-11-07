@@ -38,7 +38,7 @@ public:
  ~FinalTruePeakPanel()override{setLookAndFeel(nullptr);}
  void update(const Processor::ResponseFrame& response){reading_=response.truePeak;repaint();}
  void resized()override{
-  included_.setBounds(24,16,120,28);enabled_.setBounds(154,16,110,28);
+  included_.setBounds(24,12,130,34);enabled_.setBounds(162,12,116,34);
   int width=std::min(190,(getWidth()-60)/3);
   for(size_t i=0;i<knobs_.size();++i){
    const int x=24+static_cast<int>(i)*(width+12);
@@ -47,9 +47,54 @@ public:
   }
  }
  void paint(juce::Graphics& g)override{
-  g.fillAll(juce::Colour(0xff121c1f));
+  g.fillAll(juce::Colour(0xffedf0f2));
+  // Concept C powder-coated sheet-metal side rails and inset dark instrument panel.
+  const float panelWidth=juce::jmax(1.f,static_cast<float>(getWidth())-20.f);
+  g.setGradientFill(juce::ColourGradient(juce::Colour(0xff344553),10.f,0.f,
+                                        juce::Colour(0xff111b25),10.f,static_cast<float>(getHeight()),false));
+  g.fillRect(10.f,0.f,panelWidth,static_cast<float>(getHeight()));
+  g.setColour(juce::Colour(0xff96a7b6));
+  g.drawVerticalLine(10,0.f,static_cast<float>(getHeight()));
+  g.drawVerticalLine(juce::jmax(10,getWidth()-11),0.f,static_cast<float>(getHeight()));
   g.setColour(juce::Colour(0xffb3e2ce));g.setFont(juce::Font(juce::FontOptions(23.f)));
   g.drawText("FINAL TRUE-PEAK",24,56,getWidth()-48,37,juce::Justification::left);
+  // A red warning light is driven strictly by a measured sample clipping condition.
+  // Inter-sample conformity remains separately audited, not inferred here.
+  const bool sampleClip=reading_.outputSamplePeak>1.f;
+  theme_.paintStatusLed(g,juce::jmax(24,getWidth()-195),56,25,sampleClip);
+  g.setColour(juce::Colour(sampleClip?0xffff5969:0xff63e28d));g.setFont(12.f);
+  g.drawText(sampleClip?"SAMPLE CLIP":"OUTPUT OK",juce::jmax(24,getWidth()-166),56,130,25,
+             juce::Justification::left);
+  // Live, mechanically styled gain reduction meter; sourced from DSP
+  // telemetry rather than a decorative animation.
+  if(getWidth()>=870){
+   const float cx=static_cast<float>(getWidth()-172),cy=209.f,radius=92.f;
+   const juce::Rectangle<float> bezel(cx-126.f,105.f,252.f,196.f);
+   theme_.drawAnalogGrBezel(g,bezel);
+   auto polar=[&](float angle,float r){
+    return juce::Point<float>(cx+std::sin(angle)*r,cy-std::cos(angle)*r);
+   };
+   constexpr float a0=-1.13f,a1=1.13f;
+   for(int tick=0;tick<=9;++tick){
+    const float angle=a0+(a1-a0)*(tick/9.f);
+    auto p1=polar(angle,radius*.70f),p2=polar(angle,radius*.84f);
+    g.setColour(juce::Colour(0xff51463d));g.drawLine({p1,p2},tick%3==0?1.9f:1.f);
+    if(tick%3==0){
+     g.setFont(11.f);
+     g.drawText(juce::String(tick*2),static_cast<int>(p2.x)-14,static_cast<int>(p2.y)-27,28,18,
+                juce::Justification::centred);
+    }
+   }
+   const float reduction=juce::jlimit(0.f,18.f,reading_.gainReductionDb);
+   const float angle=a0+(a1-a0)*reduction/18.f;
+   const auto tip=polar(angle,radius*.76f);
+   g.setColour(juce::Colour(0xff2b333a));g.drawLine({juce::Point<float>(cx+1.f,cy+2.f),tip.translated(1.f,2.f)},3.f);
+   g.setColour(juce::Colour(0xffab332b));g.drawLine({juce::Point<float>(cx,cy),tip},2.2f);
+   g.setColour(juce::Colour(0xff3a302a));g.fillEllipse(cx-5.f,cy-5.f,10.f,10.f);
+   g.setColour(juce::Colour(0xff554738));g.setFont(12.f);
+   g.drawText("GAIN REDUCTION  /  dB",static_cast<int>(cx-108.f),266,216,24,
+              juce::Justification::centred);
+  }
   g.setColour(juce::Colour(0xffd4dee6));g.setFont(14.f);
   const int y=std::max(315,getHeight()-155);
   auto db=[](float x){return juce::String(20.f*std::log10(std::max(1e-9f,x)),2);};
