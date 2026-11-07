@@ -177,7 +177,7 @@ public:
      auto next=std::make_unique<masterlab::LiveStemEngine>();
      if(next->prepare(sr,4096,220)){
       auto backend=std::make_unique<masterlab::StemgenRtBackend>(
-        std::filesystem::path(models.getFullPathName().toStdWString()),true);
+        std::filesystem::u8path(models.getFullPathName().toRawUTF8()),true);
       auto worker=std::make_unique<masterlab::LiveStemWorker>(*next,std::move(backend));
       liveStem=std::move(next);liveWorker=std::move(worker);
       liveAvailable.store(true,std::memory_order_release);
