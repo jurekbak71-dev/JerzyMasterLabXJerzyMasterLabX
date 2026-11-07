@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <string>
 namespace masterlab {
-inline constexpr size_t parameterCount=247;
+inline constexpr size_t parameterCount=248;
 inline constexpr std::array<const char*,140> moduleParameterIds{
  "eqPresent","limPresent","stereoPresent","stereoOn","stereoLowWidth","stereoMidWidth","stereoHighWidth","stereoLowSplit","stereoHighSplit","stereoMonoBass","stereoMono","stereoBalance",
  "dynamicsPresent","dynamicsOn","dynamicsMode","dynThreshold","dynRatio","dynAttack","dynRelease","dynKnee","dynMakeup","dynMix","upwardAmount","upwardThreshold",
@@ -26,6 +26,7 @@ inline std::string parameterId(size_t i){
  if(i<54)return i==52?"limiterDrive":"limiterRelease";
  if(i<86)return std::string(i%2==0?"bandType":"bandEnabled")+std::to_string(1+(i-54)/2);
  if(i<226)return moduleParameterIds[i-86];
- return stemParameterIds[i-226];
+ if(i<247)return stemParameterIds[i-226];
+ return "stemLiveOn";
 }
 }
