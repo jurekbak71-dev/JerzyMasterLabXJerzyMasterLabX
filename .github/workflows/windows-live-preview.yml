@@ -38,7 +38,8 @@ jobs:
       - name: Configure Windows LIVE VST3
         shell: pwsh
         run: |
-          cmake -S . -B build-live -A x64 -DMASTERLAB_PLUGIN=ON -DMASTERLAB_STEMGENRT=ON -DMASTERLAB_LIVE_STEM_PLUGIN=ON "-DMASTERLAB_ORT_ROOT=$pwd/build/onnxruntime-win-x64-1.26.0" "-DMASTERLAB_STEMGENRT_MODELS=$pwd/build/models"
+          $py = python -c "import sys; print(sys.executable)"
+          cmake -S . -B build-live -A x64 -DMASTERLAB_PLUGIN=ON -DMASTERLAB_STEMGENRT=ON -DMASTERLAB_LIVE_STEM_PLUGIN=ON "-DMASTERLAB_ORT_ROOT=$pwd/build/onnxruntime-win-x64-1.26.0" "-DMASTERLAB_STEMGENRT_MODELS=$pwd/build/models" "-DPython3_EXECUTABLE=$py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build LIVE plugin and tests
         run: cmake --build build-live --config Release --parallel 2
