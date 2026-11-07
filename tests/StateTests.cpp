@@ -43,7 +43,7 @@ int main(){
   [](auto& t){t.getChildWithProperty("id","stereoPresent").setProperty("value",.5,nullptr);},
   [](auto& t){t.getChildWithProperty("id","chainOrder").setProperty("value",.5,nullptr);},
   [](auto& t){t.getChildWithProperty("id","chainOrder").setProperty("value",720,nullptr);}
- }){if(!reject(corrupt)){std::cerr<<"partial application of invalid state";return 1;}++rejected;}
+ }){if(!reject(corrupt)){std::cerr<<"partial application of invalid state at corruption case "<<rejected;return 1;}++rejected;}
  target->setStateInformation(nullptr,0);const char garbage[]="not a preset";target->setStateInformation(garbage,sizeof garbage);
  target->setStateInformation(saved.getData(),static_cast<int>(saved.getSize()/2));
  juce::MemoryBlock oversized(1024*1024+1,true);target->setStateInformation(oversized.getData(),static_cast<int>(oversized.getSize()));
