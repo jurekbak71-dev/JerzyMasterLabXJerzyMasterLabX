@@ -166,6 +166,10 @@ public:
   if(std::abs(sr-44100.)<.01){
    auto models=juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory)
      .getChildFile("JerzyMasterLabX").getChildFile("StemgenRT");
+   // CI and explicit local evaluation may point to hash-verified test models.
+   const auto overrideDir=juce::SystemStats::getEnvironmentVariable(
+       "MASTERLAB_STEMGENRT_MODELS",juce::String{});
+   if(overrideDir.isNotEmpty())models=juce::File(overrideDir);
    if(models.getChildFile("drums.onnx").existsAsFile() &&
       models.getChildFile("bass.onnx").existsAsFile() &&
       models.getChildFile("vocals.onnx").existsAsFile()){
