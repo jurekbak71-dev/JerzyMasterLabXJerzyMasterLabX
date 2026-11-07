@@ -580,7 +580,6 @@ public:
         resetMetersButton.setBounds(getWidth()-210,136,186,26);
         newButton.setBounds(211,13,52,30);presetButton.setBounds(267,13,89,30);
         undoButton.setBounds(360,13,40,30);redoButton.setBounds(404,13,40,30);
-        stemView.setBounds(getWidth()-542,48,100,26);
         eqView.setBounds(getWidth()-432,48,98,26);limiterView.setBounds(getWidth()-326,48,98,26);inspectorView.setBounds(getWidth()-220,48,98,26);brainView.setBounds(getWidth()-114,48,98,26);
         const int brainCell=(getWidth()-80)/4;
         for(int i=0;i<4;++i)brainLabels[static_cast<size_t>(i)].setBounds(40+i*brainCell,166,brainCell-12,20);
@@ -594,7 +593,7 @@ public:
         releaseLabel.setBounds(32+width,top,width-12,22);release.setBounds(32+width,top+22,width-16,113);
         bandChoice.setBounds(28,140,110,26);typeChoice.setBounds(148,140,155,26);fftChoice.setBounds(313,140,130,26);bandEnabled.setBounds(453,140,74,26);
         eqEnabled.setBounds(537,140,72,26);limiterEnabled.setBounds(getWidth()-114,136,90,26);
-        const int navWidth=(getWidth()-48)/9;int nav=0;for(auto* button:{&consoleView,&eqView,&dynamicView,&dynamicsView,&stereoView,&stabilizerView,&limiterView,&inspectorView,&brainView}){button->setBounds(24+nav*navWidth,48,navWidth-5,26);++nav;}
+        const int navWidth=(getWidth()-48)/10;int nav=0;for(auto* button:{&consoleView,&stemView,&eqView,&dynamicView,&dynamicsView,&stereoView,&stabilizerView,&limiterView,&inspectorView,&brainView}){button->setBounds(24+nav*navWidth,48,navWidth-5,26);++nav;}
         modulesButton.setBounds(602,14,120,26);routingChoice.setBounds(448,14,134,26);
         for(auto& panel:modulePanels)panel->setBounds(0,134,getWidth(),getHeight()-154);
         parallelPanel.setBounds(0,134,getWidth(),getHeight()-154);
