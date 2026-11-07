@@ -13,6 +13,15 @@ struct LiveStemTransport {
     bool nonRealtime{};
     bool hasPosition{};
 };
+// Values are physical, not normalised VST parameter positions.
+struct LiveStemControls {
+    std::array<float,4> gainLinear{1.f,1.f,1.f,1.f};
+    std::array<float,4> tone{0.f,0.f,0.f,0.f};
+    std::array<float,4> width{1.f,1.f,1.f,1.f};
+    std::array<bool,4> mute{};
+    std::array<bool,4> solo{};
+    bool enabled{true};
+};
 struct LiveStemStatistics {
     std::uint64_t droppedInput{}, missingFrames{}, invalidFrames{}, staleFrames{};
 };
@@ -28,7 +37,8 @@ public:
     static constexpr std::size_t queueCapacity = 65536;
     bool prepare(double sampleRate, std::size_t latencySamples, std::size_t fadeSamples);
     void reset() noexcept;
-    void process(float* left, float* right, std::size_t samples, LiveStemTransport transport) noexcept;
+    void process(float* left, float* right, std::size_t samples, LiveStemTransport transport,
+                 const LiveStemControls& controls = {}) noexcept;
     bool popInput(StereoLiveFrame& frame) noexcept { return input_.tryPop(frame); }
     bool pushOutput(const SeparatedLiveFrame& frame) noexcept { return output_.tryPush(frame); }
     LiveStemStatistics statistics() const noexcept;
@@ -58,8 +68,13 @@ private:
     float wetMix_{};
     std::array<float,2> lastCorrection_{};
     std::array<float,2> recoveryHold_{};
+    std::array<std::array<float,2>,4> toneLowpass_{};
+    std::array<float,4> smoothedGain_{1.f,1.f,1.f,1.f};
+    float toneCoefficient_{0.2f};
+    bool wasRemixEnabled_{true};
     std::atomic<std::uint64_t> droppedInput_{0}, missingFrames_{0}, invalidFrames_{0}, staleFrames_{0};
     void newEpoch() noexcept;
-    bool findOutput(std::uint64_t position, std::array<float,2>& sum) noexcept;
+    bool findOutput(std::uint64_t position, std::array<float,2>& sum,
+                    const LiveStemControls& controls) noexcept;
 };
 } // namespace masterlab
