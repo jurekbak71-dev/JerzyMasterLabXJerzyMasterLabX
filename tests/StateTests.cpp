@@ -52,7 +52,7 @@ int main(){
  if(!afterXml||afterXml->getStringAttribute("schemaVersion")!="17"){std::cerr<<"schema lost";return 1;}
  // Upgrade both previous versions; newly introduced parameters use factory defaults.
  for(int version:{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16}){
-  const int count=version==1?52:(version==2?54:(version==3?86:(version==4?138:(version==5?161:(version==6?162:(version==7?163:(version==8?176:(version==9?179:(version==10?180:(version==11?191:(version==12?201:(version==13?203:(version==14?211:221)))))))))))));
+  int count=version==1?52:(version==2?54:(version==3?86:(version==4?138:(version==5?161:(version==6?162:(version==7?163:(version==8?176:(version==9?179:(version==10?180:(version==11?191:(version==12?201:(version==13?203:(version==14?211:221)))))))))))));
   if(version==16)count=226;
   auto legacy=original.createCopy();legacy.setProperty("schemaVersion",version,nullptr);
   for(int i=count;i<source->getParameters().size();++i){auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(source->getParameters()[i]);legacy.removeChild(legacy.getChildWithProperty("id",parameter->paramID),nullptr);}
