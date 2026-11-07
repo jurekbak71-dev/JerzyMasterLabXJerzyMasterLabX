@@ -81,5 +81,60 @@ int main(){
  for(auto* parameter:p.getParameters())
   check(std::abs(parameter->getValue()-parameter->getDefaultValue())<1.0e-6f,
         "factory NEW redo did not restore all defaults");
+ // Real four-stem playback from aligned WAV files. This never fakes source
+ // separation with spectral filters and does not require inference in CTest.
+ {
+  const auto folder=juce::File::getSpecialLocation(juce::File::tempDirectory)
+                       .getNonexistentChildFile("masterlab-stem-test","",false);
+  check(folder.createDirectory().wasOk(),"cannot create stem test folder");
+  juce::WavAudioFormat wav;
+  for(int stem=0;stem<4;++stem){
+   juce::AudioBuffer<float> source(2,1024);
+   const float amplitude=(stem+1)*.04f;
+   for(int i=0;i<1024;++i){source.setSample(0,i,amplitude);source.setSample(1,i,amplitude);}
+   auto file=folder.getChildFile(juce::String(masterlab::stemNames[static_cast<size_t>(stem)])+".wav");
+   std::unique_ptr<juce::FileOutputStream> output(file.createOutputStream());
+   check(output!=nullptr,"stem WAV output missing");
+   auto* raw=output.release();
+   std::unique_ptr<juce::AudioFormatWriter> writer(
+      wav.createWriterFor(raw,44100,2,32,{},0));
+   check(writer!=nullptr,"stem WAV writer unavailable");
+   check(writer->writeFromAudioSampleBuffer(source,0,1024),"stem WAV write failed");
+  }
+  masterlab::StemRemix mixer;
+  auto error=mixer.loadFolder(folder);
+  check(error.isEmpty(),"four aligned WAVs failed to import");
+  check(mixer.snapshot()!=nullptr&&mixer.snapshot()->samples==1024,
+        "stem bank did not load exact samples");
+  std::array<float,21> recipe{};
+  recipe[0]=1;
+  for(int stem=0;stem<4;++stem)recipe[static_cast<size_t>(3+5*stem)]=1.f;
+  juce::AudioBuffer<float> result(2,128);
+  result.clear();
+  mixer.render(result,44100.,0,true,recipe);
+  check(std::abs(result.getSample(0,25)-.4f)<1.e-4f,
+        "all stem playback did not reconstruct the synthetic mix");
+  recipe[static_cast<size_t>(1+3*5+3)]=1.f; // mute vocals
+  result.clear();mixer.render(result,44100.,128,true,recipe);
+  check(std::abs(result.getSample(0,25)-.24f)<1.e-4f,
+        "mute vocals leaked into stem mix");
+  recipe[static_cast<size_t>(1+3*5+3)]=0.f;
+  recipe[static_cast<size_t>(1+1*5+4)]=1.f; // solo bass
+  result.clear();mixer.render(result,44100.,256,true,recipe);
+  check(std::abs(result.getSample(0,25)-.08f)<1.e-4f,
+        "solo bass did not isolate real bass WAV");
+  recipe[static_cast<size_t>(1+1*5+4)]=0.f;
+  recipe[0]=0;result.clear();result.applyGain(.0f);
+  result.addSample(0,8,.6f);
+  mixer.render(result,44100.,384,true,recipe);
+  check(std::abs(result.getSample(0,8)-.6f)<1.e-6f,
+        "stem bypass did not preserve original DAW audio");
+  recipe[0]=1;result.clear();
+  mixer.render(result,44100.,1100,true,recipe);
+  check(std::abs(result.getSample(0,20))<1.e-7f,"stems did not end at file boundary");
+  mixer.unload();
+  check(mixer.snapshot()==nullptr,"unload retained stale stem audio");
+  folder.deleteRecursively();
+ }
  p.releaseResources();std::cout<<"Passed: real audio capture, exact duration, no callback C++ allocations, independent worker measurements, no automatic changes, revision, stale protection, single Undo, silence, cancel and overflow\n";
 }
