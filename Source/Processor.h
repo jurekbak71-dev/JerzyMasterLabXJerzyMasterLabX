@@ -148,7 +148,11 @@ public:
   auto sample=stemRemix.fallbackPosition();bool running=true;
   if(auto* playhead=getPlayHead())if(auto pos=playhead->getPosition()){
    if(auto timeline=pos->getTimeInSamples())sample=*timeline;
-   running=pos->getIsPlaying();
+   else if(auto seconds=pos->getTimeInSeconds())
+    sample=static_cast<std::int64_t>(*seconds*displayRate.load());
+   // FL Studio offline render may not mark the transport as "playing":
+   // never silence stems in offline WAV export solely because of that flag.
+   running=pos->getIsPlaying()||isNonRealtime();
   }
   stemRemix.render(b,displayRate.load(),sample,running,control);
  }
