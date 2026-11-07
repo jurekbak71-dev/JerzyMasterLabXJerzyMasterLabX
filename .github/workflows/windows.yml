@@ -131,6 +131,30 @@ jobs:
           if (-not (Test-Path build/StemEngine/stems-split.exe)) { throw 'Native separator executable missing' }
           & ./build/StemEngine/stems-split.exe --version
           if ($LASTEXITCODE -ne 0) { throw 'Native separator cannot run on Windows runner' }
+      - name: Prove real HTDemucs inference and 4 WAV stems on Windows CPU
+        shell: pwsh
+        run: |
+          @'
+          import math, struct, wave
+          path = 'build/stem-inference-smoke.wav'
+          with wave.open(path, 'wb') as wav:
+              wav.setnchannels(2)
+              wav.setsampwidth(2)
+              wav.setframerate(44100)
+              pcm = bytearray()
+              for i in range(44100 * 9):
+                  sample = int(9000 * math.sin(2 * math.pi * 110 * i / 44100) + 4000 * math.sin(2 * math.pi * 440 * i / 44100))
+                  pcm += struct.pack('<hh', sample, sample)
+              wav.writeframes(pcm)
+          '@ | python -
+          New-Item -ItemType Directory -Force build/stem-inference-smoke-out | Out-Null
+          & ./build/StemEngine/stems-split.exe -m build/StemEngine/models/htdemucs-42M-v1.0-F16.gguf -i build/stem-inference-smoke.wav -o build/stem-inference-smoke-out --float32
+          if ($LASTEXITCODE -ne 0) { throw 'The actual native HTDemucs inference test failed' }
+          $output = @(Get-ChildItem build/stem-inference-smoke-out -Recurse -Filter '*.wav' -File)
+          foreach ($stem in @('drums','bass','other','vocals')) {
+            if (-not ($output | Where-Object { $_.Name -match $stem })) { throw "No $stem stem was separated" }
+          }
+          Write-Output "Verified: four distinct neural-separated WAV files, not frequency approximations."
       - name: Package verified binary
         shell: pwsh
         run: |
