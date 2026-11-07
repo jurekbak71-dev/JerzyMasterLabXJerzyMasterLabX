@@ -18,7 +18,7 @@ inline juce::ValueTree validateState(const juce::ValueTree& candidate,
         || candidate["limiterInstanceId"].toString() != "limiter-0001"
         || candidate.getNumChildren() != sourceCount) return {};
     if((schema=="4"||schema=="5"||schema=="6"||schema=="7"||schema=="8"||schema=="9"||schema=="10"||schema=="11"||schema=="12"||schema=="13"||schema=="14"||schema=="15"||schema=="16"||schema=="17")&&(candidate["dynamicEqInstanceId"].toString()!="dynamic-eq-0001"||candidate["dynamicsInstanceId"].toString()!="dynamics-0001"||candidate["stereoInstanceId"].toString()!="stereo-0001"))return {};
-    if((schema=="5"||schema=="6"||schema=="7"||schema=="8"||schema=="9"||schema=="10"||schema=="11"||schema=="12"||schema=="13"||schema=="14"||schema=="15"||schema=="16")&&candidate["stabilizerInstanceId"].toString()!="stabilizer-0001")return {};
+    if((schema=="5"||schema=="6"||schema=="7"||schema=="8"||schema=="9"||schema=="10"||schema=="11"||schema=="12"||schema=="13"||schema=="14"||schema=="15"||schema=="16"||schema=="17")&&candidate["stabilizerInstanceId"].toString()!="stabilizer-0001")return {};
     std::set<juce::String> permitted,seen;
     for(int i=0;i<sourceCount;++i){auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(expected[i]);if(!parameter)return {};permitted.insert(parameter->paramID);}
     auto canonical = juce::ValueTree("MasterLab");
