@@ -10,6 +10,11 @@
 #include "LoudnessMeter.h"
 #include "MasterBrain.h"
 #include "StemRemix.h"
+#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
+#include "LiveStemEngine.h"
+#include "LiveStemWorker.h"
+#include "StemgenRtBackend.h"
+#endif
 #include "StateValidation.h"
 class Processor final: public juce::AudioProcessor,private juce::AsyncUpdater {
 public:
@@ -17,6 +22,11 @@ public:
  juce::AudioProcessorValueTreeState state;
  masterlab::MasterBrain brain;
  masterlab::StemRemix stemRemix;
+#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
+ std::unique_ptr<masterlab::LiveStemEngine> liveStem;
+ std::unique_ptr<masterlab::LiveStemWorker> liveWorker;
+ std::atomic<bool> liveAvailable{false};
+#endif
  std::vector<float> brainBaseline,brainAuditionValues;
  int brainAuditionVariant=-1;
  juce::String brainActionMessage{"No Brain proposal applied yet."};
@@ -54,7 +64,7 @@ public:
  for(int band=1;band<=16;++band){auto suffix=juce::String(band);
  p.add(std::make_unique<juce::AudioParameterChoice>("bandType"+suffix,"Band "+suffix+" filter type",juce::StringArray{"Bell","Low Shelf","High Shelf","High Pass 12 dB/oct","Low Pass 12 dB/oct","Notch"},0));
  p.add(std::make_unique<juce::AudioParameterBool>("bandEnabled"+suffix,"Band "+suffix+" enabled",true));}
- addModuleParameters(p);addStemParameters(p);return p;}
+ addModuleParameters(p);addStemParameters(p);p.add(std::make_unique<juce::AudioParameterBool>("stemLiveOn","Stem Brain live neural input",false));return p;}
  static void addStemParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
   p.add(std::make_unique<juce::AudioParameterChoice>("stemMode","Stem Brain source",
       juce::StringArray{"Original DAW mix","Separated stems only","DAW mix plus stems"},0));
@@ -124,17 +134,73 @@ public:
  void updateModules(){
   masterlab::configureModules(engine,[&](size_t i){return parameters[i]->load();});
  }
- Processor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,&undoManager,"MasterLab",layout()){state.state.setProperty("schemaVersion",17,nullptr);state.state.setProperty("eqInstanceId","eq-0001",nullptr);state.state.setProperty("limiterInstanceId","limiter-0001",nullptr);state.state.setProperty("dynamicEqInstanceId","dynamic-eq-0001",nullptr);state.state.setProperty("dynamicsInstanceId","dynamics-0001",nullptr);state.state.setProperty("stereoInstanceId","stereo-0001",nullptr);state.state.setProperty("stabilizerInstanceId","stabilizer-0001",nullptr);const char* ids[]={"frequency","gain","q","ceiling","eq","lim","order"};for(size_t i=0;i<7;++i)parameters[i]=state.getRawParameterValue(ids[i]);for(int k=2;k<=16;++k){int offset=7+(k-2)*3;const auto suffix=juce::String(k);parameters[offset]=state.getRawParameterValue("frequency"+suffix);parameters[offset+1]=state.getRawParameterValue("gain"+suffix);parameters[offset+2]=state.getRawParameterValue("q"+suffix);}
+ Processor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,&undoManager,"MasterLab",layout()){state.state.setProperty("schemaVersion",18,nullptr);state.state.setProperty("eqInstanceId","eq-0001",nullptr);state.state.setProperty("limiterInstanceId","limiter-0001",nullptr);state.state.setProperty("dynamicEqInstanceId","dynamic-eq-0001",nullptr);state.state.setProperty("dynamicsInstanceId","dynamics-0001",nullptr);state.state.setProperty("stereoInstanceId","stereo-0001",nullptr);state.state.setProperty("stabilizerInstanceId","stabilizer-0001",nullptr);const char* ids[]={"frequency","gain","q","ceiling","eq","lim","order"};for(size_t i=0;i<7;++i)parameters[i]=state.getRawParameterValue(ids[i]);for(int k=2;k<=16;++k){int offset=7+(k-2)*3;const auto suffix=juce::String(k);parameters[offset]=state.getRawParameterValue("frequency"+suffix);parameters[offset+1]=state.getRawParameterValue("gain"+suffix);parameters[offset+2]=state.getRawParameterValue("q"+suffix);}
  parameters[52]=state.getRawParameterValue("limiterDrive");parameters[53]=state.getRawParameterValue("limiterRelease");
  for(int k=1;k<=16;++k){parameters[54+(k-1)*2]=state.getRawParameterValue("bandType"+juce::String(k));parameters[55+(k-1)*2]=state.getRawParameterValue("bandEnabled"+juce::String(k));}
  for(size_t i=0;i<masterlab::moduleParameterIds.size();++i)parameters[86+i]=state.getRawParameterValue(masterlab::moduleParameterIds[i]);
- for(size_t i=0;i<masterlab::stemParameterIds.size();++i)parameters[226+i]=state.getRawParameterValue(masterlab::stemParameterIds[i]);}
+ for(size_t i=0;i<masterlab::stemParameterIds.size();++i)parameters[226+i]=state.getRawParameterValue(masterlab::stemParameterIds[i]);parameters[247]=state.getRawParameterValue("stemLiveOn");}
+ bool liveNeuralAvailable()const noexcept {
+#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
+  return liveAvailable.load(std::memory_order_acquire);
+#else
+  return false;
+#endif
+ }
  const juce::String getName()const override{return "JerzyMasterLabX";}
  bool acceptsMidi()const override{return false;}bool producesMidi()const override{return false;}double getTailLengthSeconds()const override{return .1;}
  int getNumPrograms()override{return 1;}int getCurrentProgram()override{return 0;}void setCurrentProgram(int)override{}const juce::String getProgramName(int)override{return "Default";}void changeProgramName(int,const juce::String&)override{}
  bool isBusesLayoutSupported(const BusesLayout& l)const override{return l.getMainInputChannelSet()==juce::AudioChannelSet::stereo()&&l.getMainOutputChannelSet()==juce::AudioChannelSet::stereo();}
- void prepareToPlay(double sr,int)override{masterlab::configureGraph(engine,[&](size_t i){return parameters[i]->load();});engine.prepare(sr,parameters[6]->load()>.5f,static_cast<int>(parameters[138]->load()));displayRate.store(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000);limiterMeter.prepare(displayRate.load());inputMeter.prepare(displayRate.load());outputMeter.prepare(displayRate.load());inputLoudness.prepare(displayRate.load());outputLoudness.prepare(displayRate.load());brain.prepare(displayRate.load());stemRemix.reset();updateModules();setLatencySamples(engine.latency());for(auto& channel:hostDryDelay)channel.assign(static_cast<size_t>(engine.latency()+1),0);hostDryPosition=0;hostBypassMix=0;hostBypassTarget=false;hostBypassStep=static_cast<float>(1/(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr*.02:960.));}
- void releaseResources()override{}void reset()override{brain.cancelRT();stemRemix.reset();engine.reset();updateModules();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;}
+ void prepareToPlay(double sr,int)override{
+#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
+  liveWorker.reset();liveStem.reset();liveAvailable.store(false,std::memory_order_release);
+#endif
+  masterlab::configureGraph(engine,[&](size_t i){return parameters[i]->load();});
+  engine.prepare(sr,parameters[6]->load()>.5f,static_cast<int>(parameters[138]->load()));
+  displayRate.store(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000);
+  limiterMeter.prepare(displayRate.load());inputMeter.prepare(displayRate.load());
+  outputMeter.prepare(displayRate.load());inputLoudness.prepare(displayRate.load());
+  outputLoudness.prepare(displayRate.load());brain.prepare(displayRate.load());
+  stemRemix.reset();updateModules();
+#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
+  // No resampling is attempted: the native graph is 44.1-kHz only.
+  if(std::abs(sr-44100.)<.01){
+   auto models=juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory)
+     .getChildFile("JerzyMasterLabX").getChildFile("StemgenRT");
+   if(models.getChildFile("drums.onnx").existsAsFile() &&
+      models.getChildFile("bass.onnx").existsAsFile() &&
+      models.getChildFile("vocals.onnx").existsAsFile()){
+    try {
+     auto next=std::make_unique<masterlab::LiveStemEngine>();
+     if(next->prepare(sr,4096,220)){
+      auto backend=std::make_unique<masterlab::StemgenRtBackend>(
+        std::filesystem::path(models.getFullPathName().toStdWString()),true);
+      auto worker=std::make_unique<masterlab::LiveStemWorker>(*next,std::move(backend));
+      liveStem=std::move(next);liveWorker=std::move(worker);
+      liveAvailable.store(true,std::memory_order_release);
+     }
+    }catch(const std::exception&){
+     liveWorker.reset();liveStem.reset();liveAvailable.store(false,std::memory_order_release);
+    }
+   }
+  }
+#endif
+  int totalLatency=engine.latency();
+#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
+  if(liveStem)totalLatency+=static_cast<int>(liveStem->latencySamples());
+#endif
+  setLatencySamples(totalLatency);
+  for(auto& channel:hostDryDelay)channel.assign(static_cast<size_t>(engine.latency()+1),0);
+  hostDryPosition=0;hostBypassMix=0;hostBypassTarget=false;
+  hostBypassStep=static_cast<float>(1/(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr*.02:960.));
+ }
+ void releaseResources()override{
+#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
+  liveWorker.reset();liveStem.reset();liveAvailable.store(false,std::memory_order_release);
+#endif
+ }void reset()override{
+#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
+  if(liveStem)liveStem->reset();
+#endifbrain.cancelRT();stemRemix.reset();engine.reset();updateModules();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;}
  void processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,false);}
  void processBlockBypassed(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,true);}
  void renderAudio(juce::AudioBuffer<float>& b,bool hostBypassed){
@@ -156,6 +222,28 @@ public:
   }
   stemRemix.render(b,displayRate.load(),sample,running,control);
  }
+#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
+ if(liveStem){
+  masterlab::LiveStemControls mix{};
+  mix.enabled=parameters[247]->load()>.5f && !hostBypassed && parameters[226]->load()<.5f;
+  masterlab::LiveStemTransport timeline{};timeline.playing=true;timeline.nonRealtime=isNonRealtime();
+  if(auto* playhead=getPlayHead())if(auto pos=playhead->getPosition()){
+   timeline.playing=pos->getIsPlaying();
+   if(auto p=pos->getTimeInSamples()){timeline.samplePosition=*p;timeline.hasPosition=true;}
+   else if(auto t=pos->getTimeInSeconds()){
+    timeline.samplePosition=static_cast<std::int64_t>(*t*displayRate.load());timeline.hasPosition=true;
+   }
+  }
+  for(int stem=0;stem<4;++stem){
+   const int i=227+5*stem;
+   mix.gainLinear[stem]=juce::Decibels::decibelsToGain(parameters[i]->load());
+   mix.tone[stem]=parameters[i+1]->load();mix.width[stem]=parameters[i+2]->load();
+   mix.mute[stem]=parameters[i+3]->load()>.5f;mix.solo[stem]=parameters[i+4]->load()>.5f;
+  }
+  liveStem->process(b.getWritePointer(0),b.getWritePointer(1),
+                    static_cast<std::size_t>(b.getNumSamples()),timeline,mix);
+ }
+#endif
  if(hostDryDelay[0].empty()){b.clear();return;}
  for(int offset=0;offset<b.getNumSamples();){int length=std::min(128,b.getNumSamples()-offset);
   for(int i=0;i<length;++i){size_t read=(hostDryPosition+1)%hostDryDelay[0].size();for(int c=0;c<2;++c){inputScratch[c][i]=masterlab::clean(b.getSample(c,offset+i));hostDryDelay[c][hostDryPosition]=inputScratch[c][i];hostDryScratch[c][i]=hostDryDelay[c][read];}hostDryPosition=read;}
