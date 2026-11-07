@@ -28,7 +28,7 @@ class StemRemix {
 public:
  StemRemix()=default;
  std::shared_ptr<const StemBank> snapshot() const {return current_.load(std::memory_order_acquire);}
- void unload(){current_.store({},std::memory_order_release);reset();}
+ void unload(){current_.store({},std::memory_order_release);} // DSP state only reset by host audio suspension
  void reset(){for(auto& pair:lowpass_)pair.fill(0.f);fallbackSamples_=0;}
  juce::String loadFolder(const juce::File& directory){
   if(!directory.isDirectory())return "Choose a folder containing four separated WAV files.";
@@ -86,7 +86,8 @@ public:
        static_cast<float>(cross/std::sqrt(std::max(1.e-20,energyL*energyR)));
   }
   current_.store(bank,std::memory_order_release);
-  reset();
+  // UI thread must not race the audio callback by clearing filter history.
+  // Filters settle within milliseconds after loading another bank.
   return {};
  }
  // Render existing stem files at the DAW position. Values: 0 input, 1 replace, 2 mix.
