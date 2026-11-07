@@ -110,6 +110,27 @@ jobs:
           if (-not $validator) { throw 'pluginval missing' }
           & $validator --strictness-level 5 --validate "$pwd/build/JerzyMasterLabX_artefacts/Release/VST3/JerzyMasterLabX.vst3"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Stage native offline HTDemucs four-stem separator and model
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force build/StemEngine/models | Out-Null
+          $tag = 'v0.1.6'
+          $runtimeUrl = "https://github.com/betweentwomidnights/stems.cpp/releases/download/$tag/stems-$tag-windows-x64-core.zip"
+          curl.exe --fail --location --retry 4 -o build/stems-native-core.zip $runtimeUrl
+          if ($LASTEXITCODE -ne 0) { throw 'Native stems.cpp binary download failed' }
+          Expand-Archive -Path build/stems-native-core.zip -DestinationPath build/StemEngine -Force
+          $modelUrl = 'https://huggingface.co/thepatch/htdemucs-GGUF/resolve/main/htdemucs-42M-v1.0-F16.gguf?download=true'
+          curl.exe --fail --location --retry 4 -o build/StemEngine/models/htdemucs-42M-v1.0-F16.gguf $modelUrl
+          if ($LASTEXITCODE -ne 0) { throw 'Real HTDemucs weights download failed; will not package fake source separation' }
+          if ((Get-Item build/StemEngine/models/htdemucs-42M-v1.0-F16.gguf).Length -lt 40000000) {
+            throw 'HTDemucs weights are incomplete'
+          }
+          $header = [System.IO.File]::ReadAllBytes((Resolve-Path 'build/StemEngine/models/htdemucs-42M-v1.0-F16.gguf'))
+          if ([Text.Encoding]::ASCII.GetString($header,0,4) -ne 'GGUF') { throw 'Invalid HTDemucs GGUF model' }
+          if (-not (Test-Path build/StemEngine/stems-split.exe)) { throw 'Native separator executable missing' }
+          & ./build/StemEngine/stems-split.exe --version
+          if ($LASTEXITCODE -ne 0) { throw 'Native separator cannot run on Windows runner' }
       - name: Package verified binary
         shell: pwsh
         run: |
@@ -118,7 +139,10 @@ jobs:
           if (-not (Test-Path 'build/Release/brain_demo.exe')) { throw 'Brain analysis executable missing' }
           Copy-Item README.md build/INSTALACJA.md
           Copy-Item Assets/Fonts/OFL-Manrope.txt build/OFL-Manrope.txt
-          Compress-Archive -Path $bundle,build/INSTALACJA.md,build/OFL-Manrope.txt -DestinationPath JerzyMasterLabX-v0.1.0-Windows-x64.zip
+          Copy-Item install/INSTALL_MASTERLABX.cmd build/INSTALL_MASTERLABX.cmd
+          Copy-Item install/install_masterlabx.ps1 build/install_masterlabx.ps1
+          Copy-Item docs/MASTER_BRAIN_STEMS.md build/MASTER_BRAIN_STEMS.md
+          Compress-Archive -Path $bundle,build/StemEngine,build/INSTALL_MASTERLABX.cmd,build/install_masterlabx.ps1,build/INSTALACJA.md,build/MASTER_BRAIN_STEMS.md,build/OFL-Manrope.txt -DestinationPath JerzyMasterLabX-v0.1.0-Windows-x64.zip
       - uses: actions/upload-artifact@v4
         with:
           name: JerzyMasterLabX-v0.1.0-Windows-x64
