@@ -18,7 +18,7 @@ class StemBrainPanel final : public juce::Component,private juce::Timer {
  std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAttachment_;
  juce::TextButton split_{"SEPARATE WAV (HTDemucs)"},import_{"LOAD FOUR STEMS"},
                   original_{"ORIGINAL MIX"},natural_{"Natural balance"},
-                  vocal_{"Vocal forward"},clear_{"Unload stems"};
+                  vocal_{"Vocal forward"},clear_{"Unload stems"},diagnose_{"DIAGNOSE"};
  juce::Label state_;
  std::unique_ptr<juce::FileChooser> chooser_;
  std::jthread worker_;
@@ -106,6 +106,44 @@ class StemBrainPanel final : public juce::Component,private juce::Timer {
               status==-3?"HTDemucs separation failed. WAV/model/driver issue; review native engine.":"Separation cancelled.");
   }
  }
+ void diagnoseStems(){
+  auto bank=processor_.stemRemix.snapshot();
+  if(!bank){showStatus("Separate or import four stems first.");return;}
+  juce::String report("MASTER BRAIN — measured STEM diagnostics\n");
+  report+="Source: "+bank->folder+"\n";
+  report+="Duration "+juce::String(bank->samples/bank->sampleRate,1)+
+          " s. Numeric RMS is unweighted dBFS, not LUFS.\n\n";
+  bool issues=false;
+  for(int i=0;i<4;++i){
+   const auto name=juce::String(masterlab::stemNames[static_cast<size_t>(i)]).toUpperCase();
+   report+=name+": RMS "+juce::String(juce::Decibels::gainToDecibels(
+      bank->rms[static_cast<size_t>(i)],-120.f),1)+
+      " dBFS | peak "+juce::String(juce::Decibels::gainToDecibels(
+      bank->peak[static_cast<size_t>(i)],-120.f),1)+
+      " dBFS | crest "+juce::String(bank->crestDb[static_cast<size_t>(i)],1)+
+      " dB | stereo r "+juce::String(bank->stereoCorrelation[static_cast<size_t>(i)],2)+"\n";
+   if(bank->nearClip[static_cast<size_t>(i)]>bank->samples/1000){
+    issues=true;report+=" - Many samples at/near full scale: investigate clipping and limiter drive.\n";
+   }
+   if(bank->crestDb[static_cast<size_t>(i)]<4.f&&bank->peak[static_cast<size_t>(i)]>.3f){
+    issues=true;report+=" - Very low crest contrast; check whether intentionally dense or over-limited.\n";
+   }
+   if(bank->stereoCorrelation[static_cast<size_t>(i)]<-.1f){
+    issues=true;report+=" - Negative L/R correlation: check mono fold-down and phase.\n";
+   }
+  }
+  if(bank->rms[3]>1.e-6f&&bank->rms[2]>bank->rms[3]*2.25f){
+   issues=true;report+="\n - Other instruments exceed vocal RMS by >7 dB; vocal-forward A/B may help.\n";
+  }
+  if(bank->rms[0]>1.e-6f&&bank->rms[1]>bank->rms[0]*2.f){
+   issues=true;report+="\n - Bass exceeds drum RMS by >6 dB; verify sub-frequency balance.\n";
+  }
+  if(!issues)report+="\nNo severe problems detected by these limited objective checks.\n";
+  report+="\nAvoid aggressive isolation gain: stem leakage and transient artifacts are model limitations."
+          "\nCheck output True Peak, LUFS, and A/B at matched listening level. These checks do not reconstruct lost audio.";
+  juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,
+                                         "Stem Brain — objective mastering diagnostics",report);
+ }
  void addSlider(juce::Slider& slider,const juce::String& id,
                 std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>& attach){
   slider.setSliderStyle(juce::Slider::LinearHorizontal);
@@ -141,13 +179,13 @@ public:
   sourceMode_.setComponentID("stem-source-mode");
   modeAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
     p.state,"stemMode",sourceMode_);
-  for(auto* button:{&split_,&import_,&original_,&natural_,&vocal_,&clear_})
+  for(auto* button:{&split_,&import_,&original_,&natural_,&vocal_,&clear_,&diagnose_})
     addAndMakeVisible(button);
   split_.setComponentID("stem-separate");
   import_.setComponentID("stem-import");
   original_.setComponentID("stem-original");
   natural_.setComponentID("stem-variant-a");vocal_.setComponentID("stem-variant-b");
-  clear_.setComponentID("stem-unload");
+  clear_.setComponentID("stem-unload");diagnose_.setComponentID("stem-diagnose");
   addAndMakeVisible(sourceMode_);
   state_.setColour(juce::Label::textColourId,juce::Colour(0xffb9ddeb));
   state_.setFont(theme_.font(13));state_.setJustificationType(juce::Justification::centredLeft);
@@ -168,6 +206,7 @@ public:
    else showStatus("Vocal-forward master remix active. Undo restores prior proportions.");
   };
   clear_.onClick=[this]{processor_.clearStemsUI();showStatus("Stem WAVs unloaded; original DAW mix restored.");};
+  diagnose_.onClick=[this]{diagnoseStems();};
   startTimerHz(3);
  }
  ~StemBrainPanel()override{
@@ -195,6 +234,7 @@ public:
   natural_.setBounds(22,juce::jmax(448,getHeight()-80),150,34);
   vocal_.setBounds(180,juce::jmax(448,getHeight()-80),155,34);
   clear_.setBounds(343,juce::jmax(448,getHeight()-80),150,34);
+  diagnose_.setBounds(503,juce::jmax(448,getHeight()-80),130,34);
  }
  void paint(juce::Graphics& g)override{
   g.fillAll(juce::Colour(0xffe7edf2));
