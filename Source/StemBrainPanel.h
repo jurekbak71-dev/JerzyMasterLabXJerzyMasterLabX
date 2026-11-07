@@ -15,6 +15,8 @@ class StemBrainPanel final : public juce::Component,private juce::Timer {
  std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>,12> sliders_{};
  std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>,8> toggles_{};
  juce::ComboBox sourceMode_;
+ juce::ToggleButton live_{"LIVE NEURAL"};
+ std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> liveAttachment_;
  std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAttachment_;
  juce::TextButton split_{"SEPARATE WAV (HTDemucs)"},import_{"LOAD FOUR STEMS"},
                   original_{"ORIGINAL MIX"},natural_{"Natural balance"},
@@ -187,6 +189,15 @@ public:
   natural_.setComponentID("stem-variant-a");vocal_.setComponentID("stem-variant-b");
   clear_.setComponentID("stem-unload");diagnose_.setComponentID("stem-diagnose");
   addAndMakeVisible(sourceMode_);
+  live_.setComponentID("stem-live-neural");addAndMakeVisible(live_);
+  liveAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+    p.state,"stemLiveOn",live_);
+  live_.onClick=[this]{
+   if(processor_.liveNeuralAvailable())
+    showStatus("LIVE 4-stem neural remix at 44.1 kHz. The stem controls affect the DAW audio stream.");
+   else
+    showStatus("LIVE unavailable: use 44.1 kHz, install verified StemgenRT models and reload plugin.");
+  };
   state_.setColour(juce::Label::textColourId,juce::Colour(0xffb9ddeb));
   state_.setFont(theme_.font(13));state_.setJustificationType(juce::Justification::centredLeft);
   state_.setText(status_,juce::dontSendNotification);addAndMakeVisible(state_);
@@ -219,7 +230,8 @@ public:
   split_.setBounds(margin,24,215,34);
   import_.setBounds(244,24,160,34);
   original_.setBounds(411,24,145,34);
-  sourceMode_.setBounds(568,25,juce::jmax(170,w-590),32);
+  live_.setBounds(568,24,116,34);
+  sourceMode_.setBounds(692,25,juce::jmax(100,w-714),32);
   state_.setBounds(margin,66,w-44,42);
   const int cell=(w-54)/4;
   for(int i=0;i<4;++i){
@@ -262,7 +274,10 @@ public:
    }
   }
   g.setColour(juce::Colour(0xff32536a));g.setFont(theme_.font(12));
-  g.drawFittedText("Real HTDemucs 4-source separation runs offline. Unavoidable bleed/artifacts: compare at matched loudness, check mono and True Peak.",
+  const auto footer=processor_.liveNeuralAvailable()
+       ? "LIVE (44.1 kHz) + offline HTDemucs. Check latency, mono and True Peak."
+       : "HTDemucs offline; LIVE requires StemgenRT noncommercial models, 44.1 kHz and a Live VST3 build.";
+   g.drawFittedText(footer,
         22,getHeight()-34,getWidth()-44,22,juce::Justification::centredLeft,1);
  }
 };
