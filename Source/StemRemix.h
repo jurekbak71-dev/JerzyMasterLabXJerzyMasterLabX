@@ -8,13 +8,15 @@
 #include <atomic>
 #include <cmath>
 #include <memory>
+#include <limits>
 #include <string>
 #include <algorithm>
 namespace masterlab {
 inline constexpr std::array<const char*,4> stemNames{"drums","bass","other","vocals"};
 struct StemBank {
  std::array<juce::AudioBuffer<float>,4> audio;
- std::array<float,4> rms{},peak{};
+ std::array<float,4> rms{},peak{},crestDb{},stereoCorrelation{};
+ std::array<int,4> nearClip{};
  double sampleRate=44100.0;
  int samples=0;
  juce::String folder;
@@ -64,16 +66,24 @@ public:
     return "Failed to read "+file.getFileName();
    if(reader->numChannels==1)
     out.copyFrom(1,0,out,0,0,bank->samples);
-   double energy=0.;
+   double energy=0.,energyL=0.,energyR=0.,cross=0.;
    for(int i=0;i<bank->samples;++i){
     const auto l=out.getSample(0,i),r=out.getSample(1,i);
     if(!std::isfinite(l)||!std::isfinite(r))return "Stem contains invalid audio values.";
     energy+=(double(l)*l+double(r)*r)*.5;
+    energyL+=double(l)*l;energyR+=double(r)*r;cross+=double(l)*r;
+    if(std::abs(l)>=.998f||std::abs(r)>=.998f)
+      ++bank->nearClip[static_cast<size_t>(stem)];
     bank->peak[static_cast<size_t>(stem)]=std::max(bank->peak[static_cast<size_t>(stem)],
                                                   std::max(std::abs(l),std::abs(r)));
    }
    bank->rms[static_cast<size_t>(stem)]=
        std::sqrt(static_cast<float>(energy/std::max(1,bank->samples)));
+   bank->crestDb[static_cast<size_t>(stem)]=20.f*std::log10(
+       std::max(1.e-8f,bank->peak[static_cast<size_t>(stem)])/
+       std::max(1.e-8f,bank->rms[static_cast<size_t>(stem)]));
+   bank->stereoCorrelation[static_cast<size_t>(stem)]=
+       static_cast<float>(cross/std::sqrt(std::max(1.e-20,energyL*energyR)));
   }
   current_.store(bank,std::memory_order_release);
   reset();
