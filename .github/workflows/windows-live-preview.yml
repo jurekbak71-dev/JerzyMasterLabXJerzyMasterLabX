@@ -37,6 +37,14 @@ jobs:
           New-Item -ItemType Directory -Force build | Out-Null
           Invoke-WebRequest https://github.com/microsoft/onnxruntime/releases/download/v1.26.0/onnxruntime-win-x64-1.26.0.zip -OutFile build/ort.zip
           Expand-Archive build/ort.zip -DestinationPath build
+      - name: Validate both PowerShell installers parse without errors
+        shell: pwsh
+        run: |
+          foreach ($file in @('install/install_masterlabx_live.ps1','install/install_offline_stems.ps1')) {
+            $tokens=$null; $errors=$null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $file).Path,[ref]$tokens,[ref]$errors)
+            if ($errors.Count -gt 0) { $errors | ForEach-Object { Write-Error $_ }; throw "Invalid script: $file" }
+          }
       - name: Configure Windows LIVE VST3
         shell: pwsh
         run: |
