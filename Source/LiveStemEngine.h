@@ -48,7 +48,7 @@ public:
     // real-time hop. An output for hop [start-128,start) becomes unusable once
     // playback has passed start+latency. Never drop offline (nonRealtime) hops.
     bool previousHopExpired(std::uint32_t epoch, std::uint64_t start) const noexcept {
-        if (epoch != currentEpoch() || publishedNonRealtime_.load(std::memory_order_relaxed) || start < 128) return false;
+        if (epoch != currentEpoch() || publishedNonRealtime_.load(std::memory_order_acquire) || start < 128) return false;
         const auto playback=publishedPlaybackPosition_.load(std::memory_order_acquire);
         return playback > start && playback-start > latency_;
     }
