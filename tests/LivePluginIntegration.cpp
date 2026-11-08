@@ -93,6 +93,26 @@ int main(){
  std::cout<<"LIVE worker diagnostic: "<<status<<"\\n";
  // Regression: the OFFLINE source-mode selector cannot turn neural LIVE off.
  CHECK(p.liveNeuralAvailable());
+ // Test the actual lower-row UI callbacks, not just Processor helper methods.
+ {
+  std::unique_ptr<juce::AudioProcessorEditor> editor(p.createEditor());
+  CHECK(editor);
+  auto* panel=editor->findChildWithID("stem-brain-panel");CHECK(panel);
+  auto click=[&](const char* id){
+   auto* button=dynamic_cast<juce::Button*>(panel->findChildWithID(id));
+   CHECK(button);CHECK(static_cast<bool>(button->onClick));button->onClick();
+  };
+  auto* vocalGain=p.state.getParameter("stemVocalsGain");CHECK(vocalGain);
+  click("stem-variant-b"); // VOCAL FORWARD must work WITHOUT offline WAVs
+  CHECK(p.state.getRawParameterValue("stemVocalsGain")->load()>1.0f);
+  click("stem-variant-a"); // NATURAL returns gain to neutral
+  CHECK(std::abs(p.state.getRawParameterValue("stemVocalsGain")->load())<.01f);
+  click("stem-original"); // ORIGINAL must actually disable neural LIVE
+  CHECK(live->getValue()<.5f);
+  CHECK(std::abs(offline->convertFrom0to1(offline->getValue()))<.01f);
+  // Re-enable to preserve existing shutdown/48-kHz regression coverage.
+  live->setValueNotifyingHost(1.f);
+ }
  p.releaseResources();
  CHECK(!p.liveNeuralAvailable());
  p.setRateAndBufferSizeDetails(48000,128);
