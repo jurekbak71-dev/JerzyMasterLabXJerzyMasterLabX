@@ -17,7 +17,7 @@ bool LiveStemEngine::prepare(double rate, std::size_t latency, std::size_t fade)
     // Both queue owners must be stopped here; never do this in reset/process.
     StereoLiveFrame in{}; while (input_.tryPop(in)) {}
     SeparatedLiveFrame out{}; while (output_.tryPop(out)) {}
-    droppedInput_.store(0); missingFrames_.store(0); invalidFrames_.store(0); staleFrames_.store(0);
+    droppedInput_.store(0); missingFrames_.store(0); invalidFrames_.store(0); staleFrames_.store(0); deliveredWetFrames_.store(0);
     reset();
     return true;
 }
@@ -125,6 +125,7 @@ void LiveStemEngine::process(float* left, float* right, std::size_t count,
         bool available = active && controls.enabled && ready &&
                          findOutput(position_ - latency_, wet, controls);
         if (available) {
+            deliveredWetFrames_.fetch_add(1, std::memory_order_relaxed);
             for (std::size_t c=0;c<2;++c)
                 if (!std::isfinite(wet[c]-dry[c])) available=false;
         }
@@ -166,6 +167,7 @@ void LiveStemEngine::process(float* left, float* right, std::size_t count,
 
 LiveStemStatistics LiveStemEngine::statistics() const noexcept {
     return {droppedInput_.load(std::memory_order_relaxed), missingFrames_.load(std::memory_order_relaxed),
-            invalidFrames_.load(std::memory_order_relaxed), staleFrames_.load(std::memory_order_relaxed)};
+            invalidFrames_.load(std::memory_order_relaxed), staleFrames_.load(std::memory_order_relaxed),
+            deliveredWetFrames_.load(std::memory_order_relaxed)};
 }
 } // namespace masterlab
