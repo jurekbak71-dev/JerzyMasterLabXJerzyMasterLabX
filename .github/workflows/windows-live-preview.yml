@@ -73,7 +73,43 @@ jobs:
           New-Item -ItemType Directory -Force $stage | Out-Null
           Copy-Item 'build-live/JerzyMasterLabX_artefacts/Release/VST3/JerzyMasterLabX.vst3' "$stage/JerzyMasterLabX.vst3" -Recurse -Force
           if(!(Test-Path "$stage/JerzyMasterLabX.vst3/Contents/x86_64-win/JerzyMasterLabX.vst3")){throw 'Missing VST3 binary'}
-          if(!(Test-Path "$stage/JerzyMasterLabX.vst3/Contents/x86_64-win/onnxruntime.dll")){throw 'Missing ONNX Runtime dependency'}
+          if(!(Test-Path "$stage/JerzyMasterLabX.vst3/Contents/x86_64-win/JerzyMasterLabX_ort_1_26.dll")){throw 'Missing ONNX Runtime dependency'}
+          # A VST3 linking to the generic DLL would pick up the System32
+          # copy and crash on ORT GetApi(26). The packaged DLL is unique.
+          $native = "$stage/JerzyMasterLabX.vst3/Contents/x86_64-win/JerzyMasterLabX.vst3"
+          $imports = & dumpbin.exe /IMPORTS $native | Out-String
+          if ($imports -match '(?im)^\\s*onnxruntime\\.dll\\s*
+          Copy-Item 'install/INSTALL_MASTERLABX_LIVE.cmd' "$stage/INSTALL_MASTERLABX_LIVE.cmd"
+          Copy-Item 'install/install_masterlabx_live.ps1' "$stage/install_masterlabx_live.ps1"
+          Copy-Item 'install/NAPRAW_MASTERLABX.ps1' "$stage/NAPRAW_MASTERLABX.ps1"
+          Copy-Item 'install/NAPRAW_MASTERLABX.cmd' "$stage/NAPRAW_MASTERLABX.cmd"
+          (Get-FileHash "$stage/JerzyMasterLabX.vst3/Contents/x86_64-win/JerzyMasterLabX.vst3" -Algorithm SHA256).Hash | Out-File "$stage/VST3-SHA256.txt" -Encoding ascii
+          $expectedHash = (Get-Content "$stage/VST3-SHA256.txt" -TotalCount 1).Trim()
+          $actualHash = (Get-FileHash "$stage/JerzyMasterLabX.vst3/Contents/x86_64-win/JerzyMasterLabX.vst3" -Algorithm SHA256).Hash
+          if ($expectedHash -ne $actualHash) { throw 'VST3 repair manifest mismatch' }
+          Copy-Item 'install/DIAGNOSE_MASTERLABX_LIVE.cmd' "$stage/DIAGNOSE_MASTERLABX_LIVE.cmd"
+          Copy-Item 'install/diagnose_masterlabx_live.ps1' "$stage/diagnose_masterlabx_live.ps1"
+          Copy-Item 'docs/LIVE_PREVIEW_WINDOWS.md' "$stage/README-LIVE.md"
+          New-Item -ItemType Directory -Force "$stage/licenses" | Out-Null
+          Copy-Item 'licenses/StemgenRT' "$stage/licenses/StemgenRT" -Recurse -Force
+          $models=Get-ChildItem $stage -Recurse -Filter *.onnx -File
+          if($models){throw 'Model weights must NOT be bundled in the CI artifact'}
+          Compress-Archive "$stage/*" 'build-live/MasterLabX-LIVE-PREVIEW-Windows-x64.zip' -Force
+          Get-FileHash 'build-live/MasterLabX-LIVE-PREVIEW-Windows-x64.zip' -Algorithm SHA256
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: MasterLabX-LIVE-PREVIEW-Windows-x64
+          path: build-live/MasterLabX-LIVE-PREVIEW-Windows-x64.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: MasterLabX-LIVE-PREVIEW-test-logs
+          path: |
+            build-live/Testing/Temporary/
+          if-no-files-found: warn
+) { throw 'VST3 still statically imports onnxruntime.dll' }
           Copy-Item 'install/INSTALL_MASTERLABX_LIVE.cmd' "$stage/INSTALL_MASTERLABX_LIVE.cmd"
           Copy-Item 'install/install_masterlabx_live.ps1' "$stage/install_masterlabx_live.ps1"
           Copy-Item 'install/NAPRAW_MASTERLABX.ps1' "$stage/NAPRAW_MASTERLABX.ps1"
