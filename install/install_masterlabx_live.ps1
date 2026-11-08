@@ -18,6 +18,10 @@ if ($missingVc.Count -gt 0) {
   Write-Host 'https://aka.ms/vc14/vc_redist.x64.exe'
   throw 'Cannot install LIVE preview until required Windows runtime libraries are installed.'
 }
+# Prevent stale host-loaded DLLs or a silent in-use installation.
+if (Get-Process -Name FL64 -ErrorAction SilentlyContinue) {
+  throw 'FL Studio (FL64.exe) is still running. Close FL Studio completely before installation.'
+}
 Write-Host 'MasterLabX LIVE PREVIEW: personal NONCOMMERCIAL evaluation.'
 Write-Host 'StemgenRT v0.7/0.8 weights: CC BY-NC-SA 4.0. Upstream does not guarantee third-party dataset clearance.'
 Write-Host 'See licenses\StemgenRT\WEIGHTS-LICENSE.md and MODEL_CARD.md before proceeding.'
@@ -71,6 +75,22 @@ try {
     if (Test-Path $old) { Copy-Item $old $targetPlugin -Recurse -Force }
     throw
   }
+  # A successful Copy-Item is not proof that FL Studio will see the new build.
+  # Compare actual PE bytes from installed system path with this package.
+  $installedBinary = Join-Path $targetPlugin 'Contents\\x86_64-win\\JerzyMasterLabX.vst3'
+  $installedRuntime = Join-Path $targetPlugin 'Contents\\x86_64-win\\onnxruntime.dll'
+  $expectedSha = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash
+  $actualSha = (Get-FileHash -LiteralPath $installedBinary -Algorithm SHA256).Hash
+  if ($expectedSha -ne $actualSha) {
+    throw ('VST3 install SHA-256 MISMATCH: expected ' + $expectedSha + ' actual ' + $actualSha)
+  }
+  $expectedOrt = (Get-FileHash -LiteralPath $runtime -Algorithm SHA256).Hash
+  $actualOrt = (Get-FileHash -LiteralPath $installedRuntime -Algorithm SHA256).Hash
+  if ($expectedOrt -ne $actualOrt) {
+    throw ('ONNX Runtime install SHA-256 MISMATCH: expected ' + $expectedOrt + ' actual ' + $actualOrt)
+  }
+  Write-Host ('INSTALLED VST3 SHA256 VERIFIED: ' + $actualSha) -ForegroundColor Green
+  Write-Host ('INSTALLED ONNX SHA256 VERIFIED: ' + $actualOrt) -ForegroundColor Green
   Write-Host ('LIVE VST3 installed: ' + $targetPlugin)
   Write-Host ('Models verified and installed: ' + $targetModels)
   Write-Host ('Backup: ' + $backup)
