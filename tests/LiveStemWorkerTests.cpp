@@ -93,4 +93,39 @@ static void wakeAndStopWithoutPolling(){
  const auto elapsed=std::chrono::steady_clock::now()-started;
  CHECK(elapsed<std::chrono::seconds(2));
 }
-int main(){varyingSamples();failuresRecover();seekDuringInference();wakeAndStopWithoutPolling();std::cout<<"LiveStemWorker: off-audio inference, varying previous-hop alignment, blocked seek, exception/nonfinite recovery and shutdown passed\n";}
+
+static void expiredBacklogRecoversWithoutWaste(){
+ LiveStemEngine engine;CHECK(engine.prepare(44100,512,1));
+ auto gate=std::make_shared<Gate>();
+ LiveStemWorker worker(engine,std::make_unique<Blocked>(gate));
+ struct EnsureRelease {std::shared_ptr<Gate> g;~EnsureRelease(){g->release.store(true);g->release.notify_all();}} release{gate};
+ std::array<float,128> l{},r{};l.fill(.2f);r.fill(.2f);
+ engine.process(l.data(),r.data(),128,{0,true,false,true});
+ const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(3);
+ while(!gate->entered.load()&&std::chrono::steady_clock::now()<deadline)std::this_thread::yield();
+ CHECK(gate->entered.load());
+ // Host advances while ONNX is blocked, reproducing a CPU-saturated session.
+ // The worker must discard expired queued hops rather than run neural inference
+ // on samples whose playback deadline is already behind the host.
+ for(std::int64_t hop=1;hop<65;++hop){
+  l.fill(.2f);r.fill(.2f);
+  engine.process(l.data(),r.data(),128,{hop*128,true,false,true});
+ }
+ gate->release.store(true);gate->release.notify_all();
+ const auto recoveryDeadline=std::chrono::steady_clock::now()+std::chrono::seconds(3);
+ while((worker.statistics().skippedExpiredHops<20||worker.statistics().outputFrames==0)
+       && std::chrono::steady_clock::now()<recoveryDeadline)std::this_thread::yield();
+ const auto stats=worker.statistics();
+ CHECK(stats.skippedExpiredHops>=20);CHECK(stats.outputFrames>0);
+ CHECK(stats.hops<65);CHECK(stats.failures==0);
+}
+static void offlineDoesNotDiscardQueuedHops(){
+ LiveStemEngine engine;CHECK(engine.prepare(44100,512,1));
+ std::array<float,128> l{},r{};l.fill(.1f);r.fill(.1f);
+ for(std::int64_t hop=0;hop<16;++hop)
+  engine.process(l.data(),r.data(),128,{hop*128,false,true,true});
+ StereoLiveFrame in{};CHECK(engine.popInput(in));
+ CHECK(!engine.previousHopExpired(in.epoch,128)); // Offline rendering: preserve every hop.
+}
+
+int main(){expiredBacklogRecoversWithoutWaste();offlineDoesNotDiscardQueuedHops();varyingSamples();failuresRecover();seekDuringInference();wakeAndStopWithoutPolling();std::cout<<"LiveStemWorker: off-audio inference, varying previous-hop alignment, blocked seek, exception/nonfinite recovery and shutdown passed\n";}
