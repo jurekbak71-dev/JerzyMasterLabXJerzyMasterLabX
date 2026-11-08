@@ -95,7 +95,14 @@ if(MASTERLAB_STEMGENRT)
   endif()
   add_library(masterlab_stemgenrt STATIC Source/StemgenRtBackend.cpp)
   target_include_directories(masterlab_stemgenrt PRIVATE "${MASTERLAB_ORT_ROOT}/include")
-  target_link_libraries(masterlab_stemgenrt PUBLIC masterlab_live masterlab_ort)
+  if(WIN32)
+    # ORT_API_MANUAL_INIT removes the static import of OrtGetApiBase.
+    # The backend resolves a unique DLL alongside the VST3 by absolute path.
+    target_compile_definitions(masterlab_stemgenrt PRIVATE ORT_API_MANUAL_INIT=1)
+    target_link_libraries(masterlab_stemgenrt PUBLIC masterlab_live)
+  else()
+    target_link_libraries(masterlab_stemgenrt PUBLIC masterlab_live masterlab_ort)
+  endif()
   add_executable(stemgenrt_backend_tests tests/StemgenRtBackendTests.cpp)
   target_link_libraries(stemgenrt_backend_tests PRIVATE masterlab_stemgenrt)
   add_test(NAME stemgenrt_neural_parity COMMAND stemgenrt_backend_tests "${MASTERLAB_STEMGENRT_MODELS}")
@@ -105,7 +112,7 @@ if(MASTERLAB_STEMGENRT)
     file(GLOB MASTERLAB_ORT_DLLS "${MASTERLAB_ORT_ROOT}/lib/*.dll")
     foreach(target stemgenrt_backend_tests stemgenrt_benchmark)
       add_custom_command(TARGET ${target} POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${MASTERLAB_ORT_DLLS} "$<TARGET_FILE_DIR:${target}>")
+        "${MASTERLAB_ORT_ROOT}/lib/onnxruntime.dll" "$<TARGET_FILE_DIR:${target}>/JerzyMasterLabX_ort_1_26.dll")
     endforeach()
   endif()
 endif()
@@ -259,7 +266,7 @@ if(MASTERLAB_PLUGIN)
      add_custom_command(TARGET JerzyMasterLabX_VST3 POST_BUILD
        COMMAND ${CMAKE_COMMAND} -E copy_if_different
        "${MASTERLAB_ORT_ROOT}/lib/onnxruntime.dll"
-       "$<TARGET_FILE_DIR:JerzyMasterLabX_VST3>/onnxruntime.dll")
+       "$<TARGET_FILE_DIR:JerzyMasterLabX_VST3>/JerzyMasterLabX_ort_1_26.dll")
    endif()
  endif()
  target_compile_definitions(JerzyMasterLabX PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
