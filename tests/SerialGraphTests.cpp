@@ -40,5 +40,60 @@ int main(){
   for(int block=0;block<200;++block){for(int i=0;i<257;++i)l[i]=r[i]=.3f*std::sin((block*257+i)*.17f);ll=l;rr=r;a.process(l.data(),r.data(),257,false,trace.data());b.process(ll.data(),rr.data(),257,false,trace.data());if(block>100)for(int i=0;i<257;++i)difference+=std::abs(l[i]-ll[i]);}
   check(difference>1,"module order does not affect audio");
  }
+ // A full routing permutation must contain exactly one of each of the
+ // 11 real processors, including the five formerly fixed post-chain modules.
+ for(int first=0;first<11;++first){
+  auto candidate=masterlab::defaultFullOrder;
+  std::rotate(candidate.begin(),candidate.begin()+first,candidate.end());
+  auto sanitized=masterlab::sanitizeFullOrder(candidate);
+  check(sanitized==candidate,"valid 11-node permutation was changed");
+  auto sorted=sanitized;std::sort(sorted.begin(),sorted.end());
+  check(sorted==masterlab::FullModuleOrder{0,1,2,3,4,5,6,7,8,9,10},
+        "full 11-node route lost/duplicated a processor");
+ }
+ {
+  const auto repaired=masterlab::sanitizeFullOrder({7,7,7,7,7,7,7,7,7,7,255});
+  auto sorted=repaired;std::sort(sorted.begin(),sorted.end());
+  check(sorted==masterlab::FullModuleOrder{0,1,2,3,4,5,6,7,8,9,10},
+        "corrupt intermediate host automation duplicates processors");
+ }
+ // A genuine change to routing the final true-peak limiter before EQ changes
+ // audio, rather than merely updating a UI order label.
+ for(double rate:{44100.,48000.}){
+  masterlab::SerialGraph standard,moved;
+  for(auto* g:{&standard,&moved}){
+   g->parameters(2000,12,1,-1,true,true);
+   g->limiterParameters(5,120);
+   masterlab::FinalTruePeakSettings peak;peak.enabled=true;peak.ceilingDb=-6;peak.driveDb=6;
+   g->finalTruePeakSettings(peak);
+   g->prepare(rate);
+  }
+  auto changed=masterlab::defaultFullOrder;
+  std::rotate(changed.begin(),changed.begin()+1,changed.end());
+  auto first=std::find(changed.begin(),changed.end(),10);
+  std::rotate(changed.begin(),first,first+1); // final true peak first
+  standard.extendedRouting(true,masterlab::defaultFullOrder);
+  moved.extendedRouting(true,changed);
+  std::array<float,257> a{},b{},c{},d{},trace{};
+  double delta=0;
+  for(int block=0;block<200;++block){
+   for(int i=0;i<257;++i){
+    const float v=.3f*std::sin((block*257+i)*.14f);
+    a[i]=b[i]=c[i]=d[i]=v;
+   }
+   audit=true;
+   standard.process(a.data(),b.data(),257,false,trace.data());
+   moved.process(c.data(),d.data(),257,false,trace.data());
+   audit=false;
+   if(block>100)for(int i=0;i<257;++i){
+    check(std::isfinite(a[i])&&std::isfinite(c[i])&&std::abs(a[i])<8&&std::abs(c[i])<8,
+          "full router emitted invalid sample");
+    delta+=std::abs(a[i]-c[i]);
+   }
+  }
+  check(standard.fullRouterActive()&&moved.fullRouterActive(),"full route not activated");
+  check(delta>.01,"real 11-node DSP order did not change rendered audio");
+  check(standard.latency()==moved.latency(),"full router changed reported PDC");
+ }
  check(allocations==0,"routing allocated in callback");std::cout<<"Passed: 720 complete permutations, legacy sound, allocation-free live changes, finite output, stable PDC and audible topology at four rates\n";
 }
