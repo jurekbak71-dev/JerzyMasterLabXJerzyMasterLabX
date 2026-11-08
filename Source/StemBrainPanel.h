@@ -193,10 +193,13 @@ public:
   liveAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
     p.state,"stemLiveOn",live_);
   live_.onClick=[this]{
+   // Never initialize ONNX from FL Studio's audio/prepare callback.
+   // Schedule it on the JUCE message thread only after explicit activation.
+   processor_.requestLiveNeuralUI();
    if(processor_.liveNeuralAvailable())
     showStatus("LIVE 4-stem neural remix at 44.1 kHz. The stem controls affect the DAW audio stream.");
    else
-    showStatus("LIVE unavailable: use 44.1 kHz, install verified StemgenRT models and reload plugin.");
+    showStatus("LIVE initializing on the UI thread, or unavailable: use 44.1 kHz and verified models.");
   };
   state_.setColour(juce::Label::textColourId,juce::Colour(0xffb9ddeb));
   state_.setFont(theme_.font(13));state_.setJustificationType(juce::Justification::centredLeft);
