@@ -36,10 +36,47 @@ class Editor final : public juce::AudioProcessorEditor,
     juce::TextButton dynamicView{"Dynamic EQ"},dynamicsView{"Dynamics"},stereoView{"Stereo"},stabilizerView{"Stabilizer"},modulesButton{"+ Modules"};
     int moduleView=-1,chainDragKind=-1,chainHover=-1;bool chainDragging=false,showingParallel=false,showingExciter=false,showingAnalog=false,showingBass=false,showingTransient=false,showingTruePeak=false;
     juce::ComboBox routingChoice;std::unique_ptr<ComboAttachment> routingAttachment;
+    inline static constexpr std::array<const char*,11> routePresentIds{
+      "dynamicEqPresent","dynamicsPresent","stereoPresent","eqPresent","limPresent","stabilizerPresent",
+      "exciterPresent","analogPresent","bassPresent","transientPresent","truePeakPresent"};
+    inline static constexpr std::array<const char*,11> routeOnIds{
+      "dynamicEqOn","dynamicsOn","stereoOn","eq","lim","stabilizerOn",
+      "exciterOn","analogOn","bassOn","transientOn","truePeakOn"};
+    inline static constexpr std::array<const char*,11> routeNames{
+      "Dynamic EQ","Dynamics","Stereo","Spectral EQ","Limiter","Stabilizer",
+      "Exciter","Analog Color","Bass","Transient","True Peak"};
+    bool usingFullRouter()const {
+      return processor.state.getRawParameterValue("fullRouterOn")->load()>.5f &&
+             processor.state.getRawParameterValue("routingMode")->load()<.5f;
+    }
+    masterlab::FullModuleOrder fullRouteOrder()const {
+      masterlab::FullModuleOrder result{};
+      for(size_t i=0;i<result.size();++i)
+       result[i]=static_cast<int>(processor.state.getRawParameterValue(
+         "fullRouteSlot"+juce::String(static_cast<int>(i+1)))->load());
+      return masterlab::sanitizeFullOrder(result);
+    }
+    void writeFullRoute(masterlab::FullModuleOrder newOrder) {
+      processor.beginUiTransaction("Reorder full 11-module chain");
+      for(size_t i=0;i<newOrder.size();++i){
+       auto* p=processor.state.getParameter("fullRouteSlot"+juce::String(static_cast<int>(i+1)));
+       p->beginChangeGesture();
+       p->setValueNotifyingHost(p->convertTo0to1(static_cast<float>(newOrder[i])));
+       p->endChangeGesture();
+      }
+      processor.finishUiTransaction();
+      repaint();
+    }
     std::vector<int> chainModules() const {
         std::vector<int> result;
+        if(usingFullRouter()){
+            for(int kind:fullRouteOrder())
+             if(processor.state.getRawParameterValue(routePresentIds[static_cast<size_t>(kind)])->load()>.5f)
+              result.push_back(kind);
+            return result;
+        }
         const auto order=masterlab::decodeOrder(static_cast<int>(processor.state.getRawParameterValue("chainOrder")->load()),processor.state.getRawParameterValue("order")->load()>.5f);
-        for(int kind:order)if(processor.state.getRawParameterValue(std::array<const char*,6>{"dynamicEqPresent","dynamicsPresent","stereoPresent","eqPresent","limPresent","stabilizerPresent"}[kind])->load()>.5f)result.push_back(kind);
+        for(int kind:order)if(processor.state.getRawParameterValue(routePresentIds[static_cast<size_t>(kind)])->load()>.5f)result.push_back(kind);
         return result;
     }
     int chainAt(float x)const {auto list=chainModules();if(list.empty()||x<24||x>getWidth()-24)return -1;size_t i=static_cast<size_t>((x-24)/((getWidth()-48.f)/list.size()));return i<list.size()?list[i]:-1;}
