@@ -70,11 +70,6 @@ try {
     if (!(Test-Path (Join-Path $targetPlugin 'Contents\x86_64-win\onnxruntime.dll'))) {
       throw 'ONNX Runtime DLL missing after copying VST3.'
     }
-  } catch {
-    if (Test-Path $targetPlugin) { Remove-Item $targetPlugin -Recurse -Force }
-    if (Test-Path $old) { Copy-Item $old $targetPlugin -Recurse -Force }
-    throw
-  }
   # A successful Copy-Item is not proof that FL Studio will see the new build.
   # Compare actual PE bytes from installed system path with this package.
   $installedBinary = Join-Path $targetPlugin 'Contents\\x86_64-win\\JerzyMasterLabX.vst3'
@@ -91,6 +86,11 @@ try {
   }
   Write-Host ('INSTALLED VST3 SHA256 VERIFIED: ' + $actualSha) -ForegroundColor Green
   Write-Host ('INSTALLED ONNX SHA256 VERIFIED: ' + $actualOrt) -ForegroundColor Green
+  } catch {
+    if (Test-Path $targetPlugin) { Remove-Item $targetPlugin -Recurse -Force }
+    if (Test-Path $old) { Copy-Item $old $targetPlugin -Recurse -Force }
+    throw
+  }
   Write-Host ('LIVE VST3 installed: ' + $targetPlugin)
   Write-Host ('Models verified and installed: ' + $targetModels)
   Write-Host ('Backup: ' + $backup)
