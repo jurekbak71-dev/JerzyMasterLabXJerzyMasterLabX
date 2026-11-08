@@ -65,7 +65,12 @@ int main(){
    audio.setSample(0,i,.08f*std::sin(at*.015f)+.03f*std::cos(at*.043f));
    audio.setSample(1,i,.09f*std::sin(at*.016f)+.025f*std::cos(at*.031f));
   }
-  if(block==200)mute->setValueNotifyingHost(1.f);
+  if(block==100)offline->setValueNotifyingHost(offline->convertTo0to1(1.f));
+  if(block==200){
+   offline->setValueNotifyingHost(offline->convertTo0to1(2.f));
+   mute->setValueNotifyingHost(1.f);
+  }
+  if(block==300)offline->setValueNotifyingHost(offline->convertTo0to1(0.f));
   p.processBlock(audio,midi);
   for(int c=0;c<2;++c)for(int i=0;i<128;++i){
    const float v=audio.getSample(c,i);CHECK(std::isfinite(v));
@@ -76,6 +81,10 @@ int main(){
  }
  CHECK(finite==400*256);
  CHECK(maxOut>.001f);
+ CHECK(p.liveWorker!=nullptr);
+ CHECK(p.liveWorker->statistics().hops>20);
+ // Regression: the OFFLINE source-mode selector cannot turn neural LIVE off.
+ CHECK(p.liveNeuralAvailable());
  p.releaseResources();
  CHECK(!p.liveNeuralAvailable());
  p.setRateAndBufferSizeDetails(48000,128);
