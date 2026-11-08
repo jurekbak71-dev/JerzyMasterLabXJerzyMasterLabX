@@ -87,7 +87,7 @@ try {
   foreach($event in $events) {
     Log ('WER event time=' + $event.TimeCreated.ToString('u') + ' provider=' + $event.ProviderName + ' id=' + $event.Id)
     foreach($line in ($event.Message -split "[`r`n]+" | Where-Object {
-      $_ -match '(?i)faulting application|faulting module|exception code|fault offset|nazwa aplikacji|nazwa modulu|kod wyjatku|przesunięcie bledu|JerzyMasterLabX|onnxruntime'
+      $_ -match '(?i)faulting application|faulting module|exception code|fault offset|nazwa aplikacji|nazwa modulu|kod wyjatku|przesuniecie bledu|JerzyMasterLabX|onnxruntime'
     } | Select-Object -First 16)){
       Log ('WER: ' + $line.Trim())
     }
