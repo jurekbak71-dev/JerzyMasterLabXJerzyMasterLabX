@@ -23,7 +23,7 @@ struct LiveStemControls {
     bool enabled{true};
 };
 struct LiveStemStatistics {
-    std::uint64_t droppedInput{}, missingFrames{}, invalidFrames{}, staleFrames{};
+    std::uint64_t droppedInput{}, missingFrames{}, invalidFrames{}, staleFrames{}, deliveredWetFrames{};
 };
 
 // Callback boundary only. This class is NOT a neural separator.
@@ -72,7 +72,7 @@ private:
     std::array<float,4> smoothedGain_{1.f,1.f,1.f,1.f};
     float toneCoefficient_{0.2f};
     bool wasRemixEnabled_{true};
-    std::atomic<std::uint64_t> droppedInput_{0}, missingFrames_{0}, invalidFrames_{0}, staleFrames_{0};
+    std::atomic<std::uint64_t> droppedInput_{0}, missingFrames_{0}, invalidFrames_{0}, staleFrames_{0}, deliveredWetFrames_{0};
     void newEpoch() noexcept;
     bool findOutput(std::uint64_t position, std::array<float,2>& sum,
                     const LiveStemControls& controls) noexcept;
