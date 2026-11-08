@@ -84,7 +84,13 @@ public:
  for(int band=1;band<=16;++band){auto suffix=juce::String(band);
  p.add(std::make_unique<juce::AudioParameterChoice>("bandType"+suffix,"Band "+suffix+" filter type",juce::StringArray{"Bell","Low Shelf","High Shelf","High Pass 12 dB/oct","Low Pass 12 dB/oct","Notch"},0));
  p.add(std::make_unique<juce::AudioParameterBool>("bandEnabled"+suffix,"Band "+suffix+" enabled",true));}
- addModuleParameters(p);addStemParameters(p);p.add(std::make_unique<juce::AudioParameterBool>("stemLiveOn","Stem Brain live neural input",false));return p;}
+ addModuleParameters(p);addStemParameters(p);
+ p.add(std::make_unique<juce::AudioParameterBool>("stemLiveOn","Stem Brain live neural input",false));
+ p.add(std::make_unique<juce::AudioParameterBool>("fullRouterOn","Full 11-module serial routing enabled",false));
+ for(int slot=0;slot<11;++slot)
+  p.add(std::make_unique<juce::AudioParameterInt>("fullRouteSlot"+juce::String(slot+1),
+       "Full route slot "+juce::String(slot+1),0,10,masterlab::defaultFullOrder[static_cast<size_t>(slot)]));
+ return p;}
  static void addStemParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
   p.add(std::make_unique<juce::AudioParameterChoice>("stemMode","Stem Brain source",
       juce::StringArray{"Original DAW mix","Separated stems only","DAW mix plus stems"},0));
@@ -158,7 +164,9 @@ public:
  parameters[52]=state.getRawParameterValue("limiterDrive");parameters[53]=state.getRawParameterValue("limiterRelease");
  for(int k=1;k<=16;++k){parameters[54+(k-1)*2]=state.getRawParameterValue("bandType"+juce::String(k));parameters[55+(k-1)*2]=state.getRawParameterValue("bandEnabled"+juce::String(k));}
  for(size_t i=0;i<masterlab::moduleParameterIds.size();++i)parameters[86+i]=state.getRawParameterValue(masterlab::moduleParameterIds[i]);
- for(size_t i=0;i<masterlab::stemParameterIds.size();++i)parameters[226+i]=state.getRawParameterValue(masterlab::stemParameterIds[i]);parameters[247]=state.getRawParameterValue("stemLiveOn");}
+ for(size_t i=0;i<masterlab::stemParameterIds.size();++i)parameters[226+i]=state.getRawParameterValue(masterlab::stemParameterIds[i]);parameters[247]=state.getRawParameterValue("stemLiveOn");
+ for(size_t i=248;i<masterlab::parameterCount;++i)
+  parameters[i]=state.getRawParameterValue(masterlab::parameterId(i));}
  // Message/control thread only. Deliberately defer potentially expensive model
  // session construction until LIVE is requested by the user or a restored LIVE
  // state. Audio callback only reads liveAvailable and already-prepared buffers.
