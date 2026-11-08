@@ -251,7 +251,7 @@ public:
    return "LIVE telemetry | WET "+num(liveWetFrames)+
     " | hops "+num(liveHops)+" | output "+num(liveOutputs)+
     " | infer-max "+juce::String(static_cast<double>(liveMaxInferenceNs.load(std::memory_order_relaxed))/1.0e6,1)+"ms"+
-    " | input-backlog "+num(liveMaxBacklog)+
+    "\\ninput-backlog "+num(liveMaxBacklog)+
     " | drop "+num(liveDroppedInput)+" | stale "+num(liveStale)+
     " | missing "+num(liveMissing)+" | invalid "+num(liveInvalid)+
     " | worker-errors "+num(liveFailures)+" | discarded "+num(liveDiscarded);
