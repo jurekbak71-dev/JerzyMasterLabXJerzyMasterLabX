@@ -68,7 +68,11 @@ bool LiveStemEngine::findOutput(std::uint64_t wanted, std::array<float,2>& sum,
                 }
                 auto& smooth=toneLowpass_[stem][channel];
                 smooth+=toneCoefficient_*(input-smooth);
-                stereo[channel]=input+controls.tone[stem]*(input-smooth);
+                // Equal-and-opposite low/high gain gives a true, smoother
+                // bipolar tilt (up to +/-4 dB per side) without the old
+                // doubling of treble energy or full low-pass at -100%.
+                stereo[channel]=smooth*toneLowGain_[stem]+
+                                (input-smooth)*toneHighGain_[stem];
             }
             // Smooth gain changes over ~15 ms at 44.1 kHz rather than
             // generating a click when the host automates a fader or mute.
@@ -106,6 +110,13 @@ void LiveStemEngine::process(float* left, float* right, std::size_t count,
                       static_cast<std::uint64_t>(t.samplePosition);
     expectedHost_ = count > room ? std::numeric_limits<std::int64_t>::max() :
         static_cast<std::int64_t>(static_cast<std::uint64_t>(t.samplePosition) + count);
+    // One cheap coefficient update per block rather than per sample.
+    for (std::size_t stem=0;stem<4;++stem) {
+        const float tone=std::clamp(std::isfinite(controls.tone[stem])?
+                                    controls.tone[stem]:0.f,-1.f,1.f);
+        toneLowGain_[stem]=std::pow(10.f,-4.f*tone/20.f);
+        toneHighGain_[stem]=std::pow(10.f,4.f*tone/20.f);
+    }
     bool enqueued = false;
     for (std::size_t i = 0; i < count; ++i, ++position_) {
         const float l = std::isfinite(left[i]) ? left[i] : 0.f;
