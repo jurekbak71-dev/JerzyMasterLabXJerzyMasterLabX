@@ -76,6 +76,12 @@ jobs:
           if(!(Test-Path "$stage/JerzyMasterLabX.vst3/Contents/x86_64-win/onnxruntime.dll")){throw 'Missing ONNX Runtime dependency'}
           Copy-Item 'install/INSTALL_MASTERLABX_LIVE.cmd' "$stage/INSTALL_MASTERLABX_LIVE.cmd"
           Copy-Item 'install/install_masterlabx_live.ps1' "$stage/install_masterlabx_live.ps1"
+          Copy-Item 'install/NAPRAW_MASTERLABX.ps1' "$stage/NAPRAW_MASTERLABX.ps1"
+          Copy-Item 'install/NAPRAW_MASTERLABX.cmd' "$stage/NAPRAW_MASTERLABX.cmd"
+          (Get-FileHash "$stage/JerzyMasterLabX.vst3/Contents/x86_64-win/JerzyMasterLabX.vst3" -Algorithm SHA256).Hash | Out-File "$stage/VST3-SHA256.txt" -Encoding ascii
+          $expectedHash = (Get-Content "$stage/VST3-SHA256.txt" -TotalCount 1).Trim()
+          $actualHash = (Get-FileHash "$stage/JerzyMasterLabX.vst3/Contents/x86_64-win/JerzyMasterLabX.vst3" -Algorithm SHA256).Hash
+          if ($expectedHash -ne $actualHash) { throw 'VST3 repair manifest mismatch' }
           Copy-Item 'install/DIAGNOSE_MASTERLABX_LIVE.cmd' "$stage/DIAGNOSE_MASTERLABX_LIVE.cmd"
           Copy-Item 'install/diagnose_masterlabx_live.ps1' "$stage/diagnose_masterlabx_live.ps1"
           Copy-Item 'docs/LIVE_PREVIEW_WINDOWS.md' "$stage/README-LIVE.md"
