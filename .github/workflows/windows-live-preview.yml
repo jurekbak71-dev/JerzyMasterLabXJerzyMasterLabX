@@ -60,6 +60,11 @@ jobs:
           if (-not $exe) { throw 'pluginval executable missing' }
           & $exe --strictness-level 5 --validate "$pwd/build-live/JerzyMasterLabX_artefacts/Release/VST3/JerzyMasterLabX.vst3"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Test Windows loader diagnostic with real VST3 bundle
+        shell: pwsh
+        run: |
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File "install/diagnose_masterlabx_live.ps1" -PluginPath "$pwd/build-live/JerzyMasterLabX_artefacts/Release/VST3/JerzyMasterLabX.vst3" -NoPause
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Stage LIVE preview package without model weights
         shell: pwsh
         run: |
@@ -71,6 +76,8 @@ jobs:
           if(!(Test-Path "$stage/JerzyMasterLabX.vst3/Contents/x86_64-win/onnxruntime.dll")){throw 'Missing ONNX Runtime dependency'}
           Copy-Item 'install/INSTALL_MASTERLABX_LIVE.cmd' "$stage/INSTALL_MASTERLABX_LIVE.cmd"
           Copy-Item 'install/install_masterlabx_live.ps1' "$stage/install_masterlabx_live.ps1"
+          Copy-Item 'install/DIAGNOSE_MASTERLABX_LIVE.cmd' "$stage/DIAGNOSE_MASTERLABX_LIVE.cmd"
+          Copy-Item 'install/diagnose_masterlabx_live.ps1' "$stage/diagnose_masterlabx_live.ps1"
           Copy-Item 'docs/LIVE_PREVIEW_WINDOWS.md' "$stage/README-LIVE.md"
           New-Item -ItemType Directory -Force "$stage/licenses" | Out-Null
           Copy-Item 'licenses/StemgenRT' "$stage/licenses/StemgenRT" -Recurse -Force
