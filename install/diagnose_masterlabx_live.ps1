@@ -75,6 +75,26 @@ public static class MasterLabXLoaderProbe {
     Issue ('LoadLibraryEx diagnostic exception: ' + $_.Exception.Message)
   }
 }
+# Windows Error Reporting gives the actual faulting DLL/offset for FL Studio.
+# The Fruity Wrapper dialog alone cannot distinguish state, editor or worker crashes.
+try {
+  $since = (Get-Date).AddDays(-3)
+  $events = @(Get-WinEvent -FilterHashtable @{LogName='Application';Id=1000,1001;StartTime=$since} -ErrorAction Stop |
+    Where-Object { $_.ProviderName -in @('Application Error','Windows Error Reporting') -and
+      $_.Message -match 'FL64\\.exe|FL Studio|JerzyMasterLabX|onnxruntime' } |
+    Select-Object -First 8)
+  if($events.Count -eq 0) { Log 'No relevant Windows Application Error / WER events in the last 3 days.' }
+  foreach($event in $events) {
+    Log ('WER event time=' + $event.TimeCreated.ToString('u') + ' provider=' + $event.ProviderName + ' id=' + $event.Id)
+    foreach($line in ($event.Message -split "[`r`n]+" | Where-Object {
+      $_ -match '(?i)faulting application|faulting module|exception code|fault offset|nazwa aplikacji|nazwa modułu|kod wyjątku|przesunięcie błędu|JerzyMasterLabX|onnxruntime'
+    } | Select-Object -First 16)){
+      Log ('WER: ' + $line.Trim())
+    }
+  }
+} catch {
+  Log ('Windows Error Reporting query unavailable: ' + $_.Exception.Message)
+}
 if ($issues.Count -gt 0) {
  Log 'Review the problems above. Official x64 Visual C++ runtime: https://aka.ms/vc14/vc_redist.x64.exe'
 } else {
