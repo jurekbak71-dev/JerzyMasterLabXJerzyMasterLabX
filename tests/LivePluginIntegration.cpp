@@ -18,11 +18,15 @@ int main(){
  juce::ScopedJuceInitialiser_GUI gui;
  Processor p;
  auto* live=p.state.getParameter("stemLiveOn");CHECK(live);
- live->setValueNotifyingHost(1.f);
+ // Model must not be constructed merely by opening the plugin.
+ live->setValueNotifyingHost(0.f);
  auto* offline=p.state.getParameter("stemMode");CHECK(offline);
  offline->setValueNotifyingHost(offline->convertTo0to1(0.f));
  p.setRateAndBufferSizeDetails(44100,128);
  p.prepareToPlay(44100,128);
+ CHECK(!p.liveNeuralAvailable()); // essential FL Studio safe-load regression
+ live->setValueNotifyingHost(1.f);
+ p.startLiveNeuralUI(); // explicit control-thread activation, not audio callback
  CHECK(p.liveNeuralAvailable());
  // A real FL Studio restore path: state is applied after the native neural
  // backend has initialized, then the editor is constructed and state restored
