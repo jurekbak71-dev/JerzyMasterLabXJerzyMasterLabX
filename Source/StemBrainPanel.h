@@ -53,7 +53,7 @@ class StemBrainPanel final : public juce::Component,private juce::Timer {
   const auto exe=engine.getChildFile("stems-split.exe");
   const auto model=engine.getChildFile("models").getChildFile("htdemucs-42M-v1.0-F16.gguf");
   if(!exe.existsAsFile()||!model.existsAsFile()){
-   showStatus("HTDemucs native runtime/model missing. Install the complete MasterLabX package using INSTALL_MASTERLABX.cmd.");
+   showStatus("SEPARATE WAV unavailable: offline StemEngine/stems-split.exe or HTDemucs model is missing. The LIVE preview installer does not supply the offline engine. Use LOAD FOUR STEMS with an existing 4-WAV export.");
    return;
   }
   resultDir_=song.getParentDirectory().getChildFile(song.getFileNameWithoutExtension()+"_MasterLabX_stems");
@@ -63,7 +63,7 @@ class StemBrainPanel final : public juce::Component,private juce::Timer {
                                 "-i",song.getFullPathName(),"-o",out,"--float32"};
   if(worker_.joinable())worker_.join();
   job_.store(1);
-  showStatus("AI separation running offline (CPU/GPU); original FL Studio playback remains active.");
+  showStatus("HTDemucs offline: processing the selected WAV into four files. This can take time; result folder: "+resultDir_.getFileName());
   worker_=std::jthread([this,args](std::stop_token stop){
    juce::ChildProcess child;
    if(!child.start(args)){job_.store(-2);return;}
@@ -117,8 +117,8 @@ class StemBrainPanel final : public juce::Component,private juce::Timer {
   }else if(status<0){
    job_.store(0);
    if(worker_.joinable())worker_.join();
-   showStatus(status==-2?"Could not launch native HTDemucs helper. Reinstall StemEngine.":
-              status==-3?"HTDemucs separation failed. WAV/model/driver issue; review native engine.":"Separation cancelled.");
+   showStatus(status==-2?"SEPARATE WAV: failed to launch stems-split.exe (offline engine missing or blocked).":
+              status==-3?"SEPARATE WAV: helper exited with error; verify input WAV, model and helper diagnostics.":"SEPARATE WAV cancelled.");
   }
  }
  void diagnoseStems(){
@@ -216,20 +216,29 @@ public:
   state_.setText(status_,juce::dontSendNotification);addAndMakeVisible(state_);
   split_.onClick=[this]{chooseSong();};import_.onClick=[this]{chooseFolder();};
   original_.onClick=[this]{
+   // Original means ORIGINAL: disable neural LIVE as well as offline stem routing.
+   auto* neural=processor_.state.getParameter("stemLiveOn");
+   if(neural->getValue()>.5f){
+    neural->beginChangeGesture();neural->setValueNotifyingHost(0.f);
+    neural->endChangeGesture();processor_.requestLiveNeuralUI();
+   }
    auto* parameter=processor_.state.getParameter("stemMode");
    parameter->beginChangeGesture();parameter->setValueNotifyingHost(parameter->convertTo0to1(0.f));
    parameter->endChangeGesture();
-   showStatus("Original mix only; the source audio is unchanged.");
+   showStatus("ORIGINAL: LIVE off, offline stems off; source DAW mix unchanged.");
   };
   natural_.onClick=[this]{
-   if(!processor_.applyStemVariantUI(0))showStatus("Load stems first.");
-   else showStatus("Natural balance active. Undo restores prior proportions.");
+   if(!processor_.applyStemVariantUI(0))showStatus("Load four offline WAV stems, or enable LIVE first.");
+   else showStatus("Natural: LIVE uses neutral stem gain; offline uses measured balancing.");
   };
   vocal_.onClick=[this]{
-   if(!processor_.applyStemVariantUI(1))showStatus("Load stems first.");
-   else showStatus("Vocal-forward master remix active. Undo restores prior proportions.");
+   if(!processor_.applyStemVariantUI(1))showStatus("Load four offline WAV stems, or enable LIVE first.");
+   else showStatus("Vocal forward: vocal gain +2 dB, backing slightly reduced (LIVE).");
   };
-  clear_.onClick=[this]{processor_.clearStemsUI();showStatus("Stem WAVs unloaded; original DAW mix restored.");};
+  clear_.onClick=[this]{
+   processor_.clearStemsUI();
+   showStatus("Offline WAV stems unloaded. LIVE, if enabled, remains active.");
+  };
   diagnose_.onClick=[this]{diagnoseStems();};
   startTimerHz(3);
  }
