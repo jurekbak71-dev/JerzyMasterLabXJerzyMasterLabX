@@ -16,7 +16,7 @@ Log ('Bundle: ' + $PluginPath)
 if (-not [Environment]::Is64BitProcess) { Issue 'Use 64-bit PowerShell to test the 64-bit VST3.' }
 $inner = Join-Path $PluginPath 'Contents\x86_64-win'
 $binary = Join-Path $inner 'JerzyMasterLabX.vst3'
-$ort = Join-Path $inner 'onnxruntime.dll'
+$ort = Join-Path $inner 'JerzyMasterLabX_ort_1_26.dll'
 foreach ($file in @($binary, $ort)) {
   if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
     Issue ('Missing: ' + $file)
