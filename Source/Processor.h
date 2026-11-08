@@ -250,7 +250,8 @@ public:
 #if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
  if(liveStem){
   masterlab::LiveStemControls mix{};
-  mix.enabled=parameters[247]->load()>.5f && !hostBypassed && parameters[226]->load()<.5f;
+  mix.enabled=liveAvailable.load(std::memory_order_acquire) &&
+     parameters[247]->load()>.5f && !hostBypassed && parameters[226]->load()<.5f;
   masterlab::LiveStemTransport timeline{};timeline.playing=true;timeline.nonRealtime=isNonRealtime();
   if(auto* playhead=getPlayHead())if(auto pos=playhead->getPosition()){
    timeline.playing=pos->getIsPlaying();
