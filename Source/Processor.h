@@ -14,6 +14,8 @@
 #include "LiveStemEngine.h"
 #include "LiveStemWorker.h"
 #include "StemgenRtBackend.h"
+#include <mutex>
+#include <thread>
 #endif
 #include "StateValidation.h"
 class Processor final: public juce::AudioProcessor,private juce::AsyncUpdater {
@@ -26,6 +28,15 @@ public:
  std::unique_ptr<masterlab::LiveStemEngine> liveStem;
  std::unique_ptr<masterlab::LiveStemWorker> liveWorker;
  std::atomic<bool> liveAvailable{false};
+ // The model is built on a loader thread, not on the FL Studio GUI/audio thread.
+ // The loader never dereferences liveStem, preventing a host prepare/reset race.
+ struct NeuralLoad {
+  std::mutex mutex;
+  std::unique_ptr<masterlab::LiveStemBackend> backend;
+  std::atomic<bool> finished{false};
+ };
+ std::shared_ptr<NeuralLoad> pendingNeuralLoad;
+ std::jthread neuralLoader;
 #endif
  std::vector<float> brainBaseline,brainAuditionValues;
  int brainAuditionVariant=-1;
@@ -142,9 +153,13 @@ public:
  // Message/control thread only. Deliberately defer potentially expensive model
  // session construction until LIVE is requested by the user or a restored LIVE
  // state. Audio callback only reads liveAvailable and already-prepared buffers.
+ // MESSAGE THREAD: schedules model creation, never runs ONNX constructor.
+ // The worker publishes a backend without touching liveStem. Only the message
+ // thread attaches the backend after checking current transport/lifecycle.
  void startLiveNeuralUI(){
 #if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
-  if(!liveStem||liveWorker||parameters[247]->load()<=.5f)return;
+  if(!liveStem || liveWorker || neuralLoader.joinable() ||
+     parameters[247]->load()<=.5f)return;
   auto models=juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory)
      .getChildFile("JerzyMasterLabX").getChildFile("StemgenRT");
   const auto overrideDir=juce::SystemStats::getEnvironmentVariable(
@@ -153,14 +168,41 @@ public:
   if(!models.getChildFile("drums.onnx").existsAsFile()||
      !models.getChildFile("bass.onnx").existsAsFile()||
      !models.getChildFile("vocals.onnx").existsAsFile())return;
+  auto load=std::make_shared<NeuralLoad>();
+  pendingNeuralLoad=load;
+  const auto path=std::filesystem::u8path(models.getFullPathName().toRawUTF8());
+  neuralLoader=std::jthread([this,load,path](std::stop_token stop){
+   try{
+    auto backend=std::make_unique<masterlab::StemgenRtBackend>(path,true);
+    if(!stop.stop_requested()){
+     std::lock_guard<std::mutex> guard(load->mutex);
+     load->backend=std::move(backend);
+    }
+   }catch(const std::exception&){
+    // Backend constructor failures must not escape a C++ thread into the host.
+   }catch(...){}
+   load->finished.store(true,std::memory_order_release);
+   if(!stop.stop_requested())triggerAsyncUpdate();
+  });
+#endif
+ }
+ // MESSAGE THREAD ONLY. Returns quickly while the neural model is loading.
+ void finishLiveNeuralUI(){
+#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
+  auto load=pendingNeuralLoad;
+  if(!load||!load->finished.load(std::memory_order_acquire))return;
+  if(neuralLoader.joinable())neuralLoader.join();
+  neuralLoader=std::jthread{};
+  pendingNeuralLoad.reset();
+  std::unique_ptr<masterlab::LiveStemBackend> backend;
+  {std::lock_guard<std::mutex> guard(load->mutex);backend=std::move(load->backend);}
+  if(!backend || !liveStem || liveWorker || parameters[247]->load()<=.5f)return;
   try{
-   auto backend=std::make_unique<masterlab::StemgenRtBackend>(
-       std::filesystem::u8path(models.getFullPathName().toRawUTF8()),true);
-   auto worker=std::make_unique<masterlab::LiveStemWorker>(*liveStem,std::move(backend));
+   auto worker=std::make_unique<masterlab::LiveStemWorker>(
+       *liveStem,std::move(backend));
    liveWorker=std::move(worker);
    liveAvailable.store(true,std::memory_order_release);
-  }catch(const std::exception&){
-   liveWorker.reset();
+  }catch(...){
    liveAvailable.store(false,std::memory_order_release);
   }
 #endif
@@ -172,6 +214,20 @@ public:
 #else
   return false;
 #endif
+ }
+ ~Processor()override{
+#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
+  // Cancel any queued GUI callbacks before the loader can publish another.
+  if(neuralLoader.joinable()){
+   neuralLoader.request_stop();
+   neuralLoader.join();
+  }
+  pendingNeuralLoad.reset();
+  liveAvailable.store(false,std::memory_order_release);
+  liveWorker.reset();
+  liveStem.reset();
+#endif
+  cancelPendingUpdate();
  }
  const juce::String getName()const override{return "JerzyMasterLabX";}
  bool acceptsMidi()const override{return false;}bool producesMidi()const override{return false;}double getTailLengthSeconds()const override{return .1;}
@@ -365,6 +421,7 @@ public:
    if(!current||current->folder!=folder)
     stemRemix.loadFolder(juce::File(folder));
   }
+  finishLiveNeuralUI();
   if(parameters[247]->load()>.5f)startLiveNeuralUI();
  }
  // UI/control thread only. Snapshot flushes pending parameter values before transaction boundaries.
