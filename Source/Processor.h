@@ -172,6 +172,7 @@ public:
   auto load=std::make_shared<NeuralLoad>();
   pendingNeuralLoad=load;
   const auto path=std::filesystem::u8path(models.getFullPathName().toRawUTF8());
+  try{
   neuralLoader=std::jthread([this,load,path](std::stop_token stop){
    try{
     auto backend=std::make_unique<masterlab::StemgenRtBackend>(path,true);
@@ -185,6 +186,10 @@ public:
    load->finished.store(true,std::memory_order_release);
    if(!stop.stop_requested())triggerAsyncUpdate();
   });
+  }catch(...){
+   pendingNeuralLoad.reset();
+   neuralLoadFailed=true;
+  }
 #endif
  }
  // MESSAGE THREAD ONLY. Returns quickly while the neural model is loading.
