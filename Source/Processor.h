@@ -34,10 +34,12 @@ public:
   std::mutex mutex;
   std::unique_ptr<masterlab::LiveStemBackend> backend;
   std::atomic<bool> finished{false};
+  std::string error;
  };
  std::shared_ptr<NeuralLoad> pendingNeuralLoad;
  std::jthread neuralLoader;
  bool neuralLoadFailed{false}; // GUI thread: retry only after explicit off/on
+ juce::String liveLoadError; // UI/message thread only
 #endif
  std::vector<float> brainBaseline,brainAuditionValues;
  int brainAuditionVariant=-1;
@@ -180,9 +182,13 @@ public:
      std::lock_guard<std::mutex> guard(load->mutex);
      load->backend=std::move(backend);
     }
-   }catch(const std::exception&){
-    // Backend constructor failures must not escape a C++ thread into the host.
-   }catch(...){}
+   }catch(const std::exception& ex){
+    std::lock_guard<std::mutex> guard(load->mutex);
+    load->error=ex.what();
+   }catch(...){
+    std::lock_guard<std::mutex> guard(load->mutex);
+    load->error="Unknown model initialization exception";
+   }
    load->finished.store(true,std::memory_order_release);
    if(!stop.stop_requested())triggerAsyncUpdate();
   });
@@ -201,7 +207,11 @@ public:
   neuralLoader=std::jthread{};
   pendingNeuralLoad.reset();
   std::unique_ptr<masterlab::LiveStemBackend> backend;
-  {std::lock_guard<std::mutex> guard(load->mutex);backend=std::move(load->backend);}
+  {
+   std::lock_guard<std::mutex> guard(load->mutex);
+   backend=std::move(load->backend);
+   liveLoadError=juce::String(load->error);
+  }
   if(!backend){
    neuralLoadFailed=true;
    return;
@@ -219,9 +229,24 @@ public:
  }
  void requestLiveNeuralUI(){
 #if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
-  if(parameters[247]->load()<=.5f)neuralLoadFailed=false;
+  if(parameters[247]->load()<=.5f){
+   neuralLoadFailed=false;
+   liveLoadError.clear();
+  }
 #endif
   triggerAsyncUpdate();
+ }
+ juce::String liveNeuralStatusUI()const{
+#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
+  if(parameters[247]->load()<=.5f)return "LIVE OFF: original input passes through.";
+  if(liveAvailable.load(std::memory_order_acquire))return "LIVE ACTIVE: 4-stem neural remix on the incoming DAW signal.";
+  if(neuralLoadFailed)return "LIVE ERROR: "+(liveLoadError.isNotEmpty()?liveLoadError:juce::String("model initialization failed"));
+  if(pendingNeuralLoad)return "LIVE LOADING: neural model loading asynchronously.";
+  if(!liveStem)return "LIVE UNAVAILABLE: set 44.1 kHz and install StemgenRT models.";
+  return "LIVE WAITING: model loading has not started (check StemgenRT files).";
+#else
+  return "LIVE unavailable in this plugin build.";
+#endif
  }
  bool liveNeuralAvailable()const noexcept {
 #if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
