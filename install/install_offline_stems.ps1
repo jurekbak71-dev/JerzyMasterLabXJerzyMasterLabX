@@ -44,7 +44,7 @@ try {
  Verify-Manifest $modelChecks $model $modelFile
  $new=Join-Path $stage 'new'
  New-Item -ItemType Directory -Force (Join-Path $new 'models') | Out-Null
- Copy-Item -LiteralPath (Join-Path $exe.DirectoryName '*') -Destination $new -Recurse -Force
+ Copy-Item -Path (Join-Path $exe.DirectoryName '*') -Destination $new -Recurse -Force
  Copy-Item -LiteralPath $model -Destination (Join-Path $new 'models' $modelFile) -Force
  # Install into ProgramData only after both upstream artifacts are verified.
  $parent=Split-Path -Parent $target
