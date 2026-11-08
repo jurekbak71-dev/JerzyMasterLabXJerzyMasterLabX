@@ -83,6 +83,7 @@ int main(){
  CHECK(maxOut>.001f);
  CHECK(p.liveWorker!=nullptr);
  CHECK(p.liveWorker->statistics().hops>20);
+ CHECK(p.liveWetFrames.load(std::memory_order_relaxed)>0); // actual neural output mixed, not dry-only fallback
  // Regression: the OFFLINE source-mode selector cannot turn neural LIVE off.
  CHECK(p.liveNeuralAvailable());
  p.releaseResources();
