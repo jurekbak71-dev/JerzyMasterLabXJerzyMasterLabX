@@ -8,12 +8,14 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <thread>
 #define CHECK(x) do{if(!(x)){std::cerr<<"FAIL "<<#x<<" at "<<__LINE__<<"\n";std::abort();}}while(false)
 int main(){
 #if !(defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN)
  std::cerr<<"Not a live plugin build\n";return 2;
 #else
+ juce::ScopedJuceInitialiser_GUI gui;
  Processor p;
  auto* live=p.state.getParameter("stemLiveOn");CHECK(live);
  live->setValueNotifyingHost(1.f);
@@ -22,6 +24,22 @@ int main(){
  p.setRateAndBufferSizeDetails(44100,128);
  p.prepareToPlay(44100,128);
  CHECK(p.liveNeuralAvailable());
+ // A real FL Studio restore path: state is applied after the native neural
+ // backend has initialized, then the editor is constructed and state restored
+ // again while its APVTS attachments are live.
+ juce::MemoryBlock savedState;
+ p.getStateInformation(savedState);
+ CHECK(savedState.getSize()>0);
+ p.setStateInformation(savedState.getData(),static_cast<int>(savedState.getSize()));
+ CHECK(p.liveNeuralAvailable());
+ {
+  std::unique_ptr<juce::AudioProcessorEditor> editor(p.createEditor());
+  CHECK(editor!=nullptr);
+  CHECK(editor->getWidth()>0 && editor->getHeight()>0);
+  p.setStateInformation(savedState.getData(),static_cast<int>(savedState.getSize()));
+  CHECK(p.liveNeuralAvailable());
+ }
+
  CHECK(p.getLatencySamples()>=4096);
  auto* mute=p.state.getParameter("stemVocalsMute");CHECK(mute);
  juce::MidiBuffer midi;juce::AudioBuffer<float> audio(2,128);
