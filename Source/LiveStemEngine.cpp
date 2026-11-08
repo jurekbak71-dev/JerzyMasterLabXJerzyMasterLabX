@@ -99,6 +99,10 @@ bool LiveStemEngine::findOutput(std::uint64_t wanted, std::array<float,2>& sum,
 void LiveStemEngine::process(float* left, float* right, std::size_t count,
                              LiveStemTransport t, const LiveStemControls& controls) noexcept {
     if (!dry_ || !left || count == 0) return;
+    // Make the render mode visible before any queued hop can reach the worker.
+    // Offline exports must never lose inference hops just because they are
+    // processed faster than wall-clock playback.
+    publishedNonRealtime_.store(t.nonRealtime,std::memory_order_release);
     const bool active = t.playing || t.nonRealtime;
     if(initialized_ && wasRemixEnabled_!=controls.enabled) newEpoch();
     wasRemixEnabled_=controls.enabled;
@@ -173,7 +177,6 @@ void LiveStemEngine::process(float* left, float* right, std::size_t count,
         }
     }
     // Publish the end of this callback for non-audio worker deadline checks.
-    publishedNonRealtime_.store(t.nonRealtime,std::memory_order_relaxed);
     publishedPlaybackPosition_.store(position_,std::memory_order_release);
     // One wakeup per block instead of a 100-us timed sleep in the worker.
     // This is lock-free; its real-time cost must still be measured in CI.
