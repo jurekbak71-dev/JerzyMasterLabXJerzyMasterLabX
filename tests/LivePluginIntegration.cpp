@@ -35,6 +35,9 @@ int main(){
   CHECK(button);
   button->setToggleState(true,juce::sendNotificationSync);
   button->onClick(); // exact production onClick path that previously crashed FL Studio
+  // The VST3 host normally runs JUCE's message loop; this headless test
+  // must dispatch the queued AsyncUpdater before polling its result.
+  juce::MessageManager::getInstance()->runDispatchLoopUntil(30);
   CHECK(live->getValue()>.5f);
   CHECK(!p.liveNeuralAvailable()); // no blocking ONNX load inside GUI callback
   // State restore while a model is being loaded must be non-blocking.
