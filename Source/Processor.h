@@ -28,6 +28,7 @@ public:
  std::unique_ptr<masterlab::LiveStemEngine> liveStem;
  std::unique_ptr<masterlab::LiveStemWorker> liveWorker;
  std::atomic<bool> liveAvailable{false};
+ std::atomic<std::uint64_t> liveWetFrames{0};
  // The model is built on a loader thread, not on the FL Studio GUI/audio thread.
  // The loader never dereferences liveStem, preventing a host prepare/reset race.
  struct NeuralLoad {
@@ -239,7 +240,11 @@ public:
  juce::String liveNeuralStatusUI()const{
 #if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
   if(parameters[247]->load()<=.5f)return "LIVE OFF: original input passes through.";
-  if(liveAvailable.load(std::memory_order_acquire))return "LIVE ACTIVE: 4-stem neural remix on the incoming DAW signal.";
+  if(liveAvailable.load(std::memory_order_acquire)){
+   const auto delivered=liveWetFrames.load(std::memory_order_relaxed);
+   if(delivered==0)return "LIVE model READY, but no neural wet frames delivered yet. Check playback/worker.";
+   return "LIVE ACTIVE: real neural wet frames delivered: "+juce::String(static_cast<juce::int64>(delivered));
+  }
   if(neuralLoadFailed)return "LIVE ERROR: "+(liveLoadError.isNotEmpty()?liveLoadError:juce::String("model initialization failed"));
   if(pendingNeuralLoad)return "LIVE LOADING: neural model loading asynchronously.";
   if(!liveStem)return "LIVE UNAVAILABLE: set 44.1 kHz and install StemgenRT models.";
@@ -275,7 +280,7 @@ public:
  bool isBusesLayoutSupported(const BusesLayout& l)const override{return l.getMainInputChannelSet()==juce::AudioChannelSet::stereo()&&l.getMainOutputChannelSet()==juce::AudioChannelSet::stereo();}
  void prepareToPlay(double sr,int)override{
 #if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
-  liveWorker.reset();liveStem.reset();liveAvailable.store(false,std::memory_order_release);
+  liveWorker.reset();liveStem.reset();liveAvailable.store(false,std::memory_order_release);liveWetFrames.store(0,std::memory_order_release);
 #endif
   masterlab::configureGraph(engine,[&](size_t i){return parameters[i]->load();});
   engine.prepare(sr,parameters[6]->load()>.5f,static_cast<int>(parameters[138]->load()));
@@ -380,6 +385,7 @@ public:
   }
   liveStem->process(b.getWritePointer(0),b.getWritePointer(1),
                     static_cast<std::size_t>(b.getNumSamples()),timeline,mix);
+  liveWetFrames.store(liveStem->statistics().deliveredWetFrames,std::memory_order_relaxed);
  }
 #endif
  if(hostDryDelay[0].empty()){b.clear();return;}
