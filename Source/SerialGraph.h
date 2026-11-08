@@ -5,6 +5,7 @@
 #include "BassArchitect.h"
 #include "TransientSculptor.h"
 #include "FinalTruePeak.h"
+#include <memory>
 namespace masterlab {
 using ModuleOrder=std::array<int,6>;
 using FullModuleOrder=std::array<int,11>;
@@ -102,36 +103,39 @@ class SerialGraph {
  };
  // The five previously fixed post-graph processors now live in each bank,
  // enabling state-correct crossfades between any two full serial permutations.
- std::array<Bank,2> banks;int active=0;float progress=1,step=1.f/960;
+ // The 11-module bank is large; constructing several SerialGraph instances on
+ // a Windows test/host stack previously overflowed the default 1 MiB stack.
+ // Allocate exactly once during graph construction, never in the callback.
+ std::unique_ptr<Bank[]> banks{std::make_unique<Bank[]>(2)};int active=0;float progress=1,step=1.f/960;
  ModuleOrder requested{5,0,1,2,3,4};
  FullModuleOrder requestedFull=defaultFullOrder;bool requestedExtended=false;
  bool requestedParallel=false;std::array<bool,6> requestedPresent{},requestedEnabled{true,true,true,true,true,true};
  std::array<std::array<float,128>,2> scratch{};std::array<float,128> trace{};
 public:
- void prepare(double rate,bool legacy=false,int code=0){rate=std::isfinite(rate)&&rate>=8000&&rate<=384000?rate:48000;requested=decodeOrder(code,legacy);active=0;progress=1;step=static_cast<float>(1/(rate*.02));for(auto& b:banks){b.order=requested;b.extended=requestedExtended;b.fullOrder=requestedFull;b.engine.prepare(rate);b.stereo.prepare(rate);b.dynamics.prepare(rate);b.dynamicEq.prepare(rate);b.stabilizer.prepare(rate);b.harmonicExciter.prepare(rate);b.analogColor.prepare(rate);b.bassArchitect.prepare(rate);b.transientSculptor.prepare(rate);b.finalTruePeak.prepare(rate);b.parallel=requestedParallel;b.present=requestedPresent;b.enabled=requestedEnabled;b.prepareParallel(rate);b.alignPosition=0;for(auto& module:b.alignment)for(auto& channel:module)channel.assign(static_cast<size_t>(b.engine.latency()+1),0);}}
- void reset()noexcept{progress=1;for(auto& b:banks){b.engine.reset();b.stereo.reset();b.dynamics.reset();b.dynamicEq.reset();b.stabilizer.reset();b.harmonicExciter.reset();b.analogColor.reset();b.bassArchitect.reset();b.transientSculptor.reset();b.finalTruePeak.reset();b.parallel=requestedParallel;b.extended=requestedExtended;b.fullOrder=requestedFull;b.present=requestedPresent;b.branchEnergy={};b.compensationSlew.value=b.compensated?1.f:0.f;b.alignPosition=0;for(size_t i=0;i<6;++i){b.trimSlew[i].value=dbGain(b.targetTrimDb[i]);b.mixSlew[i].value=b.targetMix[i];}for(auto& module:b.alignment)for(auto& channel:module)std::fill(channel.begin(),channel.end(),0);}}
+ void prepare(double rate,bool legacy=false,int code=0){rate=std::isfinite(rate)&&rate>=8000&&rate<=384000?rate:48000;requested=decodeOrder(code,legacy);active=0;progress=1;step=static_cast<float>(1/(rate*.02));for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.order=requested;b.extended=requestedExtended;b.fullOrder=requestedFull;b.engine.prepare(rate);b.stereo.prepare(rate);b.dynamics.prepare(rate);b.dynamicEq.prepare(rate);b.stabilizer.prepare(rate);b.harmonicExciter.prepare(rate);b.analogColor.prepare(rate);b.bassArchitect.prepare(rate);b.transientSculptor.prepare(rate);b.finalTruePeak.prepare(rate);b.parallel=requestedParallel;b.present=requestedPresent;b.enabled=requestedEnabled;b.prepareParallel(rate);b.alignPosition=0;for(auto& module:b.alignment)for(auto& channel:module)channel.assign(static_cast<size_t>(b.engine.latency()+1),0);}}
+ void reset()noexcept{progress=1;for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.engine.reset();b.stereo.reset();b.dynamics.reset();b.dynamicEq.reset();b.stabilizer.reset();b.harmonicExciter.reset();b.analogColor.reset();b.bassArchitect.reset();b.transientSculptor.reset();b.finalTruePeak.reset();b.parallel=requestedParallel;b.extended=requestedExtended;b.fullOrder=requestedFull;b.present=requestedPresent;b.branchEnergy={};b.compensationSlew.value=b.compensated?1.f:0.f;b.alignPosition=0;for(size_t i=0;i<6;++i){b.trimSlew[i].value=dbGain(b.targetTrimDb[i]);b.mixSlew[i].value=b.targetMix[i];}for(auto& module:b.alignment)for(auto& channel:module)std::fill(channel.begin(),channel.end(),0);}}
  int latency()const noexcept{return banks[active].engine.latency()+FinalTruePeak::latencySamples;}
- void parameters(float hz,float db,float q,float ceiling,bool eq,bool lim)noexcept{for(auto& b:banks)b.engine.parameters(hz,db,q,ceiling,eq,lim);}
- void limiterParameters(float drive,float release)noexcept{for(auto& b:banks)b.engine.limiterParameters(drive,release);}
- void setBand(size_t i,float hz,float db,float q)noexcept{for(auto& b:banks)b.engine.setBand(i,hz,db,q);}
- void setBandMode(size_t i,FilterType t,bool on)noexcept{for(auto& b:banks)b.engine.setBandMode(i,t,on);}
- void stereoSettings(StereoSettings c)noexcept{for(auto& b:banks)b.stereo.settings(c);}
- void dynamicsSettings(DynamicsSettings c)noexcept{for(auto& b:banks)b.dynamics.settings(c);}
- void dynamicEqSettings(DynamicEqSettings c)noexcept{for(auto& b:banks)b.dynamicEq.settings(c);}
- void stabilizerSettings(StabilizerSettings c)noexcept{for(auto& b:banks)b.stabilizer.settings(c);}
- void harmonicExciterSettings(HarmonicExciterSettings c)noexcept{c.oversample2x=false;for(auto& b:banks)b.harmonicExciter.settings(c);}
+ void parameters(float hz,float db,float q,float ceiling,bool eq,bool lim)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.engine.parameters(hz,db,q,ceiling,eq,lim);}}
+ void limiterParameters(float drive,float release)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.engine.limiterParameters(drive,release);}}
+ void setBand(size_t i,float hz,float db,float q)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.engine.setBand(i,hz,db,q);}}
+ void setBandMode(size_t i,FilterType t,bool on)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.engine.setBandMode(i,t,on);}}
+ void stereoSettings(StereoSettings c)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.stereo.settings(c);}}
+ void dynamicsSettings(DynamicsSettings c)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.dynamics.settings(c);}}
+ void dynamicEqSettings(DynamicEqSettings c)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.dynamicEq.settings(c);}}
+ void stabilizerSettings(StabilizerSettings c)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.stabilizer.settings(c);}}
+ void harmonicExciterSettings(HarmonicExciterSettings c)noexcept{c.oversample2x=false;for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.harmonicExciter.settings(c);}}
  HarmonicExciterReading harmonicExciterRead()const noexcept{return banks[active].harmonicExciter.reading();}
- void analogColorSettings(AnalogColorSettings c)noexcept{for(auto& b:banks)b.analogColor.settings(c);}
- void bassArchitectSettings(BassArchitectSettings c)noexcept{for(auto& b:banks)b.bassArchitect.settings(c);}
+ void analogColorSettings(AnalogColorSettings c)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.analogColor.settings(c);}}
+ void bassArchitectSettings(BassArchitectSettings c)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.bassArchitect.settings(c);}}
  BassArchitectReading bassArchitectRead()const noexcept{return banks[active].bassArchitect.reading();}
- void transientSculptorSettings(TransientSculptorSettings c)noexcept{for(auto& b:banks)b.transientSculptor.settings(c);}
+ void transientSculptorSettings(TransientSculptorSettings c)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.transientSculptor.settings(c);}}
  TransientSculptorReading transientSculptorRead()const noexcept{return banks[active].transientSculptor.reading();}
- void finalTruePeakSettings(FinalTruePeakSettings s)noexcept{for(auto& b:banks)b.finalTruePeak.settings(s);}
+ void finalTruePeakSettings(FinalTruePeakSettings s)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.finalTruePeak.settings(s);}}
  FinalTruePeakReading finalTruePeakRead()const noexcept{return banks[active].finalTruePeak.reading();}
  AnalogColorReading analogColorRead()const noexcept{return banks[active].analogColor.reading();}
  void topology(bool parallel,std::array<bool,6> present)noexcept{topology(parallel,present,{true,true,true,true,true,true});}
- void topology(bool parallel,std::array<bool,6> present,std::array<bool,6> enabled)noexcept{requestedParallel=parallel;requestedPresent=present;requestedEnabled=enabled;for(auto& b:banks)b.enabled=enabled;}
- void parallelSettings(bool compensated,std::array<float,6> trims,std::array<float,6> mixes)noexcept{for(auto& b:banks)b.parallelSettings(compensated,trims,mixes);}
+ void topology(bool parallel,std::array<bool,6> present,std::array<bool,6> enabled)noexcept{requestedParallel=parallel;requestedPresent=present;requestedEnabled=enabled;for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.enabled=enabled;}}
+ void parallelSettings(bool compensated,std::array<float,6> trims,std::array<float,6> mixes)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.parallelSettings(compensated,trims,mixes);}}
  void routing(int code,bool legacy)noexcept{requested=decodeOrder(code,legacy);}
  void extendedRouting(bool enabled,FullModuleOrder sequence)noexcept {
   requestedExtended=enabled;requestedFull=sanitizeFullOrder(sequence);
