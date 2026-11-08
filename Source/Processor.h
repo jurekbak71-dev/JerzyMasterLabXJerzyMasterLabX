@@ -446,6 +446,13 @@ public:
  juce::String loadStemsUI(const juce::File& folder){
   auto result=stemRemix.loadFolder(folder);
   if(result.isEmpty()){
+   // Imported OFFLINE stems must replace the LIVE source, not remain hidden
+   // behind a still-checked LIVE toggle (which skips file-backed rendering).
+   auto* live=state.getParameter("stemLiveOn");
+   if(live && parameters[247]->load()>.5f){
+    live->beginChangeGesture();live->setValueNotifyingHost(0.f);
+    live->endChangeGesture();requestLiveNeuralUI();
+   }
    state.state.setProperty("stemFolder",folder.getFullPathName(),&undoManager);
    auto* param=state.getParameter("stemMode");
    beginUiTransaction("Stem Brain import");
