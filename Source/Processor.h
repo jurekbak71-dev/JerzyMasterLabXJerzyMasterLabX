@@ -461,23 +461,29 @@ public:
   state.state.removeProperty("stemFolder",&undoManager);
  }
  bool applyStemVariantUI(int variant){
-  auto bank=stemRemix.snapshot();if(!bank||variant<0||variant>1)return false;
-  // Measured, conservative stem-balancing rules. They are deliberately
-  // transparent DSP heuristics, not a claim to reconstruct the original mix.
+  if(variant<0||variant>1)return false;
+  const bool isLive=parameters[247]->load()>.5f;
+  auto bank=stemRemix.snapshot();
+  if(!isLive&&!bank)return false;
+  // LIVE: a deterministic, undoable gain preset. Do not misrepresent this
+  // as measured balancing, since the live path has no per-stem RMS analysis.
+  // OFFLINE: retain the existing measured, conservative balancing behaviour.
   std::array<float,4> offsets{};
-  auto relativeDb=[&](int a,int b){
-   return 20.f*std::log10(std::max(1.e-7f,bank->rms[static_cast<size_t>(a)])/
-                         std::max(1.e-7f,bank->rms[static_cast<size_t>(b)]));
-  };
-  if(relativeDb(0,3)>7.f)offsets[0]-=1.f; // drums masking vocal
-  if(relativeDb(1,0)>5.f)offsets[1]-=1.5f; // bass masking kick
-  if(relativeDb(2,3)>7.f)offsets[2]-=1.f; // backing masking lead
-  if(relativeDb(3,2)<-8.f)offsets[3]+=1.f; // buried voice
-  for(int i=0;i<4;++i){
-   if(bank->peak[static_cast<size_t>(i)]>=.998f)offsets[static_cast<size_t>(i)]-=.75f;
-  }
-  if(variant==1){
-   offsets[0]-=.75f;offsets[2]-=.5f;offsets[3]+=1.5f;
+  if(isLive){
+   offsets=variant==0?std::array<float,4>{0.f,0.f,0.f,0.f}:
+                       std::array<float,4>{-.75f,-.5f,-.75f,2.0f};
+  }else{
+   auto relativeDb=[&](int a,int b){
+    return 20.f*std::log10(std::max(1.e-7f,bank->rms[static_cast<size_t>(a)])/
+                          std::max(1.e-7f,bank->rms[static_cast<size_t>(b)]));
+   };
+   if(relativeDb(0,3)>7.f)offsets[0]-=1.f;
+   if(relativeDb(1,0)>5.f)offsets[1]-=1.5f;
+   if(relativeDb(2,3)>7.f)offsets[2]-=1.f;
+   if(relativeDb(3,2)<-8.f)offsets[3]+=1.f;
+   for(int i=0;i<4;++i)
+    if(bank->peak[static_cast<size_t>(i)]>=.998f)offsets[static_cast<size_t>(i)]-=.75f;
+   if(variant==1){offsets[0]-=.75f;offsets[2]-=.5f;offsets[3]+=1.5f;}
   }
   beginUiTransaction(variant==0?"Stem Brain natural balance":"Stem Brain vocal-forward");
   for(int i=0;i<4;++i){
@@ -489,6 +495,7 @@ public:
   }
   finishUiTransaction();return true;
  }
+
  void getStateInformation(juce::MemoryBlock& dest)override{auto xml=state.copyState().createXml();copyXmlToBinary(*xml,dest);}
  juce::ValueTree parseState(const void* data,int size){
   if(data==nullptr||size<=0||size>1024*1024)return {};
