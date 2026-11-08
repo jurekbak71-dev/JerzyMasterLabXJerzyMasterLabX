@@ -1,5 +1,12 @@
 #include "StemgenRtBackend.h"
+#if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
 #include <onnxruntime_cxx_api.h>
+#include <string_view>
 #include <algorithm>
 #include <cmath>
 #include <condition_variable>
@@ -13,6 +20,48 @@
 
 namespace masterlab {
 namespace {
+#if defined(_WIN32)
+// The FL Studio process may already load a different onnxruntime.dll from
+// System32 (verified in Windows minidumps). Never link to or use that module.
+// Load a uniquely named, hash-pinned ORT 1.26 DLL from OUR VST3 directory.
+void initializeBundledOrt() {
+ static const bool initialized=[]() {
+  HMODULE owner=nullptr;
+  if(!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+      GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+      reinterpret_cast<LPCWSTR>(&initializeBundledOrt), &owner) || !owner)
+   throw std::runtime_error("Cannot locate the MasterLabX module");
+  std::wstring filename(32768, L'\\0');
+  const DWORD len=GetModuleFileNameW(owner,filename.data(),
+                                    static_cast<DWORD>(filename.size()));
+  if(len==0 || len>=filename.size())
+   throw std::runtime_error("Cannot locate the MasterLabX module path");
+  filename.resize(len);
+  const auto dir=std::filesystem::path(filename).parent_path();
+  const auto dll=(dir/L"JerzyMasterLabX_ort_1_26.dll").wstring();
+  HMODULE ort=LoadLibraryExW(dll.c_str(),nullptr,
+       LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
+  if(!ort)throw std::runtime_error("Cannot load bundled ORT 1.26 DLL (Win32 error "+std::to_string(GetLastError())+")");
+  using GetBase=const OrtApiBase* (ORT_API_CALL*)();
+  auto getBase=reinterpret_cast<GetBase>(GetProcAddress(ort,"OrtGetApiBase"));
+  if(!getBase)throw std::runtime_error("Bundled ONNX Runtime has no OrtGetApiBase export");
+  const auto* base=getBase();
+  if(!base || !base->GetApi || !base->GetVersionString)
+   throw std::runtime_error("Invalid bundled ONNX Runtime API base");
+  const char* version=base->GetVersionString();
+  if(!version || std::string_view(version)!="1.26.0")
+   throw std::runtime_error(std::string("Wrong bundled ONNX Runtime version: ")+(version?version:"<null>"));
+  const auto* api=base->GetApi(ORT_API_VERSION);
+  if(!api)throw std::runtime_error("Bundled ONNX Runtime does not provide expected API version");
+  Ort::InitApi(api); // ORT_API_MANUAL_INIT prevents any implicit System32 import.
+  // Intentionally keep the DLL loaded until the host exits: ORT function
+  // pointers and sessions must never outlive their owning module.
+  return true;
+ }();
+ (void)initialized;
+}
+#endif
+
 struct Runner {
  Ort::Session session;
  Ort::MemoryInfo memory{Ort::MemoryInfo::CreateCpu(OrtArenaAllocator,OrtMemTypeDefault)};
@@ -112,7 +161,14 @@ struct StemgenRtBackend::Impl {
   const bool valid=primed;primed=true;previous=audio;return valid;
  }
 };
-StemgenRtBackend::StemgenRtBackend(const std::filesystem::path& folder,bool parallel):impl_(std::make_unique<Impl>(folder,parallel)){}
+StemgenRtBackend::StemgenRtBackend(const std::filesystem::path& folder,bool parallel)
+ :impl_([&]{
+#if defined(_WIN32)
+   initializeBundledOrt(); // before constructing Ort::Env in Impl
+#endif
+   return std::make_unique<Impl>(folder,parallel);
+ }()){}
+
 StemgenRtBackend::~StemgenRtBackend()=default;
 bool StemgenRtBackend::process(const LiveStemHop& input,SeparatedStemHop& output){return impl_->process(input,output);}
 void StemgenRtBackend::reset(){impl_->reset();}
