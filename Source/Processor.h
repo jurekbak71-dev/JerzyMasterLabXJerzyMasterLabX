@@ -37,6 +37,7 @@ public:
  };
  std::shared_ptr<NeuralLoad> pendingNeuralLoad;
  std::jthread neuralLoader;
+ bool neuralLoadFailed{false}; // GUI thread: retry only after explicit off/on
 #endif
  std::vector<float> brainBaseline,brainAuditionValues;
  int brainAuditionVariant=-1;
@@ -158,7 +159,7 @@ public:
  // thread attaches the backend after checking current transport/lifecycle.
  void startLiveNeuralUI(){
 #if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
-  if(!liveStem || liveWorker || neuralLoader.joinable() ||
+  if(!liveStem || liveWorker || neuralLoader.joinable() || neuralLoadFailed ||
      parameters[247]->load()<=.5f)return;
   auto models=juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory)
      .getChildFile("JerzyMasterLabX").getChildFile("StemgenRT");
@@ -196,7 +197,11 @@ public:
   pendingNeuralLoad.reset();
   std::unique_ptr<masterlab::LiveStemBackend> backend;
   {std::lock_guard<std::mutex> guard(load->mutex);backend=std::move(load->backend);}
-  if(!backend || !liveStem || liveWorker || parameters[247]->load()<=.5f)return;
+  if(!backend){
+   neuralLoadFailed=true;
+   return;
+  }
+  if(!liveStem || liveWorker || parameters[247]->load()<=.5f)return;
   try{
    auto worker=std::make_unique<masterlab::LiveStemWorker>(
        *liveStem,std::move(backend));
@@ -207,7 +212,12 @@ public:
   }
 #endif
  }
- void requestLiveNeuralUI(){triggerAsyncUpdate();}
+ void requestLiveNeuralUI(){
+#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
+  if(parameters[247]->load()<=.5f)neuralLoadFailed=false;
+#endif
+  triggerAsyncUpdate();
+ }
  bool liveNeuralAvailable()const noexcept {
 #if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
   return liveAvailable.load(std::memory_order_acquire);
@@ -269,6 +279,11 @@ public:
   if(liveStem)totalLatency+=static_cast<int>(liveStem->latencySamples());
 #endif
   setLatencySamples(totalLatency);
+#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
+  // FL Studio may restore VST3 state BEFORE calling prepareToPlay.
+  // Wake the message thread again once its new audio engine is prepared.
+  if(parameters[247]->load()>.5f)triggerAsyncUpdate();
+#endif
   for(auto& channel:hostDryDelay)channel.assign(static_cast<size_t>(engine.latency()+1),0);
   hostDryPosition=0;hostBypassMix=0;hostBypassTarget=false;
   hostBypassStep=static_cast<float>(1/(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr*.02:960.));
