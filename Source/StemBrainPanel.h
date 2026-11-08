@@ -131,6 +131,15 @@ class StemBrainPanel final : public juce::Component,private juce::Timer {
   }
  }
  void diagnoseStems(){
+  if(processor_.state.getRawParameterValue("stemLiveOn")->load()>.5f){
+   auto report=processor_.liveNeuralStatusUI();
+   report+="\n\nA positive WET count alone does not qualify real-time throughput.";
+   report+="\nAt 44.1 kHz / 128 samples, the audio deadline is about 2.90 ms.";
+   report+="\nCompare hops/output/WET during uninterrupted playback; stopped WET and growing output means results arrive too late or out of alignment.";
+   juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,
+      "STEMS LIVE - worker diagnostics",report);
+   return;
+  }
   auto bank=processor_.stemRemix.snapshot();
   if(!bank){showStatus("Separate or import four stems first.");return;}
   juce::String report("MASTER BRAIN — measured STEM diagnostics\n");
@@ -245,8 +254,13 @@ public:
    else showStatus("Vocal forward: vocal gain +2 dB, backing slightly reduced (LIVE).");
   };
   clear_.onClick=[this]{
+   auto* liveParam=processor_.state.getParameter("stemLiveOn");
+   if(liveParam->getValue()>.5f){
+    liveParam->beginChangeGesture();liveParam->setValueNotifyingHost(0.f);
+    liveParam->endChangeGesture();processor_.requestLiveNeuralUI();
+   }
    processor_.clearStemsUI();
-   showStatus("Offline WAV stems unloaded. LIVE, if enabled, remains active.");
+   showStatus("UNLOAD STEMS: LIVE stopped, offline WAV memory freed, DAW source restored.");
   };
   diagnose_.onClick=[this]{diagnoseStems();};
   startTimerHz(3);
@@ -263,7 +277,7 @@ public:
   original_.setBounds(411,24,145,34);
   live_.setBounds(568,24,116,34);
   sourceMode_.setBounds(692,25,juce::jmax(100,w-714),32);
-  state_.setBounds(margin,66,w-44,42);
+  state_.setBounds(margin,64,w-44,56);
   const int cell=(w-54)/4;
   for(int i=0;i<4;++i){
    const int x=18+i*cell;
