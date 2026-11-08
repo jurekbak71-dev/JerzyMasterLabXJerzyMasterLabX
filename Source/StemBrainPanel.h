@@ -27,6 +27,7 @@ class StemBrainPanel final : public juce::Component,private juce::Timer {
  std::atomic<int> job_{0}; // 0 idle, 1 running, 2 success, negative failure
  juce::File resultDir_;
  juce::String status_{"Choose WAV to separate with HTDemucs, or import aligned real stems."};
+ bool lastLiveWanted_{false};
  static juce::File engineDirectory(){
   return juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory)
          .getChildFile("JerzyMasterLabX").getChildFile("StemEngine");
@@ -95,6 +96,18 @@ class StemBrainPanel final : public juce::Component,private juce::Timer {
              " seconds. Play from start in FL Studio; audition gain/tone/width/solo.");
  }
  void timerCallback()override{
+  // Synchronize the visible status with actual backend readiness rather than
+  // claiming LIVE is active immediately after a button click.
+  const bool liveWanted=processor_.state.getRawParameterValue("stemLiveOn")->load()>.5f;
+  sourceMode_.setEnabled(!liveWanted);
+  if(liveWanted){
+   if(!processor_.liveNeuralAvailable())processor_.requestLiveNeuralUI();
+   const auto neuralStatus=processor_.liveNeuralStatusUI();
+   if(status_!=neuralStatus)showStatus(neuralStatus);
+  }else if(lastLiveWanted_){
+   showStatus("LIVE OFF: original DAW stream. Offline WAV mode can be selected.");
+  }
+  lastLiveWanted_=liveWanted;
   const auto status=job_.load();
   if(status==1)return;
   if(status==2){
@@ -178,6 +191,8 @@ public:
   sourceMode_.addItem("DAW mix unchanged",1);
   sourceMode_.addItem("4 stems replace DAW",2);
   sourceMode_.addItem("4 stems + DAW",3);
+  // This is an OFFLINE WAV routing selector, not the neural LIVE source.
+  // Disable it while LIVE is selected to avoid misleading the user.
   sourceMode_.setComponentID("stem-source-mode");
   modeAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
     p.state,"stemMode",sourceMode_);
@@ -193,13 +208,8 @@ public:
   liveAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
     p.state,"stemLiveOn",live_);
   live_.onClick=[this]{
-   // Never initialize ONNX from FL Studio's audio/prepare callback.
-   // Schedule it on the JUCE message thread only after explicit activation.
    processor_.requestLiveNeuralUI();
-   if(processor_.liveNeuralAvailable())
-    showStatus("LIVE 4-stem neural remix at 44.1 kHz. The stem controls affect the DAW audio stream.");
-   else
-    showStatus("LIVE initializing on the UI thread, or unavailable: use 44.1 kHz and verified models.");
+   showStatus(processor_.liveNeuralStatusUI());
   };
   state_.setColour(juce::Label::textColourId,juce::Colour(0xffb9ddeb));
   state_.setFont(theme_.font(13));state_.setJustificationType(juce::Justification::centredLeft);
