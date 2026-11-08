@@ -53,11 +53,20 @@ class StemBrainPanel final : public juce::Component,private juce::Timer {
   const auto exe=engine.getChildFile("stems-split.exe");
   const auto model=engine.getChildFile("models").getChildFile("htdemucs-42M-v1.0-F16.gguf");
   if(!exe.existsAsFile()||!model.existsAsFile()){
-   showStatus("SEPARATE WAV unavailable: offline StemEngine/stems-split.exe or HTDemucs model is missing. The LIVE preview installer does not supply the offline engine. Use LOAD FOUR STEMS with an existing 4-WAV export.");
+   showStatus("SEPARATE WAV unavailable: offline engine/model not installed.");
+   juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
+      "HTDemucs offline separator unavailable",
+      "The LIVE neural model does not separate imported WAV files offline. "
+      "Run INSTALL_OFFLINE_STEMS.cmd from the MasterLabX package once, "
+      "then choose SEPARATE WAV again. The installer downloads and checks "
+      "the upstream stems.cpp engine and HTDemucs model.");
    return;
   }
   resultDir_=song.getParentDirectory().getChildFile(song.getFileNameWithoutExtension()+"_MasterLabX_stems");
-  resultDir_.createDirectory();
+  if(resultDir_.createDirectory().failed()){
+   showStatus("SEPARATE WAV ERROR: cannot create output folder near selected WAV.");
+   return;
+  }
   const auto out=resultDir_.getFullPathName();
   const juce::StringArray args{exe.getFullPathName(),"-m",model.getFullPathName(),
                                 "-i",song.getFullPathName(),"-o",out,"--float32"};
@@ -92,8 +101,8 @@ class StemBrainPanel final : public juce::Component,private juce::Timer {
   auto issue=processor_.loadStemsUI(directory);
   if(issue.isNotEmpty()){showStatus(issue);return;}
   const auto bank=processor_.stemRemix.snapshot();
-  showStatus("Four real stems loaded: "+juce::String(bank->samples/bank->sampleRate,1)+
-             " seconds. Play from start in FL Studio; audition gain/tone/width/solo.");
+  showStatus("FOUR WAV STEMS LOADED ("+juce::String(bank->samples/bank->sampleRate,1)+
+             " s). LIVE OFF; press PLAY in FL Studio from 0:00 to hear the four WAV stems.");
  }
  void timerCallback()override{
   // Synchronize the visible status with actual backend readiness rather than
