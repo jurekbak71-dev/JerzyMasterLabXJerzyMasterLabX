@@ -13,6 +13,8 @@ on:
       - 'CMakeLists.txt'
       - 'install/*live*'
       - 'install/*LIVE*'
+      - 'install/*offline*'
+      - 'install/*OFFLINE*'
       - '.github/workflows/windows-live-preview.yml'
 permissions:
   contents: read
@@ -81,6 +83,8 @@ jobs:
           $nativeAscii = [System.Text.Encoding]::ASCII.GetString($nativeBytes)
           if ($nativeAscii.Contains('onnxruntime.dll')) { throw 'VST3 still references generic onnxruntime.dll' }
           Copy-Item 'install/INSTALL_MASTERLABX_LIVE.cmd' "$stage/INSTALL_MASTERLABX_LIVE.cmd"
+          Copy-Item 'install/INSTALL_OFFLINE_STEMS.cmd' "$stage/INSTALL_OFFLINE_STEMS.cmd"
+          Copy-Item 'install/install_offline_stems.ps1' "$stage/install_offline_stems.ps1"
           Copy-Item 'install/install_masterlabx_live.ps1' "$stage/install_masterlabx_live.ps1"
           Copy-Item 'install/NAPRAW_MASTERLABX.ps1' "$stage/NAPRAW_MASTERLABX.ps1"
           Copy-Item 'install/NAPRAW_MASTERLABX.cmd' "$stage/NAPRAW_MASTERLABX.cmd"
