@@ -25,21 +25,28 @@ int main(){
  p.setRateAndBufferSizeDetails(44100,128);
  p.prepareToPlay(44100,128);
  CHECK(!p.liveNeuralAvailable()); // essential FL Studio safe-load regression
- live->setValueNotifyingHost(1.f);
- p.startLiveNeuralUI(); // explicit control-thread activation, not audio callback
- CHECK(p.liveNeuralAvailable());
- // A real FL Studio restore path: state is applied after the native neural
- // backend has initialized, then the editor is constructed and state restored
- // again while its APVTS attachments are live.
- juce::MemoryBlock savedState;
- p.getStateInformation(savedState);
- CHECK(savedState.getSize()>0);
- p.setStateInformation(savedState.getData(),static_cast<int>(savedState.getSize()));
- CHECK(p.liveNeuralAvailable());
+ // Reproduce FL Studio's actual GUI toggle, rather than calling the
+ // processor's model initializer directly from a test.
  {
   std::unique_ptr<juce::AudioProcessorEditor> editor(p.createEditor());
   CHECK(editor!=nullptr);
-  CHECK(editor->getWidth()>0 && editor->getHeight()>0);
+  auto* panel=editor->findChildWithID("stem-brain-panel");CHECK(panel);
+  auto* button=dynamic_cast<juce::Button*>(panel->findChildWithID("stem-live-neural"));
+  CHECK(button);
+  button->setToggleState(true,juce::sendNotificationSync);
+  button->onClick(); // exact production onClick path that previously crashed FL Studio
+  CHECK(live->getValue()>.5f);
+  CHECK(!p.liveNeuralAvailable()); // no blocking ONNX load inside GUI callback
+  // State restore while a model is being loaded must be non-blocking.
+  juce::MemoryBlock savedState;
+  p.getStateInformation(savedState);
+  CHECK(savedState.getSize()>0);
+  p.setStateInformation(savedState.getData(),static_cast<int>(savedState.getSize()));
+  for(int tick=0;tick<2500 && !p.liveNeuralAvailable();++tick){
+   p.finishLiveNeuralUI(); // explicit message-thread pump for CLI test host
+   std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  }
+  CHECK(p.liveNeuralAvailable());
   p.setStateInformation(savedState.getData(),static_cast<int>(savedState.getSize()));
   CHECK(p.liveNeuralAvailable());
  }
