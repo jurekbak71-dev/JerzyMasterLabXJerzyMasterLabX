@@ -44,6 +44,15 @@ public:
     LiveStemStatistics statistics() const noexcept;
     std::size_t latencySamples() const noexcept { return latency_; }
     std::uint32_t currentEpoch() const noexcept { return publishedEpoch_.load(std::memory_order_acquire); }
+    // Worker-only decision to avoid spending ONNX CPU on an already-expired
+    // real-time hop. An output for hop [start-128,start) becomes unusable once
+    // playback has passed start+latency. Never drop offline (nonRealtime) hops.
+    bool previousHopExpired(std::uint32_t epoch, std::uint64_t start) const noexcept {
+        if (epoch != currentEpoch() || publishedNonRealtime_.load(std::memory_order_relaxed) || start < 128) return false;
+        const auto playback=publishedPlaybackPosition_.load(std::memory_order_acquire);
+        return playback > start && playback-start > latency_;
+    }
+
     // Approximate queue depth, read by its single worker consumer only.
     std::size_t pendingInputFrames() const noexcept { return input_.size(); }
     // Producer notifies at most once per audio block. A waiting worker can
@@ -60,6 +69,8 @@ private:
     std::uint64_t position_{};
     std::uint32_t epoch_{1};
     std::atomic<std::uint32_t> publishedEpoch_{1};
+    std::atomic<std::uint64_t> publishedPlaybackPosition_{0};
+    std::atomic<bool> publishedNonRealtime_{false};
     std::atomic<std::uint32_t> wakeSequence_{0};
     std::int64_t expectedHost_{};
     bool initialized_{}, wasActive_{}, hadPosition_{}, wasNonRealtime_{};
