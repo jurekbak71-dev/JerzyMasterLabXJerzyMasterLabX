@@ -8,6 +8,16 @@ $notice = Join-Path $source 'licenses\StemgenRT\WEIGHTS-LICENSE.md'
 if (!(Test-Path $binary) -or !(Test-Path $runtime) -or !(Test-Path $notice)) {
   throw 'The complete LIVE VST3 package (including ONNX Runtime and license) must be extracted first.'
 }
+# The CI runner includes MSVC, but FL Studio users may not. The native VST3
+# imports these DLLs before JUCE can display any useful diagnostic.
+$vcDlls = @('MSVCP140.dll','MSVCP140_1.dll','MSVCP140_ATOMIC_WAIT.dll','VCRUNTIME140.dll','VCRUNTIME140_1.dll')
+$missingVc = @($vcDlls | Where-Object { !(Test-Path -LiteralPath (Join-Path $env:WINDIR ('System32\\' + $_)) -PathType Leaf) })
+if ($missingVc.Count -gt 0) {
+  Write-Host ('Required x64 Microsoft Visual C++ runtime files missing: ' + ($missingVc -join ', ')) -ForegroundColor Red
+  Write-Host 'Install the official Microsoft Visual C++ Redistributable (x64) and run this installer again.'
+  Write-Host 'https://aka.ms/vc14/vc_redist.x64.exe'
+  throw 'Cannot install LIVE preview until required Windows runtime libraries are installed.'
+}
 Write-Host 'MasterLabX LIVE PREVIEW: personal NONCOMMERCIAL evaluation.'
 Write-Host 'StemgenRT v0.7/0.8 weights: CC BY-NC-SA 4.0. Upstream does not guarantee third-party dataset clearance.'
 Write-Host 'See licenses\StemgenRT\WEIGHTS-LICENSE.md and MODEL_CARD.md before proceeding.'
