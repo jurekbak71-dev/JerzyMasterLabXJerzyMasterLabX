@@ -28,6 +28,7 @@ void LiveStemEngine::newEpoch() noexcept {
     havePending_ = false;
     for(auto& pair:toneLowpass_)pair.fill(0.f);
     smoothedGain_.fill(1.f);
+    publishedPlaybackPosition_.store(0,std::memory_order_release);
     publishedEpoch_.store(epoch_,std::memory_order_release);
 }
 void LiveStemEngine::reset() noexcept { newEpoch(); initialized_ = false; }
@@ -171,6 +172,9 @@ void LiveStemEngine::process(float* left, float* right, std::size_t count,
             invalidFrames_.fetch_add(1, std::memory_order_relaxed);
         }
     }
+    // Publish the end of this callback for non-audio worker deadline checks.
+    publishedNonRealtime_.store(t.nonRealtime,std::memory_order_relaxed);
+    publishedPlaybackPosition_.store(position_,std::memory_order_release);
     // One wakeup per block instead of a 100-us timed sleep in the worker.
     // This is lock-free; its real-time cost must still be measured in CI.
     if (enqueued) wakeInput();
