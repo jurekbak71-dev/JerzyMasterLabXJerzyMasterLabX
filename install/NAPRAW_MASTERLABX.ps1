@@ -2,10 +2,10 @@ $ErrorActionPreference = 'Stop'
 $source = Split-Path -Parent $PSCommandPath
 $bundle = Join-Path $source 'JerzyMasterLabX.vst3'
 $srcBinary = Join-Path $bundle 'Contents\x86_64-win\JerzyMasterLabX.vst3'
-$srcOrt = Join-Path $bundle 'Contents\x86_64-win\onnxruntime.dll'
+$srcOrt = Join-Path $bundle 'Contents\x86_64-win\JerzyMasterLabX_ort_1_26.dll'
 $target = Join-Path $env:CommonProgramFiles 'VST3\JerzyMasterLabX.vst3'
 $targetBin = Join-Path $target 'Contents\x86_64-win\JerzyMasterLabX.vst3'
-$targetOrt = Join-Path $target 'Contents\x86_64-win\onnxruntime.dll'
+$targetOrt = Join-Path $target 'Contents\x86_64-win\JerzyMasterLabX_ort_1_26.dll'
 function HashOf([string] $path) {
  if (!(Test-Path -LiteralPath $path -PathType Leaf)) { return 'MISSING' }
  return (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToUpperInvariant()
