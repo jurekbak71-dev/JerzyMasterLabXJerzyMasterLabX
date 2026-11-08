@@ -84,6 +84,13 @@ int main(){
  CHECK(p.liveWorker!=nullptr);
  CHECK(p.liveWorker->statistics().hops>20);
  CHECK(p.liveWetFrames.load(std::memory_order_relaxed)>0); // actual neural output mixed, not dry-only fallback
+ CHECK(p.liveHops.load(std::memory_order_relaxed)>0);
+ CHECK(p.liveOutputs.load(std::memory_order_relaxed)>0);
+ CHECK(p.liveMaxInferenceNs.load(std::memory_order_relaxed)>0);
+ const auto status=p.liveNeuralStatusUI().toStdString();
+ CHECK(status.find("infer-max")!=std::string::npos);
+ CHECK(status.find("worker-errors")!=std::string::npos);
+ std::cout<<"LIVE worker diagnostic: "<<status<<"\\n";
  // Regression: the OFFLINE source-mode selector cannot turn neural LIVE off.
  CHECK(p.liveNeuralAvailable());
  p.releaseResources();
