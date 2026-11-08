@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $source = Split-Path -Parent $PSCommandPath
 $bundle = Join-Path $source 'JerzyMasterLabX.vst3'
 $binary = Join-Path $bundle 'Contents\x86_64-win\JerzyMasterLabX.vst3'
-$runtime = Join-Path $bundle 'Contents\x86_64-win\onnxruntime.dll'
+$runtime = Join-Path $bundle 'Contents\x86_64-win\JerzyMasterLabX_ort_1_26.dll'
 $notice = Join-Path $source 'licenses\StemgenRT\WEIGHTS-LICENSE.md'
 if (!(Test-Path $binary) -or !(Test-Path $runtime) -or !(Test-Path $notice)) {
   throw 'The complete LIVE VST3 package (including ONNX Runtime and license) must be extracted first.'
@@ -67,13 +67,13 @@ try {
   try {
     if (Test-Path $targetPlugin) { Remove-Item $targetPlugin -Recurse -Force }
     Copy-Item $bundle $targetPlugin -Recurse -Force
-    if (!(Test-Path (Join-Path $targetPlugin 'Contents\x86_64-win\onnxruntime.dll'))) {
+    if (!(Test-Path (Join-Path $targetPlugin 'Contents\x86_64-win\JerzyMasterLabX_ort_1_26.dll'))) {
       throw 'ONNX Runtime DLL missing after copying VST3.'
     }
   # A successful Copy-Item is not proof that FL Studio will see the new build.
   # Compare actual PE bytes from installed system path with this package.
   $installedBinary = Join-Path $targetPlugin 'Contents\\x86_64-win\\JerzyMasterLabX.vst3'
-  $installedRuntime = Join-Path $targetPlugin 'Contents\\x86_64-win\\onnxruntime.dll'
+  $installedRuntime = Join-Path $targetPlugin 'Contents\\x86_64-win\\JerzyMasterLabX_ort_1_26.dll'
   $expectedSha = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash
   $actualSha = (Get-FileHash -LiteralPath $installedBinary -Algorithm SHA256).Hash
   if ($expectedSha -ne $actualSha) {
