@@ -81,7 +81,7 @@ try {
   $since = (Get-Date).AddDays(-3)
   $events = @(Get-WinEvent -FilterHashtable @{LogName='Application';Id=1000,1001;StartTime=$since} -ErrorAction Stop |
     Where-Object { $_.ProviderName -in @('Application Error','Windows Error Reporting') -and
-      $_.Message -match 'FL64\\.exe|FL Studio|JerzyMasterLabX|onnxruntime' } |
+      $_.Message -match 'FL64\.exe|FL Studio|JerzyMasterLabX|onnxruntime' } |
     Select-Object -First 8)
   if($events.Count -eq 0) { Log 'No relevant Windows Application Error / WER events in the last 3 days.' }
   foreach($event in $events) {
