@@ -168,6 +168,11 @@ static void independentStemMixerControls(){
  controls.gainLinear[0]=2.f; // DRUMS +6.02 dB
  CHECK(std::abs(runFourStemMixer(controls)-1.25f)<.005f);
  controls.gainLinear[0]=1.f;
+ controls.tone[0]=1.f; // presence up and low down, tonal balance shifts smoothly
+ CHECK(runFourStemMixer(controls)<.95f);
+ controls.tone[0]=-1.f; // low up and presence down
+ CHECK(runFourStemMixer(controls)>1.08f);
+ controls.tone[0]=0.f;
  controls.width[0]=0.f; // midside centre remains unchanged for mono
  CHECK(std::abs(runFourStemMixer(controls)-1.f)<.005f);
 }
