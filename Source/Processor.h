@@ -139,6 +139,33 @@ public:
  for(int k=1;k<=16;++k){parameters[54+(k-1)*2]=state.getRawParameterValue("bandType"+juce::String(k));parameters[55+(k-1)*2]=state.getRawParameterValue("bandEnabled"+juce::String(k));}
  for(size_t i=0;i<masterlab::moduleParameterIds.size();++i)parameters[86+i]=state.getRawParameterValue(masterlab::moduleParameterIds[i]);
  for(size_t i=0;i<masterlab::stemParameterIds.size();++i)parameters[226+i]=state.getRawParameterValue(masterlab::stemParameterIds[i]);parameters[247]=state.getRawParameterValue("stemLiveOn");}
+ // Message/control thread only. Deliberately defer potentially expensive model
+ // session construction until LIVE is requested by the user or a restored LIVE
+ // state. Audio callback only reads liveAvailable and already-prepared buffers.
+ void startLiveNeuralUI(){
+#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
+  if(!liveStem||liveWorker||parameters[247]->load()<=.5f)return;
+  auto models=juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory)
+     .getChildFile("JerzyMasterLabX").getChildFile("StemgenRT");
+  const auto overrideDir=juce::SystemStats::getEnvironmentVariable(
+     "MASTERLAB_STEMGENRT_MODELS",juce::String{});
+  if(overrideDir.isNotEmpty())models=juce::File(overrideDir);
+  if(!models.getChildFile("drums.onnx").existsAsFile()||
+     !models.getChildFile("bass.onnx").existsAsFile()||
+     !models.getChildFile("vocals.onnx").existsAsFile())return;
+  try{
+   auto backend=std::make_unique<masterlab::StemgenRtBackend>(
+       std::filesystem::u8path(models.getFullPathName().toRawUTF8()),true);
+   auto worker=std::make_unique<masterlab::LiveStemWorker>(*liveStem,std::move(backend));
+   liveWorker=std::move(worker);
+   liveAvailable.store(true,std::memory_order_release);
+  }catch(const std::exception&){
+   liveWorker.reset();
+   liveAvailable.store(false,std::memory_order_release);
+  }
+#endif
+ }
+ void requestLiveNeuralUI(){triggerAsyncUpdate();}
  bool liveNeuralAvailable()const noexcept {
 #if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
   return liveAvailable.load(std::memory_order_acquire);
@@ -173,18 +200,11 @@ public:
    if(models.getChildFile("drums.onnx").existsAsFile() &&
       models.getChildFile("bass.onnx").existsAsFile() &&
       models.getChildFile("vocals.onnx").existsAsFile()){
-    try {
-     auto next=std::make_unique<masterlab::LiveStemEngine>();
-     if(next->prepare(sr,4096,220)){
-      auto backend=std::make_unique<masterlab::StemgenRtBackend>(
-        std::filesystem::u8path(models.getFullPathName().toRawUTF8()),true);
-      auto worker=std::make_unique<masterlab::LiveStemWorker>(*next,std::move(backend));
-      liveStem=std::move(next);liveWorker=std::move(worker);
-      liveAvailable.store(true,std::memory_order_release);
-     }
-    }catch(const std::exception&){
-     liveWorker.reset();liveStem.reset();liveAvailable.store(false,std::memory_order_release);
-    }
+    // Only allocate the bounded callback buffers here. Never construct ONNX
+    // sessions/worker inside prepareToPlay: hosts may invoke it while restoring
+    // wrapper state or while their audio engine is holding critical locks.
+    auto next=std::make_unique<masterlab::LiveStemEngine>();
+    if(next->prepare(sr,4096,220))liveStem=std::move(next);
    }
   }
 #endif
@@ -331,8 +351,10 @@ public:
   auto validated=parseState(data,size);
   if(validated.isValid()){
    state.replaceState(validated);
-   if(state.state.hasProperty("stemFolder"))triggerAsyncUpdate();
-   else stemRemix.unload();
+   if(!state.state.hasProperty("stemFolder"))stemRemix.unload();
+   // Restore the state first; initialize ONNX later on the message thread.
+   if(state.state.hasProperty("stemFolder") || parameters[247]->load()>.5f)
+    triggerAsyncUpdate();
   }
  }
  void handleAsyncUpdate()override{
@@ -342,6 +364,7 @@ public:
    if(!current||current->folder!=folder)
     stemRemix.loadFolder(juce::File(folder));
   }
+  if(parameters[247]->load()>.5f)startLiveNeuralUI();
  }
  // UI/control thread only. Snapshot flushes pending parameter values before transaction boundaries.
  void beginUiTransaction(const juce::String& name){state.copyState();undoManager.beginNewTransaction(name);}
