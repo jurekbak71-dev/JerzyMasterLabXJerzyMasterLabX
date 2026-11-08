@@ -61,6 +61,11 @@ jobs:
           $env:MASTERLAB_STEMGENRT_MODELS = (Resolve-Path build/models).Path
           & ./build-live/Release/live_plugin_integration.exe
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Measure real ONNX parent vs parallel and paced 128/256/512-sample streaming
+        shell: pwsh
+        run: |
+          & ./build-live/Release/stemgenrt_benchmark.exe "$pwd/build/models" 400 4
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate real LIVE VST3 via pluginval
         shell: pwsh
         run: |
