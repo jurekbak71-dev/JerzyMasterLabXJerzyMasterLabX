@@ -153,6 +153,7 @@ static float runFourStemMixer(const LiveStemControls& controls){
   for(std::size_t s=0;s<4;++s){out.channels[s*2]=.25f;out.channels[s*2+1]=.25f;}
   CHECK(e.pushOutput(out));
  }
+ CHECK(e.statistics().deliveredWetFrames>1000);
  return value;
 }
 static void independentStemMixerControls(){
