@@ -77,8 +77,9 @@ jobs:
           # A VST3 linking to the generic DLL would pick up the System32
           # copy and crash on ORT GetApi(26). The packaged DLL is unique.
           $native = "$stage/JerzyMasterLabX.vst3/Contents/x86_64-win/JerzyMasterLabX.vst3"
-          $imports = & dumpbin.exe /IMPORTS $native | Out-String
-          if ($imports -match '(?im)^\\s*onnxruntime\\.dll\\s*
+          $nativeBytes = [System.IO.File]::ReadAllBytes((Resolve-Path $native).Path)
+          $nativeAscii = [System.Text.Encoding]::ASCII.GetString($nativeBytes)
+          if ($nativeAscii.Contains('onnxruntime.dll')) { throw 'VST3 still references generic onnxruntime.dll' }
           Copy-Item 'install/INSTALL_MASTERLABX_LIVE.cmd' "$stage/INSTALL_MASTERLABX_LIVE.cmd"
           Copy-Item 'install/install_masterlabx_live.ps1' "$stage/install_masterlabx_live.ps1"
           Copy-Item 'install/NAPRAW_MASTERLABX.ps1' "$stage/NAPRAW_MASTERLABX.ps1"
