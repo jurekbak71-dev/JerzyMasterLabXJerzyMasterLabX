@@ -69,6 +69,9 @@ private:
     std::array<float,2> lastCorrection_{};
     std::array<float,2> recoveryHold_{};
     std::array<std::array<float,2>,4> toneLowpass_{};
+    // Precomputed per audio block, no expensive pow() per separated sample.
+    std::array<float,4> toneLowGain_{1.f,1.f,1.f,1.f};
+    std::array<float,4> toneHighGain_{1.f,1.f,1.f,1.f};
     std::array<float,4> smoothedGain_{1.f,1.f,1.f,1.f};
     float toneCoefficient_{0.2f};
     bool wasRemixEnabled_{true};
