@@ -312,6 +312,14 @@ public:
  hostBypassTarget=hostBypassed;
  {std::array<float,21> control{};
   for(size_t n=0;n<control.size();++n)control[n]=parameters[226+n]->load();
+#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
+  // LIVE and file-backed stem remix are mutually exclusive sources.
+  // When neural LIVE is selected, the incoming DAW signal must go straight
+  // to LiveStemEngine. Never render loaded WAV stems on top of it.
+  const bool liveSelected=parameters[247]->load()>.5f;
+#else
+  constexpr bool liveSelected=false;
+#endif
   auto sample=stemRemix.fallbackPosition();bool running=true;
   if(auto* playhead=getPlayHead())if(auto pos=playhead->getPosition()){
    if(auto timeline=pos->getTimeInSamples())sample=*timeline;
@@ -321,13 +329,16 @@ public:
    // never silence stems in offline WAV export solely because of that flag.
    running=pos->getIsPlaying()||isNonRealtime();
   }
-  stemRemix.render(b,displayRate.load(),sample,running,control);
+  if(!liveSelected)
+   stemRemix.render(b,displayRate.load(),sample,running,control);
  }
 #if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
  if(liveStem){
   masterlab::LiveStemControls mix{};
+  // stemMode controls OFFLINE WAV rendering only. It must never gate the
+  // neural LIVE stream, regardless of the 0/1/2 choice in the old combo box.
   mix.enabled=liveAvailable.load(std::memory_order_acquire) &&
-     parameters[247]->load()>.5f && !hostBypassed && parameters[226]->load()<.5f;
+     parameters[247]->load()>.5f && !hostBypassed;
   masterlab::LiveStemTransport timeline{};timeline.playing=true;timeline.nonRealtime=isNonRealtime();
   if(auto* playhead=getPlayHead())if(auto pos=playhead->getPosition()){
    timeline.playing=pos->getIsPlaying();
