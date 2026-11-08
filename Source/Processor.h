@@ -32,7 +32,8 @@ public:
  // Lock-free audio -> UI diagnostics. No worker pointers are read by the GUI.
  std::atomic<std::uint64_t> liveHops{0},liveOutputs{0},liveFailures{0},
   liveDiscarded{0},liveMaxInferenceNs{0},liveMaxBacklog{0},
-  liveDroppedInput{0},liveMissing{0},liveStale{0},liveInvalid{0};
+  liveDroppedInput{0},liveMissing{0},liveStale{0},liveInvalid{0},
+  liveExpiredHops{0};
  // The model is built on a loader thread, not on the FL Studio GUI/audio thread.
  // The loader never dereferences liveStem, preventing a host prepare/reset race.
  struct NeuralLoad {
@@ -254,7 +255,8 @@ public:
     "\\ninput-backlog "+num(liveMaxBacklog)+
     " | drop "+num(liveDroppedInput)+" | stale "+num(liveStale)+
     " | missing "+num(liveMissing)+" | invalid "+num(liveInvalid)+
-    " | worker-errors "+num(liveFailures)+" | discarded "+num(liveDiscarded);
+    " | worker-errors "+num(liveFailures)+" | discarded "+num(liveDiscarded)+
+    " | expired-hops "+num(liveExpiredHops);
   }
   if(neuralLoadFailed)return "LIVE ERROR: "+(liveLoadError.isNotEmpty()?liveLoadError:juce::String("model initialization failed"));
   if(pendingNeuralLoad)return "LIVE LOADING: neural model loading asynchronously.";
@@ -295,6 +297,7 @@ public:
   liveHops.store(0);liveOutputs.store(0);liveFailures.store(0);liveDiscarded.store(0);
   liveMaxInferenceNs.store(0);liveMaxBacklog.store(0);
   liveDroppedInput.store(0);liveMissing.store(0);liveStale.store(0);liveInvalid.store(0);
+  liveExpiredHops.store(0);
 #endif
   masterlab::configureGraph(engine,[&](size_t i){return parameters[i]->load();});
   engine.prepare(sr,parameters[6]->load()>.5f,static_cast<int>(parameters[138]->load()));
@@ -414,6 +417,7 @@ public:
    liveDiscarded.store(ws.discardedFrames,std::memory_order_relaxed);
    liveMaxInferenceNs.store(ws.maxInferenceNanoseconds,std::memory_order_relaxed);
    liveMaxBacklog.store(ws.maxInputBacklogFrames,std::memory_order_relaxed);
+   liveExpiredHops.store(ws.skippedExpiredHops,std::memory_order_relaxed);
   }
  }
 #endif
