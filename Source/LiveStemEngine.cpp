@@ -110,11 +110,21 @@ void LiveStemEngine::process(float* left, float* right, std::size_t count,
         t.hasPosition != hadPosition_ || (active && t.hasPosition && t.samplePosition != expectedHost_)))
         newEpoch();
     initialized_ = true; wasActive_ = active; hadPosition_ = t.hasPosition; wasNonRealtime_ = t.nonRealtime;
-    // Saturate host addition rather than overflowing signed time on malformed host data.
-    const auto room = static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max()) -
-                      static_cast<std::uint64_t>(t.samplePosition);
-    expectedHost_ = count > room ? std::numeric_limits<std::int64_t>::max() :
-        static_cast<std::int64_t>(static_cast<std::uint64_t>(t.samplePosition) + count);
+    // Signed host positions can be negative during preroll. Do not convert a
+    // negative position to uint64_t before computing the available headroom:
+    // that would wrap and spuriously trigger a transport discontinuity.
+    const auto maxPosition = static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max());
+    if (t.samplePosition < 0) {
+        const auto toZero = static_cast<std::uint64_t>(-(t.samplePosition + 1)) + 1;
+        if (count < toZero)
+            expectedHost_ = t.samplePosition + static_cast<std::int64_t>(count);
+        else
+            expectedHost_ = static_cast<std::int64_t>(std::min<std::uint64_t>(count - toZero, maxPosition));
+    } else {
+        const auto room = maxPosition - static_cast<std::uint64_t>(t.samplePosition);
+        expectedHost_ = count > room ? std::numeric_limits<std::int64_t>::max() :
+            t.samplePosition + static_cast<std::int64_t>(count);
+    }
     // One cheap coefficient update per block rather than per sample.
     for (std::size_t stem=0;stem<4;++stem) {
         const float tone=std::clamp(std::isfinite(controls.tone[stem])?
