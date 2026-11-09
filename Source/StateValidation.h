@@ -12,7 +12,7 @@ inline juce::ValueTree validateState(const juce::ValueTree& candidate,
                                     juce::AudioProcessorValueTreeState& parameters,
                                     const juce::Array<juce::AudioProcessorParameter*>& expected) {
     const auto schema=candidate["schemaVersion"].toString();
-    const int sourceCount=schema=="21"?static_cast<int>(parameterCount):0;
+    const int sourceCount=schema=="22"?static_cast<int>(parameterCount):0;
     if (!candidate.hasType("MasterLab") || sourceCount==0 || expected.size()!=static_cast<int>(parameterCount)
         || candidate["eqInstanceId"].toString() != "eq-0001"
         || candidate["limiterInstanceId"].toString() != "limiter-0001"
@@ -21,7 +21,7 @@ inline juce::ValueTree validateState(const juce::ValueTree& candidate,
     std::set<juce::String> permitted,seen;
     for(int i=0;i<sourceCount;++i){auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(expected[i]);if(!parameter)return {};permitted.insert(parameter->paramID);}
     auto canonical = juce::ValueTree("MasterLab");
-    canonical.setProperty("schemaVersion", 21, nullptr);
+    canonical.setProperty("schemaVersion", 22, nullptr);
     canonical.setProperty("eqInstanceId", "eq-0001", nullptr);
     canonical.setProperty("limiterInstanceId", "limiter-0001", nullptr);
     canonical.setProperty("dynamicEqInstanceId", "dynamic-eq-0001", nullptr);canonical.setProperty("dynamicsInstanceId", "dynamics-0001", nullptr);canonical.setProperty("stereoInstanceId", "stereo-0001", nullptr);
