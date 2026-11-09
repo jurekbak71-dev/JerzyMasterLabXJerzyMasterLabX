@@ -177,7 +177,7 @@ class GuiSmoke final : private juce::Timer {
             console->onClick();
             auto* overview=dynamic_cast<ConceptCOverviewPanel*>(editor->findChildWithID("concept-c-overview"));
             if(!overview||!overview->isVisible())return false;
-            if(overview->connectedControlCount()!=16||!overview->hasMeasuredSpectrum()){
+            if(overview->connectedControlCount()!=16||!overview->hasMeasuredSpectrum()||!overview->hasMeasuredInputSpectrum()){
                 std::cerr<<"Concept C real APVTS knobs or measured FFT missing\n";return false;
             }
             // A visible Concept C rotary must update the existing parameter, then restore it.
