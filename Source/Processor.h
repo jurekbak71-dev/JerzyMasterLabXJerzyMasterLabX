@@ -9,44 +9,12 @@
 #include "WindowMeter.h"
 #include "LoudnessMeter.h"
 #include "MasterBrain.h"
-#include "StemRemix.h"
-#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
-#include "LiveStemEngine.h"
-#include "LiveStemWorker.h"
-#include "StemgenRtBackend.h"
-#include <mutex>
-#include <thread>
-#endif
 #include "StateValidation.h"
-class Processor final: public juce::AudioProcessor,private juce::AsyncUpdater {
+class Processor final: public juce::AudioProcessor {
 public:
  juce::UndoManager undoManager{1000000,100};
  juce::AudioProcessorValueTreeState state;
  masterlab::MasterBrain brain;
- masterlab::StemRemix stemRemix;
-#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
- std::unique_ptr<masterlab::LiveStemEngine> liveStem;
- std::unique_ptr<masterlab::LiveStemWorker> liveWorker;
- std::atomic<bool> liveAvailable{false};
- std::atomic<std::uint64_t> liveWetFrames{0};
- // Lock-free audio -> UI diagnostics. No worker pointers are read by the GUI.
- std::atomic<std::uint64_t> liveHops{0},liveOutputs{0},liveFailures{0},
-  liveDiscarded{0},liveMaxInferenceNs{0},liveMaxBacklog{0},
-  liveDroppedInput{0},liveMissing{0},liveStale{0},liveInvalid{0},
-  liveExpiredHops{0};
- // The model is built on a loader thread, not on the FL Studio GUI/audio thread.
- // The loader never dereferences liveStem, preventing a host prepare/reset race.
- struct NeuralLoad {
-  std::mutex mutex;
-  std::unique_ptr<masterlab::LiveStemBackend> backend;
-  std::atomic<bool> finished{false};
-  std::string error;
- };
- std::shared_ptr<NeuralLoad> pendingNeuralLoad;
- std::jthread neuralLoader;
- bool neuralLoadFailed{false}; // GUI thread: retry only after explicit off/on
- juce::String liveLoadError; // UI/message thread only
-#endif
  std::vector<float> brainBaseline,brainAuditionValues;
  int brainAuditionVariant=-1;
  juce::String brainActionMessage{"No Brain proposal applied yet."};
@@ -84,25 +52,12 @@ public:
  for(int band=1;band<=16;++band){auto suffix=juce::String(band);
  p.add(std::make_unique<juce::AudioParameterChoice>("bandType"+suffix,"Band "+suffix+" filter type",juce::StringArray{"Bell","Low Shelf","High Shelf","High Pass 12 dB/oct","Low Pass 12 dB/oct","Notch"},0));
  p.add(std::make_unique<juce::AudioParameterBool>("bandEnabled"+suffix,"Band "+suffix+" enabled",true));}
- addModuleParameters(p);addStemParameters(p);
- p.add(std::make_unique<juce::AudioParameterBool>("stemLiveOn","Stem Brain live neural input",false));
+ addModuleParameters(p);
  p.add(std::make_unique<juce::AudioParameterBool>("fullRouterOn","Full 11-module serial routing enabled",false));
  for(int slot=0;slot<11;++slot)
   p.add(std::make_unique<juce::AudioParameterInt>("fullRouteSlot"+juce::String(slot+1),
        "Full route slot "+juce::String(slot+1),0,10,masterlab::defaultFullOrder[static_cast<size_t>(slot)]));
  return p;}
- static void addStemParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
-  p.add(std::make_unique<juce::AudioParameterChoice>("stemMode","Stem Brain source",
-      juce::StringArray{"Original DAW mix","Separated stems only","DAW mix plus stems"},0));
-  constexpr std::array<const char*,4> names{"Drums","Bass","Other","Vocals"};
-  for(const auto* name:names){const auto n=juce::String(name);const auto stem="stem"+n;
-   p.add(std::make_unique<juce::AudioParameterFloat>(stem+"Gain",n+" gain dB",-24.f,12.f,0.f));
-   p.add(std::make_unique<juce::AudioParameterFloat>(stem+"Tone",n+" tonal tilt",-1.f,1.f,0.f));
-   p.add(std::make_unique<juce::AudioParameterFloat>(stem+"Width",n+" stereo width",0.f,2.f,1.f));
-   p.add(std::make_unique<juce::AudioParameterBool>(stem+"Mute",n+" mute",false));
-   p.add(std::make_unique<juce::AudioParameterBool>(stem+"Solo",n+" solo",false));
-  }
- }
  static void addModuleParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
   auto boolean=[&](const char* id,const char* name,bool initial){p.add(std::make_unique<juce::AudioParameterBool>(id,name,initial));};
   auto number=[&](const char* id,const char* name,float lo,float hi,float initial){p.add(std::make_unique<juce::AudioParameterFloat>(id,name,lo,hi,initial));};
@@ -160,203 +115,35 @@ public:
  void updateModules(){
   masterlab::configureModules(engine,[&](size_t i){return parameters[i]->load();});
  }
- Processor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,&undoManager,"MasterLab",layout()){state.state.setProperty("schemaVersion",19,nullptr);state.state.setProperty("eqInstanceId","eq-0001",nullptr);state.state.setProperty("limiterInstanceId","limiter-0001",nullptr);state.state.setProperty("dynamicEqInstanceId","dynamic-eq-0001",nullptr);state.state.setProperty("dynamicsInstanceId","dynamics-0001",nullptr);state.state.setProperty("stereoInstanceId","stereo-0001",nullptr);state.state.setProperty("stabilizerInstanceId","stabilizer-0001",nullptr);const char* ids[]={"frequency","gain","q","ceiling","eq","lim","order"};for(size_t i=0;i<7;++i)parameters[i]=state.getRawParameterValue(ids[i]);for(int k=2;k<=16;++k){int offset=7+(k-2)*3;const auto suffix=juce::String(k);parameters[offset]=state.getRawParameterValue("frequency"+suffix);parameters[offset+1]=state.getRawParameterValue("gain"+suffix);parameters[offset+2]=state.getRawParameterValue("q"+suffix);}
+ Processor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,&undoManager,"MasterLab",layout()){state.state.setProperty("schemaVersion",20,nullptr);state.state.setProperty("eqInstanceId","eq-0001",nullptr);state.state.setProperty("limiterInstanceId","limiter-0001",nullptr);state.state.setProperty("dynamicEqInstanceId","dynamic-eq-0001",nullptr);state.state.setProperty("dynamicsInstanceId","dynamics-0001",nullptr);state.state.setProperty("stereoInstanceId","stereo-0001",nullptr);state.state.setProperty("stabilizerInstanceId","stabilizer-0001",nullptr);const char* ids[]={"frequency","gain","q","ceiling","eq","lim","order"};for(size_t i=0;i<7;++i)parameters[i]=state.getRawParameterValue(ids[i]);for(int k=2;k<=16;++k){int offset=7+(k-2)*3;const auto suffix=juce::String(k);parameters[offset]=state.getRawParameterValue("frequency"+suffix);parameters[offset+1]=state.getRawParameterValue("gain"+suffix);parameters[offset+2]=state.getRawParameterValue("q"+suffix);}
  parameters[52]=state.getRawParameterValue("limiterDrive");parameters[53]=state.getRawParameterValue("limiterRelease");
  for(int k=1;k<=16;++k){parameters[54+(k-1)*2]=state.getRawParameterValue("bandType"+juce::String(k));parameters[55+(k-1)*2]=state.getRawParameterValue("bandEnabled"+juce::String(k));}
  for(size_t i=0;i<masterlab::moduleParameterIds.size();++i)parameters[86+i]=state.getRawParameterValue(masterlab::moduleParameterIds[i]);
- for(size_t i=0;i<masterlab::stemParameterIds.size();++i)parameters[226+i]=state.getRawParameterValue(masterlab::stemParameterIds[i]);parameters[247]=state.getRawParameterValue("stemLiveOn");
- for(size_t i=248;i<masterlab::parameterCount;++i)
+ 
+ for(size_t i=226;i<masterlab::parameterCount;++i)
   parameters[i]=state.getRawParameterValue(masterlab::parameterId(i));}
- // Message/control thread only. Deliberately defer potentially expensive model
- // session construction until LIVE is requested by the user or a restored LIVE
- // state. Audio callback only reads liveAvailable and already-prepared buffers.
- // MESSAGE THREAD: schedules model creation, never runs ONNX constructor.
- // The worker publishes a backend without touching liveStem. Only the message
- // thread attaches the backend after checking current transport/lifecycle.
- void startLiveNeuralUI(){
-#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
-  if(!liveStem || liveWorker || neuralLoader.joinable() || neuralLoadFailed ||
-     parameters[247]->load()<=.5f)return;
-  auto models=juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory)
-     .getChildFile("JerzyMasterLabX").getChildFile("StemgenRT");
-  const auto overrideDir=juce::SystemStats::getEnvironmentVariable(
-     "MASTERLAB_STEMGENRT_MODELS",juce::String{});
-  if(overrideDir.isNotEmpty())models=juce::File(overrideDir);
-  if(!models.getChildFile("drums.onnx").existsAsFile()||
-     !models.getChildFile("bass.onnx").existsAsFile()||
-     !models.getChildFile("vocals.onnx").existsAsFile())return;
-  auto load=std::make_shared<NeuralLoad>();
-  pendingNeuralLoad=load;
-  const auto path=std::filesystem::u8path(models.getFullPathName().toRawUTF8());
-  try{
-  neuralLoader=std::jthread([this,load,path](std::stop_token stop){
-   try{
-    auto backend=std::make_unique<masterlab::StemgenRtBackend>(path,true);
-    if(!stop.stop_requested()){
-     std::lock_guard<std::mutex> guard(load->mutex);
-     load->backend=std::move(backend);
-    }
-   }catch(const std::exception& ex){
-    std::lock_guard<std::mutex> guard(load->mutex);
-    load->error=ex.what();
-   }catch(...){
-    std::lock_guard<std::mutex> guard(load->mutex);
-    load->error="Unknown model initialization exception";
-   }
-   load->finished.store(true,std::memory_order_release);
-   if(!stop.stop_requested())triggerAsyncUpdate();
-  });
-  }catch(...){
-   pendingNeuralLoad.reset();
-   neuralLoadFailed=true;
-  }
-#endif
- }
- // MESSAGE THREAD ONLY. Returns quickly while the neural model is loading.
- void finishLiveNeuralUI(){
-#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
-  auto load=pendingNeuralLoad;
-  if(!load||!load->finished.load(std::memory_order_acquire))return;
-  if(neuralLoader.joinable())neuralLoader.join();
-  neuralLoader=std::jthread{};
-  pendingNeuralLoad.reset();
-  std::unique_ptr<masterlab::LiveStemBackend> backend;
-  {
-   std::lock_guard<std::mutex> guard(load->mutex);
-   backend=std::move(load->backend);
-   liveLoadError=juce::String(load->error);
-  }
-  if(!backend){
-   neuralLoadFailed=true;
-   return;
-  }
-  if(!liveStem || liveWorker || parameters[247]->load()<=.5f)return;
-  try{
-   auto worker=std::make_unique<masterlab::LiveStemWorker>(
-       *liveStem,std::move(backend));
-   liveWorker=std::move(worker);
-   liveAvailable.store(true,std::memory_order_release);
-  }catch(...){
-   liveAvailable.store(false,std::memory_order_release);
-  }
-#endif
- }
- void requestLiveNeuralUI(){
-#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
-  if(parameters[247]->load()<=.5f){
-   neuralLoadFailed=false;
-   liveLoadError.clear();
-  }
-#endif
-  triggerAsyncUpdate();
- }
- juce::String liveNeuralStatusUI()const{
-#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
-  if(parameters[247]->load()<=.5f)return "LIVE OFF: original input passes through.";
-  if(liveAvailable.load(std::memory_order_acquire)){
-   auto num=[](const std::atomic<std::uint64_t>& n){
-    return juce::String(static_cast<juce::int64>(n.load(std::memory_order_relaxed)));
-   };
-   return "LIVE telemetry | WET "+num(liveWetFrames)+
-    " | hops "+num(liveHops)+" | output "+num(liveOutputs)+
-    " | infer-max "+juce::String(static_cast<double>(liveMaxInferenceNs.load(std::memory_order_relaxed))/1.0e6,1)+"ms"+
-    "\\ninput-backlog "+num(liveMaxBacklog)+
-    " | drop "+num(liveDroppedInput)+" | stale "+num(liveStale)+
-    " | missing "+num(liveMissing)+" | invalid "+num(liveInvalid)+
-    " | worker-errors "+num(liveFailures)+" | discarded "+num(liveDiscarded)+
-    " | expired-hops "+num(liveExpiredHops);
-  }
-  if(neuralLoadFailed)return "LIVE ERROR: "+(liveLoadError.isNotEmpty()?liveLoadError:juce::String("model initialization failed"));
-  if(pendingNeuralLoad)return "LIVE LOADING: neural model loading asynchronously.";
-  if(!liveStem)return "LIVE UNAVAILABLE: set 44.1 kHz and install StemgenRT models.";
-  return "LIVE WAITING: model loading has not started (check StemgenRT files).";
-#else
-  return "LIVE unavailable in this plugin build.";
-#endif
- }
- bool liveNeuralAvailable()const noexcept {
-#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
-  return liveAvailable.load(std::memory_order_acquire);
-#else
-  return false;
-#endif
- }
- ~Processor()override{
-#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
-  // Cancel any queued GUI callbacks before the loader can publish another.
-  if(neuralLoader.joinable()){
-   neuralLoader.request_stop();
-   neuralLoader.join();
-  }
-  pendingNeuralLoad.reset();
-  liveAvailable.store(false,std::memory_order_release);
-  liveWorker.reset();
-  liveStem.reset();
-#endif
-  cancelPendingUpdate();
- }
+ ~Processor()override=default;
  const juce::String getName()const override{return "JerzyMasterLabX";}
  bool acceptsMidi()const override{return false;}bool producesMidi()const override{return false;}double getTailLengthSeconds()const override{return .1;}
  int getNumPrograms()override{return 1;}int getCurrentProgram()override{return 0;}void setCurrentProgram(int)override{}const juce::String getProgramName(int)override{return "Default";}void changeProgramName(int,const juce::String&)override{}
  bool isBusesLayoutSupported(const BusesLayout& l)const override{return l.getMainInputChannelSet()==juce::AudioChannelSet::stereo()&&l.getMainOutputChannelSet()==juce::AudioChannelSet::stereo();}
  void prepareToPlay(double sr,int)override{
-#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
-  liveWorker.reset();liveStem.reset();liveAvailable.store(false,std::memory_order_release);liveWetFrames.store(0,std::memory_order_release);
-  liveHops.store(0);liveOutputs.store(0);liveFailures.store(0);liveDiscarded.store(0);
-  liveMaxInferenceNs.store(0);liveMaxBacklog.store(0);
-  liveDroppedInput.store(0);liveMissing.store(0);liveStale.store(0);liveInvalid.store(0);
-  liveExpiredHops.store(0);
-#endif
   masterlab::configureGraph(engine,[&](size_t i){return parameters[i]->load();});
   engine.prepare(sr,parameters[6]->load()>.5f,static_cast<int>(parameters[138]->load()));
   displayRate.store(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000);
   limiterMeter.prepare(displayRate.load());inputMeter.prepare(displayRate.load());
   outputMeter.prepare(displayRate.load());inputLoudness.prepare(displayRate.load());
   outputLoudness.prepare(displayRate.load());brain.prepare(displayRate.load());
-  stemRemix.reset();updateModules();
-#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
-  // No resampling is attempted: the native graph is 44.1-kHz only.
-  if(std::abs(sr-44100.)<.01){
-   auto models=juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory)
-     .getChildFile("JerzyMasterLabX").getChildFile("StemgenRT");
-   // CI and explicit local evaluation may point to hash-verified test models.
-   const auto overrideDir=juce::SystemStats::getEnvironmentVariable(
-       "MASTERLAB_STEMGENRT_MODELS",juce::String{});
-   if(overrideDir.isNotEmpty())models=juce::File(overrideDir);
-   if(models.getChildFile("drums.onnx").existsAsFile() &&
-      models.getChildFile("bass.onnx").existsAsFile() &&
-      models.getChildFile("vocals.onnx").existsAsFile()){
-    // Only allocate the bounded callback buffers here. Never construct ONNX
-    // sessions/worker inside prepareToPlay: hosts may invoke it while restoring
-    // wrapper state or while their audio engine is holding critical locks.
-    auto next=std::make_unique<masterlab::LiveStemEngine>();
-    if(next->prepare(sr,4096,220))liveStem=std::move(next);
-   }
-  }
-#endif
+  updateModules();
   int totalLatency=engine.latency();
-#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
-  if(liveStem)totalLatency+=static_cast<int>(liveStem->latencySamples());
-#endif
   setLatencySamples(totalLatency);
-#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
-  // FL Studio may restore VST3 state BEFORE calling prepareToPlay.
-  // Wake the message thread again once its new audio engine is prepared.
-  if(parameters[247]->load()>.5f)triggerAsyncUpdate();
-#endif
   for(auto& channel:hostDryDelay)channel.assign(static_cast<size_t>(engine.latency()+1),0);
   hostDryPosition=0;hostBypassMix=0;hostBypassTarget=false;
   hostBypassStep=static_cast<float>(1/(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr*.02:960.));
  }
  void releaseResources()override{
-#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
-  liveWorker.reset();liveStem.reset();liveAvailable.store(false,std::memory_order_release);
-#endif
  }void reset()override{
-#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
-  if(liveStem)liveStem->reset();
-#endif
- brain.cancelRT();stemRemix.reset();engine.reset();updateModules();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;}
+ brain.cancelRT();engine.reset();updateModules();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;}
  void processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,false);}
  void processBlockBypassed(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,true);}
  void renderAudio(juce::AudioBuffer<float>& b,bool hostBypassed){
@@ -365,70 +152,6 @@ public:
  auto value=[&](size_t index){return parameters[index]->load();};
  masterlab::configureGraph(engine,value);
  hostBypassTarget=hostBypassed;
- {std::array<float,21> control{};
-  for(size_t n=0;n<control.size();++n)control[n]=parameters[226+n]->load();
-#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
-  // LIVE and file-backed stem remix are mutually exclusive sources.
-  // When neural LIVE is selected, the incoming DAW signal must go straight
-  // to LiveStemEngine. Never render loaded WAV stems on top of it.
-  const bool liveSelected=parameters[247]->load()>.5f;
-#else
-  constexpr bool liveSelected=false;
-#endif
-  auto sample=stemRemix.fallbackPosition();bool running=true;
-  if(auto* playhead=getPlayHead())if(auto pos=playhead->getPosition()){
-   if(auto timeline=pos->getTimeInSamples())sample=*timeline;
-   else if(auto seconds=pos->getTimeInSeconds())
-    sample=static_cast<std::int64_t>(*seconds*displayRate.load());
-   // FL Studio offline render may not mark the transport as "playing":
-   // never silence stems in offline WAV export solely because of that flag.
-   running=pos->getIsPlaying()||isNonRealtime();
-  }
-  if(!liveSelected)
-   stemRemix.render(b,displayRate.load(),sample,running,control);
- }
-#if defined(MASTERLAB_LIVE_STEM_PLUGIN) && MASTERLAB_LIVE_STEM_PLUGIN
- if(liveStem){
-  masterlab::LiveStemControls mix{};
-  // stemMode controls OFFLINE WAV rendering only. It must never gate the
-  // neural LIVE stream, regardless of the 0/1/2 choice in the old combo box.
-  mix.enabled=liveAvailable.load(std::memory_order_acquire) &&
-     parameters[247]->load()>.5f && !hostBypassed;
-  masterlab::LiveStemTransport timeline{};timeline.playing=true;timeline.nonRealtime=isNonRealtime();
-  if(auto* playhead=getPlayHead())if(auto pos=playhead->getPosition()){
-   timeline.playing=pos->getIsPlaying();
-   if(auto p=pos->getTimeInSamples()){timeline.samplePosition=*p;timeline.hasPosition=true;}
-   else if(auto t=pos->getTimeInSeconds()){
-    timeline.samplePosition=static_cast<std::int64_t>(*t*displayRate.load());timeline.hasPosition=true;
-   }
-  }
-  for(int stem=0;stem<4;++stem){
-   const int i=227+5*stem;
-   mix.gainLinear[stem]=juce::Decibels::decibelsToGain(parameters[i]->load());
-   mix.tone[stem]=parameters[i+1]->load();mix.width[stem]=parameters[i+2]->load();
-   mix.mute[stem]=parameters[i+3]->load()>.5f;mix.solo[stem]=parameters[i+4]->load()>.5f;
-  }
-  liveStem->process(b.getWritePointer(0),b.getWritePointer(1),
-                    static_cast<std::size_t>(b.getNumSamples()),timeline,mix);
-  // Cheap atomic statistics; never perform model work or allocate in audio callback.
-  const auto ls=liveStem->statistics();
-  liveWetFrames.store(ls.deliveredWetFrames,std::memory_order_relaxed);
-  liveDroppedInput.store(ls.droppedInput,std::memory_order_relaxed);
-  liveMissing.store(ls.missingFrames,std::memory_order_relaxed);
-  liveStale.store(ls.staleFrames,std::memory_order_relaxed);
-  liveInvalid.store(ls.invalidFrames,std::memory_order_relaxed);
-  if(liveWorker){
-   const auto ws=liveWorker->statistics();
-   liveHops.store(ws.hops,std::memory_order_relaxed);
-   liveOutputs.store(ws.outputFrames,std::memory_order_relaxed);
-   liveFailures.store(ws.failures,std::memory_order_relaxed);
-   liveDiscarded.store(ws.discardedFrames,std::memory_order_relaxed);
-   liveMaxInferenceNs.store(ws.maxInferenceNanoseconds,std::memory_order_relaxed);
-   liveMaxBacklog.store(ws.maxInputBacklogFrames,std::memory_order_relaxed);
-   liveExpiredHops.store(ws.skippedExpiredHops,std::memory_order_relaxed);
-  }
- }
-#endif
  if(hostDryDelay[0].empty()){b.clear();return;}
  for(int offset=0;offset<b.getNumSamples();){int length=std::min(128,b.getNumSamples()-offset);
   for(int i=0;i<length;++i){size_t read=(hostDryPosition+1)%hostDryDelay[0].size();for(int c=0;c<2;++c){inputScratch[c][i]=masterlab::clean(b.getSample(c,offset+i));hostDryDelay[c][hostDryPosition]=inputScratch[c][i];hostDryScratch[c][i]=hostDryDelay[c][read];}hostDryPosition=read;}
@@ -455,66 +178,6 @@ public:
  int s1,n1,s2,n2;fifo.prepareToWrite(b.getNumSamples(),s1,n1,s2,n2);
  for(int j=0;j<n1;++j){traceL[s1+j]=b.getSample(0,j);traceR[s1+j]=b.getSample(1,j);}for(int j=0;j<n2;++j){traceL[s2+j]=b.getSample(0,n1+j);traceR[s2+j]=b.getSample(1,n1+j);}fifo.finishedWrite(n1+n2);
  }
- juce::String loadStemsUI(const juce::File& folder){
-  auto result=stemRemix.loadFolder(folder);
-  if(result.isEmpty()){
-   // Imported OFFLINE stems must replace the LIVE source, not remain hidden
-   // behind a still-checked LIVE toggle (which skips file-backed rendering).
-   auto* live=state.getParameter("stemLiveOn");
-   if(live && parameters[247]->load()>.5f){
-    live->beginChangeGesture();live->setValueNotifyingHost(0.f);
-    live->endChangeGesture();requestLiveNeuralUI();
-   }
-   state.state.setProperty("stemFolder",folder.getFullPathName(),&undoManager);
-   auto* param=state.getParameter("stemMode");
-   beginUiTransaction("Stem Brain import");
-   param->beginChangeGesture();param->setValueNotifyingHost(param->convertTo0to1(1.f));
-   param->endChangeGesture();finishUiTransaction();
-  }
-  return result;
- }
- void clearStemsUI(){
-  stemRemix.unload();
-  auto* p=state.getParameter("stemMode");
-  p->beginChangeGesture();p->setValueNotifyingHost(p->convertTo0to1(0.f));p->endChangeGesture();
-  state.state.removeProperty("stemFolder",&undoManager);
- }
- bool applyStemVariantUI(int variant){
-  if(variant<0||variant>1)return false;
-  const bool isLive=parameters[247]->load()>.5f;
-  auto bank=stemRemix.snapshot();
-  if(!isLive&&!bank)return false;
-  // LIVE: a deterministic, undoable gain preset. Do not misrepresent this
-  // as measured balancing, since the live path has no per-stem RMS analysis.
-  // OFFLINE: retain the existing measured, conservative balancing behaviour.
-  std::array<float,4> offsets{};
-  if(isLive){
-   offsets=variant==0?std::array<float,4>{0.f,0.f,0.f,0.f}:
-                       std::array<float,4>{-.75f,-.5f,-.75f,2.0f};
-  }else{
-   auto relativeDb=[&](int a,int b){
-    return 20.f*std::log10(std::max(1.e-7f,bank->rms[static_cast<size_t>(a)])/
-                          std::max(1.e-7f,bank->rms[static_cast<size_t>(b)]));
-   };
-   if(relativeDb(0,3)>7.f)offsets[0]-=1.f;
-   if(relativeDb(1,0)>5.f)offsets[1]-=1.5f;
-   if(relativeDb(2,3)>7.f)offsets[2]-=1.f;
-   if(relativeDb(3,2)<-8.f)offsets[3]+=1.f;
-   for(int i=0;i<4;++i)
-    if(bank->peak[static_cast<size_t>(i)]>=.998f)offsets[static_cast<size_t>(i)]-=.75f;
-   if(variant==1){offsets[0]-=.75f;offsets[2]-=.5f;offsets[3]+=1.5f;}
-  }
-  beginUiTransaction(variant==0?"Stem Brain natural balance":"Stem Brain vocal-forward");
-  for(int i=0;i<4;++i){
-   const auto id=juce::String(masterlab::stemParameterIds[1+5*i]);
-   auto* param=state.getParameter(id);
-   const float amount=std::clamp(offsets[static_cast<size_t>(i)],-3.f,3.f);
-   param->beginChangeGesture();param->setValueNotifyingHost(param->convertTo0to1(amount));
-   param->endChangeGesture();
-  }
-  finishUiTransaction();return true;
- }
-
  void getStateInformation(juce::MemoryBlock& dest)override{auto xml=state.copyState().createXml();copyXmlToBinary(*xml,dest);}
  juce::ValueTree parseState(const void* data,int size){
   if(data==nullptr||size<=0||size>1024*1024)return {};
@@ -525,29 +188,15 @@ public:
   auto validated=parseState(data,size);
   if(validated.isValid()){
    state.replaceState(validated);
-   if(!state.state.hasProperty("stemFolder"))stemRemix.unload();
-   // Restore the state first; initialize ONNX later on the message thread.
-   if(state.state.hasProperty("stemFolder") || parameters[247]->load()>.5f)
-    triggerAsyncUpdate();
   }
- }
- void handleAsyncUpdate()override{
-  const auto folder=state.state["stemFolder"].toString();
-  if(folder.isNotEmpty()){
-   const auto current=stemRemix.snapshot();
-   if(!current||current->folder!=folder)
-    stemRemix.loadFolder(juce::File(folder));
-  }
-  finishLiveNeuralUI();
-  if(parameters[247]->load()>.5f)startLiveNeuralUI();
  }
  // UI/control thread only. Snapshot flushes pending parameter values before transaction boundaries.
  void beginUiTransaction(const juce::String& name){state.copyState();undoManager.beginNewTransaction(name);}
  void finishUiTransaction(){state.copyState();undoManager.beginNewTransaction();}
  bool undo(){state.copyState();bool changed=undoManager.undo();undoManager.beginNewTransaction();
-  if(changed&&state.state.hasProperty("stemFolder"))triggerAsyncUpdate();return changed;}
+  return changed;}
  bool redo(){state.copyState();bool changed=undoManager.redo();undoManager.beginNewTransaction();
-  if(changed&&state.state.hasProperty("stemFolder"))triggerAsyncUpdate();return changed;}
+  return changed;}
  // Factory preset 0: reset every real host parameter to its declared JUCE
  // default. Preserve host state schema and saved .jmlx files. One Undo action.
  bool loadFactoryDefaultUI(){
@@ -555,14 +204,11 @@ public:
   bool changed=false;
   for(auto* p:hostParameters)
    changed|=std::abs(p->getValue()-p->getDefaultValue())>1.0e-6f;
-  changed|=stemRemix.snapshot()!=nullptr||state.state.hasProperty("stemFolder");
   brain.clearUI();
   brainBaseline.clear();brainAuditionValues.clear();brainAuditionVariant=-1;
   brainActionMessage="DEFAULT 0: factory settings restored.";
   if(!changed)return true;
   beginUiTransaction("NEW / DEFAULT 0");
-  cancelPendingUpdate();stemRemix.unload();
-  state.state.removeProperty("stemFolder",&undoManager);
   for(auto* p:hostParameters){
    if(std::abs(p->getValue()-p->getDefaultValue())<=1.0e-6f)continue;
    p->beginChangeGesture();
