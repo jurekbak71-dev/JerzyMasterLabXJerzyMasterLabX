@@ -33,6 +33,18 @@ jobs:
           cmake --version
           c++ --version
           python3 --version
+      - name: Verify Codex API credential is available
+        shell: bash
+        env:
+          CODEX_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CODEX_API_KEY}" ]]; then
+            echo "BLOCKED: repository Actions secret OPENAI_API_KEY is missing or empty." | tee masterlabx-agent-result.txt
+            echo "::error::Configure repository secret OPENAI_API_KEY under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          echo "Credential present (value never printed)."
       - name: Run one coding-agent work package
         uses: openai/codex-action@v1
         with:
