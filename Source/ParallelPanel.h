@@ -36,7 +36,15 @@ public:
   for(int i=0;i<6;++i){const int column=i%3,row=i/3,x=20+column*(cardWidth+gap),y=top+row*rowHeight;trimLabel[i].setBounds(x+12,y+60,42,20);trim[i].setBounds(x+54,y+59,cardWidth-66,23);mixLabel[i].setBounds(x+12,y+88,42,20);mix[i].setBounds(x+54,y+87,cardWidth-66,23);}
  }
  void paint(juce::Graphics& g)override{
-  g.fillAll(juce::Colour(0xff101318));g.setColour(juce::Colours::whitesmoke);g.setFont(theme.font(22));g.drawText("Parallel Branch Mixer",20,5,getWidth()-280,30,juce::Justification::left);
+  g.fillAll(juce::Colour(0xffedf0f2));
+  // Concept C powder-coated sheet-metal side rails and inset dark instrument panel.
+  const float panelWidth=juce::jmax(1.f,static_cast<float>(getWidth())-20.f);
+  g.setGradientFill(juce::ColourGradient(juce::Colour(0xff344553),10.f,0.f,
+                                        juce::Colour(0xff111b25),10.f,static_cast<float>(getHeight()),false));
+  g.fillRect(10.f,0.f,panelWidth,static_cast<float>(getHeight()));
+  g.setColour(juce::Colour(0xff96a7b6));
+  g.drawVerticalLine(10,0.f,static_cast<float>(getHeight()));
+  g.drawVerticalLine(juce::jmax(10,getWidth()-11),0.f,static_cast<float>(getHeight()));g.setColour(juce::Colours::whitesmoke);g.setFont(theme.font(22));g.drawText("Parallel Branch Mixer",20,5,getWidth()-280,30,juce::Justification::left);
   g.setColour(muted);g.setFont(theme.font(11));g.drawText(frame.parallel.compensated?"NORMALIZED WEIGHTS  /  relative trims":"LEGACY 1/N  /  trims can change total level",20,31,getWidth()-40,18,juce::Justification::left);
   const int gap=10,columns=3,cardWidth=(getWidth()-40-gap*(columns-1))/columns;const int top=48,rowHeight=std::max(135,(getHeight()-top-18)/2);
   for(int i=0;i<6;++i){const int column=i%3,row=i/3,x=20+column*(cardWidth+gap),y=top+row*rowHeight;const bool present=frame.parallel.present[i],enabled=frame.parallel.enabled[i];g.setColour(panel);g.fillRoundedRectangle(static_cast<float>(x),static_cast<float>(y),static_cast<float>(cardWidth),static_cast<float>(rowHeight-10),12);g.setColour(present&&enabled?accent:muted.withAlpha(.45f));g.fillEllipse(static_cast<float>(x+12),static_cast<float>(y+14),7,7);g.setFont(theme.font(11));g.drawText(names[i],x+26,y+7,cardWidth-38,20,juce::Justification::left);

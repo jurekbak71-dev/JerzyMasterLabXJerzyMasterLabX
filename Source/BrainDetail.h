@@ -9,6 +9,8 @@ struct BrainDetail {
  bool analysed=false;std::array<double,brainSpectrumBins> power{};
  std::array<float,brainSpectrumBins> prominence{},persistence{};
  float coverage=0,sectionLowDb=-120,sectionHighDb=-120,sectionSpreadDb=0,sectionJumpDb=0,windowSpreadDb=0;
+ std::vector<float> sectionLevelsDb; // Chronological ~3-second RMS sections, computed off audio thread.
+
 };
 inline std::array<float,brainSpectrumBins> spectralProminence(const std::array<double,brainSpectrumBins>& power){
  std::array<float,brainSpectrumBins> db{},out{};
@@ -46,6 +48,8 @@ public:
   BrainDetail out;out.analysed=frames>=4;for(size_t i=0;i<energy.size();++i){out.power[i]=frames?energy[i]/frames:0;out.persistence[i]=frames?static_cast<float>(present[i])/frames:0;}out.prominence=spectralProminence(out.power);out.coverage=static_cast<float>(coverage/std::max(size_t{1},frames));
   auto levels=sections;append(levels,sectionPower,sectionCount);auto shortLevels=windows;append(shortLevels,windowPower,windowCount);
   auto gate=[](std::vector<float>& values){if(values.empty())return;const float floor=std::max(-70.f,*std::max_element(values.begin(),values.end())-40);values.erase(std::remove_if(values.begin(),values.end(),[&](float db){return db<floor;}),values.end());};gate(levels);gate(shortLevels);
+  out.sectionLevelsDb=sections;
+  if(sectionCount)append(out.sectionLevelsDb,sectionPower,sectionCount);
   out.sectionLowDb=percentile(levels,.1f);out.sectionHighDb=percentile(levels,.9f);out.sectionSpreadDb=std::max(0.f,out.sectionHighDb-out.sectionLowDb);for(size_t i=1;i<levels.size();++i)out.sectionJumpDb=std::max(out.sectionJumpDb,std::abs(levels[i]-levels[i-1]));out.windowSpreadDb=std::max(0.f,percentile(shortLevels,.9f)-percentile(shortLevels,.1f));return out;
  }
 };

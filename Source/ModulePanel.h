@@ -61,7 +61,7 @@ public:
  void updateScope(const std::array<juce::Point<float>,1024>& points){scope=points;}
  void update(const Processor::ResponseFrame& f){frame=f;history[historyHead]={f.dynamics.reduction,f.dynamics.upward,f.dynamics.punch};historyHead=(historyHead+1)%history.size();historyCount=std::min(history.size(),historyCount+1);repaint();}
  void resized()override{
-  present.setBounds(getWidth()-232,12,112,28);enabled.setBounds(getWidth()-114,12,104,28);
+  present.setBounds(getWidth()-264,10,130,34);enabled.setBounds(getWidth()-128,10,118,34);
   const int side=std::min(340,getWidth()/2-24),left=getWidth()-side-24;
   const int row=54;controlsViewport.setBounds(left+12,94,side-24,getHeight()-154);controlsContent.setSize(side-40,static_cast<int>(controls.size())*row);
   for(size_t i=0;i<controls.size();++i){int y=static_cast<int>(i)*row;controls[i]->label.setBounds(0,y,side-40,18);controls[i]->slider.setBounds(0,y+20,side-40,30);}
@@ -70,14 +70,22 @@ public:
    controlsContent.setSize(controlsViewport.getWidth()-16,controlsViewport.getHeight());
    const int column=controlsContent.getWidth()/4;
    for(size_t i=0;i<controls.size();++i){auto& c=*controls[i];c.label.setVisible(i<4);c.slider.setVisible(i<4);if(i<4){c.label.setBounds(static_cast<int>(i)*column,0,column,22);c.slider.setSliderStyle(juce::Slider::LinearVertical);c.slider.setTextBoxStyle(juce::Slider::TextBoxBelow,false,column-8,24);c.slider.setColour(juce::Slider::trackColourId,bandColours[i]);c.slider.setColour(juce::Slider::thumbColourId,bandColours[i]);c.slider.setBounds(static_cast<int>(i)*column+4,56,column-8,controlsContent.getHeight()-58);bandPower[i].setBounds(static_cast<int>(i)*column+3,25,column/2-4,23);bandSolo[i].setBounds(static_cast<int>(i)*column+column/2+1,25,column/2-4,23);}}
-   for(int i:{7,8,9}){addAndMakeVisible(controls[i]->label);addAndMakeVisible(controls[i]->slider);}controls[7]->label.setBounds(getWidth()-285,51,70,24);controls[7]->slider.setBounds(getWidth()-213,51,185,24);controls[8]->label.setBounds(320,getHeight()-50,60,28);controls[8]->slider.setBounds(380,getHeight()-50,(getWidth()-428)/2-30,28);controls[8]->slider.setTextBoxStyle(juce::Slider::TextBoxRight,false,50,24);controls[9]->slider.setTextBoxStyle(juce::Slider::TextBoxRight,false,50,24);controls[9]->label.setBounds(getWidth()/2+170,getHeight()-50,65,28);controls[9]->slider.setBounds(getWidth()/2+235,getHeight()-50,getWidth()/2-259,28);deltaMonitor.setBounds(300,12,90,28);
-   monoBass.setBounds(24,getHeight()-50,140,28);mono.setBounds(168,getHeight()-50,150,28);
+   for(int i:{7,8,9}){addAndMakeVisible(controls[i]->label);addAndMakeVisible(controls[i]->slider);}controls[7]->label.setBounds(getWidth()-285,51,70,24);controls[7]->slider.setBounds(getWidth()-213,51,185,24);controls[8]->label.setBounds(320,getHeight()-50,60,28);controls[8]->slider.setBounds(380,getHeight()-50,(getWidth()-428)/2-30,28);controls[8]->slider.setTextBoxStyle(juce::Slider::TextBoxRight,false,50,24);controls[9]->slider.setTextBoxStyle(juce::Slider::TextBoxRight,false,50,24);controls[9]->label.setBounds(getWidth()/2+170,getHeight()-50,65,28);controls[9]->slider.setBounds(getWidth()/2+235,getHeight()-50,getWidth()/2-259,28);deltaMonitor.setBounds(300,10,104,34);
+   monoBass.setBounds(24,getHeight()-52,140,34);mono.setBounds(170,getHeight()-52,150,34);
   }
-  mode.setBounds(left+12,53,(kind==3?(side-36)/3:kind==1?(side-30)/2:side-24),28);if(kind==1){intensity.setBounds(left+side/2,53,side/2-12,28);dynamicsDelta.setBounds(getWidth()-108,getHeight()-48,96,28);}if(kind==3){const int column=(side-36)/3;profile.setBounds(left+18+column,53,column,28);intensity.setBounds(left+24+column*2,53,column,28);tame.setBounds(left+12,getHeight()-48,side-108,28);stabilizerDelta.setBounds(getWidth()-108,getHeight()-48,96,28);}bandChoice.setBounds(left+12,53,side/2-12,28);bandOn.setBounds(left+side/2+6,53,side/2-18,28);
+  mode.setBounds(left+12,53,(kind==3?(side-36)/3:kind==1?(side-30)/2:side-24),28);if(kind==1){intensity.setBounds(left+side/2,53,side/2-12,28);dynamicsDelta.setBounds(getWidth()-116,getHeight()-51,108,34);}if(kind==3){const int column=(side-36)/3;profile.setBounds(left+18+column,53,column,28);intensity.setBounds(left+24+column*2,53,column,28);tame.setBounds(left+12,getHeight()-51,side-126,34);stabilizerDelta.setBounds(getWidth()-116,getHeight()-51,108,34);}bandChoice.setBounds(left+12,53,side/2-12,28);bandOn.setBounds(left+side/2+6,53,side/2-18,28);
   if(kind!=2){monoBass.setBounds(left+12,getHeight()-48,side/2-12,28);mono.setBounds(left+side/2+6,getHeight()-48,side/2-18,28);}
  }
  void paint(juce::Graphics& g)override{
-  g.fillAll(juce::Colour(0xff101318));g.setColour(juce::Colours::whitesmoke);g.setFont(theme.font(23));g.drawText(kind==3?"Stabilizer":kind==0?"Dynamic EQ":(kind==1?"Smart Dynamics":"Stereo Architect"),24,6,getWidth()-280,36,juce::Justification::left);
+  g.fillAll(juce::Colour(0xffedf0f2));
+  // Concept C powder-coated sheet-metal side rails and inset dark instrument panel.
+  const float panelWidth=juce::jmax(1.f,static_cast<float>(getWidth())-20.f);
+  g.setGradientFill(juce::ColourGradient(juce::Colour(0xff344553),10.f,0.f,
+                                        juce::Colour(0xff111b25),10.f,static_cast<float>(getHeight()),false));
+  g.fillRect(10.f,0.f,panelWidth,static_cast<float>(getHeight()));
+  g.setColour(juce::Colour(0xff96a7b6));
+  g.drawVerticalLine(10,0.f,static_cast<float>(getHeight()));
+  g.drawVerticalLine(juce::jmax(10,getWidth()-11),0.f,static_cast<float>(getHeight()));g.setColour(juce::Colours::whitesmoke);g.setFont(theme.font(23));g.drawText(kind==3?"Stabilizer":kind==0?"Dynamic EQ":(kind==1?"Smart Dynamics":"Stereo Architect"),24,6,getWidth()-280,36,juce::Justification::left);
   const int side=std::min(340,getWidth()/2-24);const float right=getWidth()-side-24.f,plotWidth=right-48.f;
   g.setColour(juce::Colour(0xff191d25));g.fillRoundedRectangle(24,54,plotWidth,getHeight()-94.f,18);g.fillRoundedRectangle(right,48,side,getHeight()-72.f,18);
   g.setColour(muted);g.setFont(theme.font(11));g.drawText("Live DSP / 20 ms bypass / drag chain cards to change processing order",24,getHeight()-32,getWidth()-48,22,juce::Justification::left);

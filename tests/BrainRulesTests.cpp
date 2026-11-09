@@ -24,6 +24,23 @@ int main(){
  c={};auto healthy=f;healthy.stereoAnalysed=true;healthy.bandCorrelation={.8f,.9f,.9f,.9f};auto simple=masterlab::proposeMastering(healthy,c);check(value(simple,"stereoPresent")==0&&value(simple,"dynamicsPresent")==0,"Brain adds unnecessary stereo or compressor");
  auto problematic=healthy;problematic.bandCorrelation[0]=-.3f;problematic.peak=.9f;problematic.rms=.05f;auto complex=masterlab::proposeMastering(problematic,c);check(value(complex,"stereoPresent")==1&&value(complex,"dynamicsPresent")==1,"Brain does not select needed processors");
  c.automaticModules=false;auto forced=masterlab::proposeMastering(healthy,c);for(const char* id:{"eqPresent","limPresent","stereoPresent","dynamicsPresent","dynamicEqPresent"})check(value(forced,id)==1,"manual processor selection not respected");
+ // Additional five real post-chain processors are opt-in and part of the
+ // actual proposal, not merely additional labels in the UI.
+ c={};c.useEq=c.useLimiter=c.useStereo=c.useDynamics=c.useDynamicEq=c.useStabilizer=false;
+ c.useExciter=c.useAnalog=c.useBass=c.useTransient=c.useTruePeak=true;
+ auto expanded=masterlab::proposeMastering(healthy,c);
+ check(expanded.valid,"Brain rejects expanded-only processor selection");
+ std::set<std::string> expandedIds;
+ for(const auto& entry:expanded.changes)
+  check(expandedIds.insert(entry.first).second&&std::isfinite(entry.second),"expanded Brain has duplicate/nonfinite values");
+ for(const char* id:{"exciterPresent","analogPresent","bassPresent","transientPresent","truePeakPresent"})
+  check(value(expanded,id)==1,"expanded Master Brain did not include selected processor");
+ check(value(expanded,"eqPresent")==-999 && value(expanded,"limPresent")==-999,
+       "expanded Brain silently enables excluded original modules");
+ check(value(expanded,"exciterAmountHigh")>=0&&value(expanded,"exciterAmountHigh")<=1,
+       "expanded Brain exciter out of range");
+ c.useExciter=c.useAnalog=c.useBass=c.useTransient=c.useTruePeak=false;
+ check(!masterlab::proposeMastering(healthy,c).valid,"empty expanded selection should not be applied");
  // Validate tonal estimates against rendered sine energy, independently of magnitude().
  for(double rate:{44100.,48000.,96000.,192000.}){
   c={};c.useLimiter=false;f.rate=rate;const auto proposal=masterlab::proposeMastering(f,c);

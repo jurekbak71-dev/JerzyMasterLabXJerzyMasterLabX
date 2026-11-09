@@ -12,21 +12,28 @@ inline juce::ValueTree validateState(const juce::ValueTree& candidate,
                                     juce::AudioProcessorValueTreeState& parameters,
                                     const juce::Array<juce::AudioProcessorParameter*>& expected) {
     const auto schema=candidate["schemaVersion"].toString();
-    const int sourceCount=schema=="1"?52:(schema=="2"?54:(schema=="3"?86:(schema=="4"?138:(schema=="5"?161:(schema=="6"?162:(schema=="7"?163:(schema=="8"?176:(schema=="9"?179:(schema=="10"?180:(schema=="11"?191:(schema=="12"?201:(schema=="13"?203:(schema=="14"?211:(schema=="15"?221:(schema=="16"?static_cast<int>(parameterCount):0)))))))))))))));
+    const int sourceCount=schema=="1"?52:(schema=="2"?54:(schema=="3"?86:(schema=="4"?138:(schema=="5"?161:(schema=="6"?162:(schema=="7"?163:(schema=="8"?176:(schema=="9"?179:(schema=="10"?180:(schema=="11"?191:(schema=="12"?201:(schema=="13"?203:(schema=="14"?211:(schema=="15"?221:(schema=="16"?226:(schema=="17"?247:(schema=="18"?248:(schema=="19"?static_cast<int>(parameterCount):0))))))))))))))))));
     if (!candidate.hasType("MasterLab") || sourceCount==0 || expected.size()!=static_cast<int>(parameterCount)
         || candidate["eqInstanceId"].toString() != "eq-0001"
         || candidate["limiterInstanceId"].toString() != "limiter-0001"
         || candidate.getNumChildren() != sourceCount) return {};
-    if((schema=="4"||schema=="5"||schema=="6"||schema=="7"||schema=="8"||schema=="9"||schema=="10"||schema=="11"||schema=="12"||schema=="13"||schema=="14"||schema=="15"||schema=="16")&&(candidate["dynamicEqInstanceId"].toString()!="dynamic-eq-0001"||candidate["dynamicsInstanceId"].toString()!="dynamics-0001"||candidate["stereoInstanceId"].toString()!="stereo-0001"))return {};
-    if((schema=="5"||schema=="6"||schema=="7"||schema=="8"||schema=="9"||schema=="10"||schema=="11"||schema=="12"||schema=="13"||schema=="14"||schema=="15"||schema=="16")&&candidate["stabilizerInstanceId"].toString()!="stabilizer-0001")return {};
+    if((schema=="4"||schema=="5"||schema=="6"||schema=="7"||schema=="8"||schema=="9"||schema=="10"||schema=="11"||schema=="12"||schema=="13"||schema=="14"||schema=="15"||schema=="16"||schema=="17"||schema=="18"||schema=="19")&&(candidate["dynamicEqInstanceId"].toString()!="dynamic-eq-0001"||candidate["dynamicsInstanceId"].toString()!="dynamics-0001"||candidate["stereoInstanceId"].toString()!="stereo-0001"))return {};
+    if((schema=="5"||schema=="6"||schema=="7"||schema=="8"||schema=="9"||schema=="10"||schema=="11"||schema=="12"||schema=="13"||schema=="14"||schema=="15"||schema=="16"||schema=="17"||schema=="18"||schema=="19")&&candidate["stabilizerInstanceId"].toString()!="stabilizer-0001")return {};
     std::set<juce::String> permitted,seen;
     for(int i=0;i<sourceCount;++i){auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(expected[i]);if(!parameter)return {};permitted.insert(parameter->paramID);}
     auto canonical = juce::ValueTree("MasterLab");
-    canonical.setProperty("schemaVersion", 16, nullptr);
+    canonical.setProperty("schemaVersion", 19, nullptr);
     canonical.setProperty("eqInstanceId", "eq-0001", nullptr);
     canonical.setProperty("limiterInstanceId", "limiter-0001", nullptr);
     canonical.setProperty("dynamicEqInstanceId", "dynamic-eq-0001", nullptr);canonical.setProperty("dynamicsInstanceId", "dynamics-0001", nullptr);canonical.setProperty("stereoInstanceId", "stereo-0001", nullptr);
     canonical.setProperty("stabilizerInstanceId","stabilizer-0001",nullptr);
+    // Optional local file association only: preserve project linkage to
+    // non-embedded stems. Never trust the path as a command or URL.
+    if(candidate.hasProperty("stemFolder")){
+        const auto folder=candidate["stemFolder"].toString();
+        if(folder.length()>0&&folder.length()<=1024&&
+           !folder.containsAnyOf("\r\n"))canonical.setProperty("stemFolder",folder,nullptr);
+    }
     for (const auto& child : candidate) {
         if (!child.hasType("PARAM") || child.getNumChildren() != 0
             || child.getNumProperties() != 2 || !child.hasProperty("id")

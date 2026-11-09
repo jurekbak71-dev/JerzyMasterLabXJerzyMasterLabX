@@ -12,6 +12,8 @@ struct BrainConfig {
  bool automaticModules=true;
  bool useStabilizer=true;
  bool useEq=true,useLimiter=true,existingEqEnabled=true,useStereo=true,useDynamics=true,useDynamicEq=true;int dynamicsMode=0;
+ // Additional existing post-chain DSP families, opt-in for compatibility.
+ bool useExciter=false,useAnalog=false,useBass=false,useTransient=false,useTruePeak=false;
  std::array<BrainBand,16> existingEq{};
  bool hasBaseline=false;std::array<float,parameterCount> baseline{};
 };
@@ -28,7 +30,10 @@ struct BrainProposal {
 inline constexpr std::array<const char*,9> brainGenres{"Rock","Punk","Post-Punk","Dark Wave","Electronic","Techno","Ambient","Pop","Acoustic"};
 inline constexpr std::array<const char*,4> brainStyles{"Transparent","Analog","Aggressive","Atmospheric"};
 inline BrainConfig cleanBrainConfig(BrainConfig c){
- c.genre=std::clamp(c.genre,0,8);c.style=std::clamp(c.style,0,3);if(c.seconds!=8&&c.seconds!=16&&c.seconds!=30&&c.seconds!=60)c.seconds=8;
+ c.genre=std::clamp(c.genre,0,8);c.style=std::clamp(c.style,0,3);
+ // Long-form sectional analysis, bounded to ten minutes of continuous DAW input.
+ if(c.seconds!=8&&c.seconds!=16&&c.seconds!=30&&c.seconds!=60&&
+    c.seconds!=120&&c.seconds!=180&&c.seconds!=300&&c.seconds!=600)c.seconds=8;
  c.targetLufs=std::clamp(clean(c.targetLufs),-24.f,-8.f);c.ceiling=std::clamp(clean(c.ceiling),-6.f,-.1f);c.intensity=std::clamp(clean(c.intensity),.25f,1.5f);return c;
 }
 inline void refineDetailedProposal(BrainProposal&,const BrainFeatures&,const BrainConfig&);
@@ -107,6 +112,43 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
   p.reasons.push_back("Dynamic EQ: up to 2 dB attenuation in broad regions with excess measured energy. This is not resonance detection; static EQ and Dynamic EQ may overlap. Listen and adjust.");
  }
  if(c.useStabilizer){add("stabilizerPresent",1);add("stabilizerOn",1);add("stabilizerMode",0);add("stabilizerProfile",c.genre==4||c.genre==5?1.f:(c.genre==8?2.f:0.f));add("stabilizerAmount",std::min(35.f,20*c.intensity));add("stabilizerSpeed",65);add("stabilizerSmoothing",70);add("stabilizerLow",70);add("stabilizerMid",100);add("stabilizerHigh",70);add("stabilizerTame",1);add("stabilizerDelta",0);p.reasons.push_back("Stabilizer: original adaptive octave-band EQ, conservative intensity and slow response. Three explicit profiles, no learned reference. Re-measure the complete output.");}
+ // Additional already implemented post-chain processors; these are not
+ // reorderable nodes of the legacy six-slot topology. They remain opt-in.
+ // Each proposed setting is bounded and fully reviewable via Brain Apply/Undo.
+ if(c.useExciter){
+  add("exciterPresent",1);add("exciterOn",1);
+  add("exciterAmountLow",0);add("exciterAmountMid",0);
+  add("exciterAmountHigh",.10f*c.intensity);add("exciterAmountAir",.07f*c.intensity);
+  add("exciterDrive",2.f*c.intensity);add("exciterMix",.35f);
+  p.reasons.push_back("Harmonic Exciter: conservative presence/air harmonics; review harshness and intermodulation after Apply.");
+ }
+ if(c.useAnalog){
+  add("analogPresent",1);add("analogOn",1);
+  add("analogDrive",2.f*c.intensity);add("analogDynamics",.10f);
+  add("analogMix",.35f);add("analogAutoGain",1);
+  p.reasons.push_back("Analog Color: gentle low-drive coloration, gain-compensated; subjective tone must be auditioned.");
+ }
+ if(c.useBass){
+  add("bassPresent",1);add("bassOn",1);
+  const bool bassDeficit=p.shares[0]+p.shares[1]<p.targetShares[0]+p.targetShares[1]-.08f;
+  add("bassSub",bassDeficit?.06f:0.f);add("bassBody",bassDeficit?.10f:0.f);
+  add("bassHarmonics",.10f*c.intensity);add("bassMono",.8f);
+  p.reasons.push_back("Bass Architect: bounded sub/body only if measured low-frequency energy is deficient; verify mono and kick interaction.");
+ }
+ if(c.useTransient){
+  add("transientPresent",1);add("transientOn",1);
+  const float crest=20.f*std::log10(f.peak/std::max(1.e-9f,f.rms));
+  const float accent=crest<10.f?.10f*c.intensity:.04f*c.intensity;
+  add("transientAttackLow",accent);add("transientAttackMid",accent);
+  add("transientAttackHigh",accent*.5f);add("transientMix",.6f);
+  p.reasons.push_back("Transient Sculptor: modest attack adjustment based on measured crest factor; avoid restoring peaks already clipped.");
+ }
+ if(c.useTruePeak){
+  add("truePeakPresent",1);add("truePeakOn",1);
+  add("truePeakCeiling",c.ceiling);add("truePeakDrive",0);
+  add("truePeakRelease",120);
+  p.reasons.push_back("Final True-Peak module: conservative ceiling without extra drive; check oversampled meter and actual exported peak.");
+ }
  // Select only processors justified by the measured fragment. Excluded families
  // remain untouched. Every decision is reviewable before Apply.
  if(c.automaticModules){
@@ -125,7 +167,42 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
  // Only change the full topology when all families are under Brain control.
  if(c.useEq&&c.useLimiter&&c.useStereo&&c.useDynamics&&c.useDynamicEq&&c.useStabilizer){add("chainOrder",0);p.reasons.push_back("Proposed order: Stabilizer, Dynamic EQ, Dynamics, Imager, EQ, Limiter; absent modules are skipped. Limiter is last. One instance per family is currently supported.");}
  refineDetailedProposal(p,f,c);
- p.valid=(c.useEq||c.useLimiter||c.useStereo||c.useDynamics||c.useDynamicEq||c.useStabilizer);return p;
+ // Sectional whole-track diagnostics from every captured 3-second window.
+ if(f.detail.sectionLevelsDb.size()>1){
+  const auto& levels=f.detail.sectionLevelsDb;
+  float loudest=*std::max_element(levels.begin(),levels.end());
+  float quietest=*std::min_element(levels.begin(),levels.end());
+  int peakSection=static_cast<int>(std::max_element(levels.begin(),levels.end())-levels.begin());
+  int lowSection=static_cast<int>(std::min_element(levels.begin(),levels.end())-levels.begin());
+  p.reasons.push_back("Whole capture: "+std::to_string(levels.size())+
+    " consecutive ~3-second sections; loudest section near "+std::to_string(peakSection*3)+
+    "s ("+std::to_string(loudest)+" dB), quietest near "+std::to_string(lowSection*3)+
+    "s ("+std::to_string(quietest)+" dB).");
+  if(loudest-quietest>12.f)p.warnings.push_back(
+   "Large section-to-section level contrast (>12 dB): review quiet and loud parts before applying one master.");
+  if(f.detail.sectionJumpDb>9.f)p.warnings.push_back(
+   "Abrupt level transition between adjacent sections: review arrangements and limiter pumping.");
+ }
+ if(f.detail.windowSpreadDb<2.f&&f.peak>0.2f)p.warnings.push_back(
+  "Low short-window dynamic contrast: potential overcompression, verify perceived punch.");
+ if(f.correlation<-.15f)p.warnings.push_back(
+  "Strong negative stereo correlation: check phase and mono fold-down.");
+ // Quantitative comparison to authored genre tonal reference (not a copied song).
+ constexpr std::array<const char*,5> referenceBands{"sub 20-80 Hz","bass 80-250 Hz",
+                                      "mids 250 Hz-2 kHz","presence 2-6 kHz","air 6-20 kHz"};
+ p.reasons.push_back(std::string("GENRE REFERENCE: ")+brainGenres[c.genre]+
+  " tonal distribution from five authored octave-normalized weightings (not external copyrighted audio).");
+ for(size_t region=0;region<5;++region){
+  if(p.targetShares[region]<1e-5f)continue;
+  const float delta=10.f*std::log10(std::max(1e-5f,p.shares[region])/
+                                   std::max(1e-5f,p.targetShares[region]));
+  p.reasons.push_back(std::string(referenceBands[region])+": "+
+                      std::to_string(delta)+" dB relative to genre target.");
+  if(std::abs(delta)>6.f)
+   p.warnings.push_back(std::string("Large genre-reference deviation in ")+
+      referenceBands[region]+"; check whether this is an intentional arrangement or a mix issue.");
+ }
+ p.valid=(c.useEq||c.useLimiter||c.useStereo||c.useDynamics||c.useDynamicEq||c.useStabilizer||c.useExciter||c.useAnalog||c.useBass||c.useTransient||c.useTruePeak);return p;
 }
 }
 

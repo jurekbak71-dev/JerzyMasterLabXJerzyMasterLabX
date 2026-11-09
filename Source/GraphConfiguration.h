@@ -14,6 +14,10 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
   TransientSculptorSettings t;t.enabled=v(211)>.5f&&v(212)>.5f;for(size_t k=0;k<3;++k){t.attack[k]=v(213+k);t.sustain[k]=v(216+k);}t.mix=v(219);t.outputDb=v(220);engine.transientSculptorSettings(t);
   FinalTruePeakSettings tp;tp.enabled=v(221)>.5f&&v(222)>.5f;tp.ceilingDb=v(223);tp.releaseMs=v(224);tp.driveDb=v(225);engine.finalTruePeakSettings(tp);
   engine.routing(static_cast<int>(v(138)),v(6)>.5f);
+  FullModuleOrder full{};
+  for(size_t slot=0;slot<full.size();++slot)
+   full[slot]=std::clamp(static_cast<int>(v(249+slot)),0,10);
+  engine.extendedRouting(v(248)>.5f,full);
 }
 template<class Getter> void configureGraph(SerialGraph& engine,Getter v) noexcept {
  configureModules(engine,v);engine.limiterParameters(v(52),v(53));
