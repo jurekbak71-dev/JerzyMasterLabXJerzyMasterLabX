@@ -19,7 +19,7 @@ jobs:
           $py = python -c "import sys; print(sys.executable)"
           cmake -S . -B build -A x64 "-DPython3_EXECUTABLE=$py"
       - name: Build Release
-        run: cmake --build build --config Release --parallel 2
+        run: cmake --build build --config Release --parallel 1
       - name: DSP tests
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Measure live callback boundary (no neural model)
