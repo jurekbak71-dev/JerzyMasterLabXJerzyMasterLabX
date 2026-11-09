@@ -131,6 +131,23 @@ static void finiteFallbackAtExtremeAmplitude() {
   if(i<2){SeparatedLiveFrame out{};out.position=in.position;out.epoch=in.epoch;out.channels[0]=out.channels[1]=maximum/4;CHECK(e.pushOutput(out));}
  }
 }
+// Regression: do not count model output as delivered WET when subtracting
+// the delayed dry sample overflows float and it must be rejected.
+static void invalidWetCorrectionDoesNotCountAsDelivered() {
+ LiveStemEngine e;CHECK(e.prepare(48000,1,2));
+ const float max=std::numeric_limits<float>::max();
+ float l=max,r=max;
+ e.process(&l,&r,1,{0,true,false,true});
+ StereoLiveFrame input{};CHECK(e.popInput(input));
+ SeparatedLiveFrame output{};
+ output.epoch=input.epoch;output.position=input.position;
+ output.channels[0]=-max;output.channels[1]=-max;
+ CHECK(e.pushOutput(output));
+ l=r=max;
+ e.process(&l,&r,1,{1,true,false,true});
+ CHECK(std::isfinite(l)&&std::isfinite(r));
+ CHECK(e.statistics().deliveredWetFrames==0);
+}
 static void impossibleFutureDoesNotHideValidOutput() {
  LiveStemEngine e;CHECK(e.prepare(48000,1,1));
  float l=.25f,r=.25f;e.process(&l,&r,1,{0,true,false,true});
@@ -200,4 +217,4 @@ static void negativePrerollContinuity(){
  CHECK(e.popInput(second));
  CHECK(first.epoch==second.epoch);
 }
-int main(){negativePrerollContinuity();variableBlocksAndMono();transportAndStaleResults();alignedOutputAndStarvation();silenceInvalidAndBoundedQueues();noCallbackAllocationsAndReset();recoveryDuringFade();concurrentWorkerAcrossSeeks();finiteFallbackAtExtremeAmplitude();impossibleFutureDoesNotHideValidOutput();independentStemMixerControls();std::cout<<"LiveStemEngineTests OK\n";}
+int main(){invalidWetCorrectionDoesNotCountAsDelivered();negativePrerollContinuity();variableBlocksAndMono();transportAndStaleResults();alignedOutputAndStarvation();silenceInvalidAndBoundedQueues();noCallbackAllocationsAndReset();recoveryDuringFade();concurrentWorkerAcrossSeeks();finiteFallbackAtExtremeAmplitude();impossibleFutureDoesNotHideValidOutput();independentStemMixerControls();std::cout<<"LiveStemEngineTests OK\n";}
