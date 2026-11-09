@@ -41,6 +41,21 @@ int main(){
   check(10*std::log10(out/in)<-7&&eq.read()[0]<-8,"dynamic EQ detector or reduction not working");
   e.bands[0].range=6;eq.settings(e);eq.reset();in=out=0;for(int block=0;block<300;++block){for(int i=0;i<257;++i)l[i]=r[i]=.2f*std::sin(6.283185307179586*1000*(block*257+i)/sr);auto before=l;eq.process(l.data(),r.data(),257);if(block>150)for(int i=0;i<257;++i){in+=before[i]*before[i];out+=l[i]*l[i];}}check(10*std::log10(out/in)>5,"positive Dynamic EQ range does not boost");
   e.enabled=false;eq.settings(e);for(int i=0;i<400;++i){l.fill(.01f);r=l;eq.process(l.data(),r.data(),257);}check(std::abs(l.back()-.01f)<1e-6,"dynamic EQ bypass not transparent");
+  // All eight bands are genuine filters: the appended eighth band alone
+  // must change the 11 kHz tone, regardless of 1/257-sample host partitioning.
+  masterlab::DynamicEqSettings eight;eight.enabled=true;
+  for(auto& band:eight.bands)band.enabled=false;
+  eight.bands[7]={11000.f,0.f,2.f,-42.f,-9.f,2.f,80.f,true};
+  masterlab::DynamicEqualizer eq8;eq8.settings(eight);eq8.prepare(sr);
+  double eighthIn=0,eighthOut=0;
+  for(int block=0;block<300;++block){
+   for(int i=0;i<257;++i)l[i]=r[i]=.25f*std::sin(6.283185307179586*11000*(block*257+i)/sr);
+   auto before=l;audit=true;eq8.process(l.data(),r.data(),257);audit=false;
+   if(block>150)for(int i=0;i<257;++i){eighthIn+=before[i]*before[i];eighthOut+=l[i]*l[i];}
+  }
+  check(eighthOut<eighthIn*.8&&eq8.read()[7]<-.1f,"eighth Dynamic EQ band not processing audio");
+  for(size_t i=0;i<7;++i)check(std::abs(eq8.read()[i])<1e-6f,"disabled Dynamic EQ band reports gain reduction");
+
  }
  check(allocations==0,"new DSP allocates in audio processing");
  std::cout<<"Passed: stereo unity/mono sum/mono preview, downward and upward compression, silence protection, dynamic EQ reduction/bypass and no callback allocation at four sample rates\n";
