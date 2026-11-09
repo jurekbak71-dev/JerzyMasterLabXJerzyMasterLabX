@@ -16,8 +16,8 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
   engine.routing(static_cast<int>(v(138)),v(6)>.5f);
   FullModuleOrder full{};
   for(size_t slot=0;slot<full.size();++slot)
-   full[slot]=std::clamp(static_cast<int>(v(249+slot)),0,10);
-  engine.extendedRouting(v(248)>.5f,full);
+   full[slot]=std::clamp(static_cast<int>(v(227+slot)),0,10);
+  engine.extendedRouting(v(226)>.5f,full);
 }
 template<class Getter> void configureGraph(SerialGraph& engine,Getter v) noexcept {
  configureModules(engine,v);engine.limiterParameters(v(52),v(53));
