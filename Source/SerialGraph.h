@@ -170,9 +170,9 @@ public:
  void copyBandBlends(std::array<float,16>& out)const noexcept{banks[active].engine.copyBandBlends(out);}
  StereoReading stereoRead()const noexcept{return banks[active].stereo.read();}
  DynamicsReading dynamicsRead()const noexcept{return banks[active].dynamics.read();}
- std::array<float,3> dynamicRead()const noexcept{return banks[active].dynamicEq.read();}
- std::array<float,3> dynamicBlends()const noexcept{return banks[active].dynamicEq.bandBlends();}
- void dynamicCoefficients(std::array<Biquad,3>& out)const noexcept{banks[active].dynamicEq.coefficients(out);}
+ std::array<float,dynamicEqBandCount> dynamicRead()const noexcept{return banks[active].dynamicEq.read();}
+ std::array<float,dynamicEqBandCount> dynamicBlends()const noexcept{return banks[active].dynamicEq.bandBlends();}
+ void dynamicCoefficients(std::array<Biquad,dynamicEqBandCount>& out)const noexcept{banks[active].dynamicEq.coefficients(out);}
  ParallelReading parallelRead()const noexcept{return banks[active].parallelRead();}
 };
 }
