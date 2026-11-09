@@ -176,4 +176,28 @@ static void independentStemMixerControls(){
  controls.width[0]=0.f; // midside centre remains unchanged for mono
  CHECK(std::abs(runFourStemMixer(controls)-1.f)<.005f);
 }
-int main(){variableBlocksAndMono();transportAndStaleResults();alignedOutputAndStarvation();silenceInvalidAndBoundedQueues();noCallbackAllocationsAndReset();recoveryDuringFade();concurrentWorkerAcrossSeeks();finiteFallbackAtExtremeAmplitude();impossibleFutureDoesNotHideValidOutput();independentStemMixerControls();std::cout<<"LiveStemEngineTests OK\n";}
+// Regression: negative DAW preroll must not be mistaken for a seek after
+// contiguous blocks. The previous unsigned conversion wrapped on negatives.
+static void negativePrerollContinuity(){
+ LiveStemEngine e;CHECK(e.prepare(48000,1,1));
+ float l=.25f,r=.25f;
+ e.process(&l,&r,1,{-2,true,false,true});
+ StereoLiveFrame first{};CHECK(e.popInput(first));
+ l=r=.25f;e.process(&l,&r,1,{-1,true,false,true});
+ StereoLiveFrame second{};CHECK(e.popInput(second));
+ CHECK(first.epoch==second.epoch);
+ CHECK(second.position==first.position+1);
+ l=r=.25f;e.process(&l,&r,1,{0,true,false,true});
+ StereoLiveFrame third{};CHECK(e.popInput(third));
+ CHECK(second.epoch==third.epoch);
+ CHECK(third.position==second.position+1);
+ // Also exercise the minimum representable host position without signed overflow.
+ e.reset();l=r=.25f;
+ e.process(&l,&r,1,{std::numeric_limits<std::int64_t>::min(),true,false,true});
+ CHECK(e.popInput(first));
+ l=r=.25f;
+ e.process(&l,&r,1,{std::numeric_limits<std::int64_t>::min()+1,true,false,true});
+ CHECK(e.popInput(second));
+ CHECK(first.epoch==second.epoch);
+}
+int main(){negativePrerollContinuity();variableBlocksAndMono();transportAndStaleResults();alignedOutputAndStarvation();silenceInvalidAndBoundedQueues();noCallbackAllocationsAndReset();recoveryDuringFade();concurrentWorkerAcrossSeeks();finiteFallbackAtExtremeAmplitude();impossibleFutureDoesNotHideValidOutput();independentStemMixerControls();std::cout<<"LiveStemEngineTests OK\n";}
