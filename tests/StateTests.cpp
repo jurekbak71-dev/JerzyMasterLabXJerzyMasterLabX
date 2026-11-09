@@ -49,7 +49,7 @@ int main(){
  juce::MemoryBlock oversized(1024*1024+1,true);target->setStateInformation(oversized.getData(),static_cast<int>(oversized.getSize()));
  if(!unchanged()){std::cerr<<"invalid binary changed settings";return 1;}
  juce::MemoryBlock after;target->getStateInformation(after);auto afterXml=juce::AudioProcessor::getXmlFromBinary(after.getData(),static_cast<int>(after.getSize()));
- if(!afterXml||afterXml->getStringAttribute("schemaVersion")!="23"){std::cerr<<"schema lost";return 1;}
+ if(!afterXml||afterXml->getStringAttribute("schemaVersion")!="24"){std::cerr<<"schema lost";return 1;}
  // Removed STEMS parameters must not be exposed by the current VST3.
  for(auto* parameter:target->getParameters()){
   auto* ranged=dynamic_cast<juce::RangedAudioParameter*>(parameter);
