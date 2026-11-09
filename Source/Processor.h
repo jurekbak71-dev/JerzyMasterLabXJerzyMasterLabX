@@ -31,7 +31,7 @@ public:
  size_t hostDryPosition=0;float hostBypassMix=0,hostBypassStep=1.f/960.f;bool hostBypassTarget=false;
  std::array<std::atomic<float>*,masterlab::parameterCount> parameters{};
  juce::AbstractFifo fifo{8192};std::array<float,8192> traceL{},traceR{};
- struct ResponseFrame {std::array<masterlab::Biquad,16> bands;std::array<float,16> blends{};double rate=48000;std::array<float,12> stabilizerGain{};std::array<masterlab::Biquad,12> stabilizerBands{};float stabilizerMix=0;float eqMix=1;masterlab::StereoReading stereo;masterlab::DynamicsReading dynamics;masterlab::ParallelReading parallel;masterlab::HarmonicExciterReading exciter;masterlab::AnalogColorReading analog;masterlab::BassArchitectReading bass;masterlab::TransientSculptorReading transient;masterlab::FinalTruePeakReading truePeak;std::array<float,3> dynamicGain{},dynamicBlends{};std::array<masterlab::Biquad,3> dynamicBands{};masterlab::MeterReading inputReading,outputReading;masterlab::LoudnessReading inputLufs,outputLufs;};
+ struct ResponseFrame {std::array<masterlab::Biquad,16> bands;std::array<float,16> blends{};double rate=48000;std::array<float,12> stabilizerGain{};std::array<masterlab::Biquad,12> stabilizerBands{};float stabilizerMix=0;float eqMix=1;masterlab::StereoReading stereo;masterlab::DynamicsReading dynamics;masterlab::ParallelReading parallel;masterlab::HarmonicExciterReading exciter;masterlab::AnalogColorReading analog;masterlab::BassArchitectReading bass;masterlab::TransientSculptorReading transient;masterlab::FinalTruePeakReading truePeak;std::array<float,masterlab::dynamicEqBandCount> dynamicGain{},dynamicBlends{};std::array<masterlab::Biquad,masterlab::dynamicEqBandCount> dynamicBands{};masterlab::MeterReading inputReading,outputReading;masterlab::LoudnessReading inputLufs,outputLufs;};
  juce::AbstractFifo responseFifo{4};std::array<ResponseFrame,4> responses{};
  std::atomic<double> displayRate{48000};
  std::atomic<float> peak{0},rms{0},correlation{0};
@@ -57,6 +57,17 @@ public:
  for(int slot=0;slot<11;++slot)
   p.add(std::make_unique<juce::AudioParameterInt>("fullRouteSlot"+juce::String(slot+1),
        "Full route slot "+juce::String(slot+1),0,10,masterlab::defaultFullOrder[static_cast<size_t>(slot)]));
+ for(int i=4;i<=8;++i){auto suffix=juce::String(i);auto title="Dynamic EQ "+suffix+" ";
+  const float hz=std::array<float,5>{100.f,400.f,1200.f,4500.f,11000.f}[i-4];
+  p.add(std::make_unique<juce::AudioParameterFloat>("deqFreq"+suffix,title+"frequency",juce::NormalisableRange<float>(20,20000,1,.3f),hz));
+  p.add(std::make_unique<juce::AudioParameterFloat>("deqGain"+suffix,title+"static gain",-12.f,12.f,0.f));
+  p.add(std::make_unique<juce::AudioParameterFloat>("deqQ"+suffix,title+"Q",.2f,6.f,1.f));
+  p.add(std::make_unique<juce::AudioParameterFloat>("deqThreshold"+suffix,title+"threshold",-60.f,0.f,-24.f));
+  p.add(std::make_unique<juce::AudioParameterFloat>("deqRange"+suffix,title+"dynamic range",-12.f,12.f,0.f));
+  p.add(std::make_unique<juce::AudioParameterFloat>("deqAttack"+suffix,title+"attack",.1f,100.f,15.f));
+  p.add(std::make_unique<juce::AudioParameterFloat>("deqRelease"+suffix,title+"release",10.f,1000.f,160.f));
+  p.add(std::make_unique<juce::AudioParameterBool>("deqBandOn"+suffix,title+"enabled",false));
+ }
  return p;}
  static void addModuleParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
   auto boolean=[&](const char* id,const char* name,bool initial){p.add(std::make_unique<juce::AudioParameterBool>(id,name,initial));};
@@ -115,7 +126,7 @@ public:
  void updateModules(){
   masterlab::configureModules(engine,[&](size_t i){return parameters[i]->load();});
  }
- Processor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,&undoManager,"MasterLab",layout()){state.state.setProperty("schemaVersion",20,nullptr);state.state.setProperty("eqInstanceId","eq-0001",nullptr);state.state.setProperty("limiterInstanceId","limiter-0001",nullptr);state.state.setProperty("dynamicEqInstanceId","dynamic-eq-0001",nullptr);state.state.setProperty("dynamicsInstanceId","dynamics-0001",nullptr);state.state.setProperty("stereoInstanceId","stereo-0001",nullptr);state.state.setProperty("stabilizerInstanceId","stabilizer-0001",nullptr);const char* ids[]={"frequency","gain","q","ceiling","eq","lim","order"};for(size_t i=0;i<7;++i)parameters[i]=state.getRawParameterValue(ids[i]);for(int k=2;k<=16;++k){int offset=7+(k-2)*3;const auto suffix=juce::String(k);parameters[offset]=state.getRawParameterValue("frequency"+suffix);parameters[offset+1]=state.getRawParameterValue("gain"+suffix);parameters[offset+2]=state.getRawParameterValue("q"+suffix);}
+ Processor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,&undoManager,"MasterLab",layout()){state.state.setProperty("schemaVersion",21,nullptr);state.state.setProperty("eqInstanceId","eq-0001",nullptr);state.state.setProperty("limiterInstanceId","limiter-0001",nullptr);state.state.setProperty("dynamicEqInstanceId","dynamic-eq-0001",nullptr);state.state.setProperty("dynamicsInstanceId","dynamics-0001",nullptr);state.state.setProperty("stereoInstanceId","stereo-0001",nullptr);state.state.setProperty("stabilizerInstanceId","stabilizer-0001",nullptr);const char* ids[]={"frequency","gain","q","ceiling","eq","lim","order"};for(size_t i=0;i<7;++i)parameters[i]=state.getRawParameterValue(ids[i]);for(int k=2;k<=16;++k){int offset=7+(k-2)*3;const auto suffix=juce::String(k);parameters[offset]=state.getRawParameterValue("frequency"+suffix);parameters[offset+1]=state.getRawParameterValue("gain"+suffix);parameters[offset+2]=state.getRawParameterValue("q"+suffix);}
  parameters[52]=state.getRawParameterValue("limiterDrive");parameters[53]=state.getRawParameterValue("limiterRelease");
  for(int k=1;k<=16;++k){parameters[54+(k-1)*2]=state.getRawParameterValue("bandType"+juce::String(k));parameters[55+(k-1)*2]=state.getRawParameterValue("bandEnabled"+juce::String(k));}
  for(size_t i=0;i<masterlab::moduleParameterIds.size();++i)parameters[86+i]=state.getRawParameterValue(masterlab::moduleParameterIds[i]);
