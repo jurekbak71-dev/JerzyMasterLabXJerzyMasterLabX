@@ -108,7 +108,20 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
  }
  if(c.useDynamicEq){
   add("dynamicEqPresent",1);add("dynamicEqOn",1);
-  for(size_t band=0;band<3;++band){auto id=std::to_string(band+1);const size_t region=std::array<size_t,3>{1,3,4}[band];add("deqFreq"+id,std::array<float,3>{180,3500,7500}[band]);add("deqGain"+id,0);add("deqQ"+id,1);add("deqThreshold"+id,std::clamp(20*std::log10(std::max(1e-9f,f.rms))-6,-48.f,-12.f));add("deqRange"+id,p.shares[region]>p.targetShares[region]*1.4f?-2.f:0.f);add("deqAttack"+id,15);add("deqRelease"+id,160);add("deqBandOn"+id,1);}
+  constexpr std::array<float,8> centres{180.f,3500.f,7500.f,80.f,400.f,1200.f,4800.f,12000.f};
+  constexpr std::array<size_t,8> regions{1,3,4,0,1,2,3,4};
+  for(size_t band=0;band<8;++band){
+   const auto id=std::to_string(band+1);
+   const size_t region=regions[band];
+   const bool excessive=p.shares[region]>p.targetShares[region]*1.4f;
+   // Three established bands remain available. New narrower bands require
+   // measurable energy imbalance and explicit proposal review.
+   const bool on=band<3||(excessive&&c.intensity>=1.f);
+   add("deqFreq"+id,centres[band]);add("deqGain"+id,0);add("deqQ"+id,band<3?1.f:1.25f);
+   add("deqThreshold"+id,std::clamp(20*std::log10(std::max(1e-9f,f.rms))-6,-48.f,-12.f));
+   add("deqRange"+id,excessive?(band<3?-2.f:-1.5f):0.f);
+   add("deqAttack"+id,15);add("deqRelease"+id,160);add("deqBandOn"+id,on?1.f:0.f);
+  }
   p.reasons.push_back("Dynamic EQ: up to 2 dB attenuation in broad regions with excess measured energy. This is not resonance detection; static EQ and Dynamic EQ may overlap. Listen and adjust.");
  }
  if(c.useStabilizer){add("stabilizerPresent",1);add("stabilizerOn",1);add("stabilizerMode",0);add("stabilizerProfile",c.genre==4||c.genre==5?1.f:(c.genre==8?2.f:0.f));add("stabilizerAmount",std::min(35.f,20*c.intensity));add("stabilizerSpeed",65);add("stabilizerSmoothing",70);add("stabilizerLow",70);add("stabilizerMid",100);add("stabilizerHigh",70);add("stabilizerTame",1);add("stabilizerDelta",0);p.reasons.push_back("Stabilizer: original adaptive octave-band EQ, conservative intensity and slow response. Three explicit profiles, no learned reference. Re-measure the complete output.");}
