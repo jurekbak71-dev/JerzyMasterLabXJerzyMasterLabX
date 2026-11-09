@@ -141,6 +141,7 @@ public:
     void updateInputSpectrum(const std::array<float,256>& bins){inputSpectrum_=bins;haveInputSpectrum_=true;repaint();}
     void updateEqCurve(const std::array<float,256>& curve){eqCurveDb_=curve;haveEqCurve_=true;repaint();}
     bool hasMeasuredSpectrum() const noexcept{return haveSpectrum_;}
+    bool hasMeasuredInputSpectrum() const noexcept{return haveInputSpectrum_;}
     int connectedControlCount() const noexcept{return static_cast<int>(controls_.size());}
     void resized()override{
         differenceButton_.setBounds(getWidth()-269,static_cast<int>(getHeight()*.305f+35.f),90,22);
