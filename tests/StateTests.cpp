@@ -49,21 +49,12 @@ int main(){
  juce::MemoryBlock oversized(1024*1024+1,true);target->setStateInformation(oversized.getData(),static_cast<int>(oversized.getSize()));
  if(!unchanged()){std::cerr<<"invalid binary changed settings";return 1;}
  juce::MemoryBlock after;target->getStateInformation(after);auto afterXml=juce::AudioProcessor::getXmlFromBinary(after.getData(),static_cast<int>(after.getSize()));
- if(!afterXml||afterXml->getStringAttribute("schemaVersion")!="19"){std::cerr<<"schema lost";return 1;}
- // Upgrade both previous versions; newly introduced parameters use factory defaults.
- for(int version:{1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18}){
-  int count=version==1?52:(version==2?54:(version==3?86:(version==4?138:(version==5?161:(version==6?162:(version==7?163:(version==8?176:(version==9?179:(version==10?180:(version==11?191:(version==12?201:(version==13?203:(version==14?211:221)))))))))))));
-  if(version==16)count=226;
-  if(version==17)count=247;
-  if(version==18)count=248; // prior LIVE release, before the full 11-module router
-  auto legacy=original.createCopy();legacy.setProperty("schemaVersion",version,nullptr);
-  for(int i=count;i<source->getParameters().size();++i){auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(source->getParameters()[i]);legacy.removeChild(legacy.getChildWithProperty("id",parameter->paramID),nullptr);}
-  std::unique_ptr<juce::AudioProcessor> migrated(createPluginFilter());
-  for(int i=count;i<migrated->getParameters().size();++i){auto* parameter=migrated->getParameters()[i];parameter->setValueNotifyingHost(parameter->isDiscrete()?(parameter->getDefaultValue()>.5f?0.f:1.f):.4f);}
-  juce::MemoryBlock oldState;juce::AudioProcessor::copyXmlToBinary(*legacy.createXml(),oldState);
-  migrated->setStateInformation(oldState.getData(),static_cast<int>(oldState.getSize()));
-  for(int i=0;i<count;++i)if(migrated->getParameters()[i]->getValue()!=source->getParameters()[i]->getValue()){std::cerr<<"legacy parameter changed";return 1;}
-  for(int i=count;i<migrated->getParameters().size();++i)if(migrated->getParameters()[i]->getValue()!=migrated->getParameters()[i]->getDefaultValue()){std::cerr<<"legacy defaults incorrect version "<<version<<" index "<<i<<" got "<<migrated->getParameters()[i]->getValue()<<" expected "<<migrated->getParameters()[i]->getDefaultValue();return 1;}
+ if(!afterXml||afterXml->getStringAttribute("schemaVersion")!="20"){std::cerr<<"schema lost";return 1;}
+ // Removed STEMS parameters must not be exposed by the current VST3.
+ for(auto* parameter:target->getParameters()){
+  auto* ranged=dynamic_cast<juce::RangedAudioParameter*>(parameter);
+  if(!ranged)return 1;
+  if(ranged->paramID.startsWithIgnoreCase("stem")){std::cerr<<"STEMS parameter retained";return 1;}
  }
  juce::MidiBuffer midi;
  for(double rate:{44100.,48000.,96000.,192000.}){
