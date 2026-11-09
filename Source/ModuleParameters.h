@@ -4,7 +4,7 @@
 #include <string>
 namespace masterlab {
 // Current host parameter table without the removed LIVE/OFFLINE STEMS module.
-inline constexpr size_t parameterCount=302;
+inline constexpr size_t parameterCount=304;
 inline constexpr std::array<const char*,140> moduleParameterIds{
  "eqPresent","limPresent","stereoPresent","stereoOn","stereoLowWidth","stereoMidWidth","stereoHighWidth","stereoLowSplit","stereoHighSplit","stereoMonoBass","stereoMono","stereoBalance",
  "dynamicsPresent","dynamicsOn","dynamicsMode","dynThreshold","dynRatio","dynAttack","dynRelease","dynKnee","dynMakeup","dynMix","upwardAmount","upwardThreshold",
@@ -26,6 +26,8 @@ inline std::string parameterId(size_t i){
  if(i<278){constexpr std::array<const char*,8> fields{"deqFreq","deqGain","deqQ","deqThreshold","deqRange","deqAttack","deqRelease","deqBandOn"};return std::string(fields[(i-238)%8])+std::to_string(4+(i-238)/8);}
  if(i<286){constexpr std::array<const char*,8> names{"analogizerOn","analogizerMode","analogizerDrive","analogizerWarmth","analogizerDeFizz","analogizerMix","analogizerOutput","analogizerPresent"};return names[i-278];}
  if(i<302){constexpr std::array<const char*,16> names{"restorationPresent","restorationOn","restoreHiss","restoreHum","restoreClick","restoreClip","restoreLearn","restoreFreeze","restoreDelta","restoreABDry","restoreHumHz","restoreThreshold","restoreReduction","restoreQuality","restoreProtect","restoreMix"};return names[i-286];}
+ if(i==302)return "workMode";
+ if(i==303)return "insertBlend";
  return "unknown";
 
 }
