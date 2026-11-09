@@ -1,4 +1,5 @@
 #include "GraphConfiguration.h"
+#include "Analogizer.h"
 #pragma once
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <juce_dsp/juce_dsp.h>
@@ -19,6 +20,7 @@ public:
  int brainAuditionVariant=-1;
  juce::String brainActionMessage{"No Brain proposal applied yet."};
  masterlab::SerialGraph engine;
+ masterlab::Analogizer analogizer;
  masterlab::LimiterMeter limiterMeter;
  masterlab::WindowMeter inputMeter,outputMeter;
  masterlab::LoudnessMeter inputLoudness,outputLoudness;
@@ -68,6 +70,14 @@ public:
   p.add(std::make_unique<juce::AudioParameterFloat>("deqRelease"+suffix,title+"release",10.f,1000.f,160.f));
   p.add(std::make_unique<juce::AudioParameterBool>("deqBandOn"+suffix,title+"enabled",false));
  }
+ p.add(std::make_unique<juce::AudioParameterBool>("analogizerOn","Analogizer enabled",true));
+ p.add(std::make_unique<juce::AudioParameterChoice>("analogizerMode","Analogizer model",juce::StringArray{"Tube","Transistor","Tape"},0));
+ p.add(std::make_unique<juce::AudioParameterFloat>("analogizerDrive","Analogizer drive dB",0.f,18.f,0.f));
+ p.add(std::make_unique<juce::AudioParameterFloat>("analogizerWarmth","Analogizer warmth",0.f,1.f,0.f));
+ p.add(std::make_unique<juce::AudioParameterFloat>("analogizerDeFizz","Analogizer de-fizz",0.f,1.f,0.f));
+ p.add(std::make_unique<juce::AudioParameterFloat>("analogizerMix","Analogizer mix",0.f,1.f,1.f));
+ p.add(std::make_unique<juce::AudioParameterFloat>("analogizerOutput","Analogizer output dB",-12.f,12.f,0.f));
+ p.add(std::make_unique<juce::AudioParameterBool>("analogizerPresent","Analogizer in chain",false));
  return p;}
  static void addModuleParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
   auto boolean=[&](const char* id,const char* name,bool initial){p.add(std::make_unique<juce::AudioParameterBool>(id,name,initial));};
@@ -126,7 +136,7 @@ public:
  void updateModules(){
   masterlab::configureModules(engine,[&](size_t i){return parameters[i]->load();});
  }
- Processor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,&undoManager,"MasterLab",layout()){state.state.setProperty("schemaVersion",21,nullptr);state.state.setProperty("eqInstanceId","eq-0001",nullptr);state.state.setProperty("limiterInstanceId","limiter-0001",nullptr);state.state.setProperty("dynamicEqInstanceId","dynamic-eq-0001",nullptr);state.state.setProperty("dynamicsInstanceId","dynamics-0001",nullptr);state.state.setProperty("stereoInstanceId","stereo-0001",nullptr);state.state.setProperty("stabilizerInstanceId","stabilizer-0001",nullptr);const char* ids[]={"frequency","gain","q","ceiling","eq","lim","order"};for(size_t i=0;i<7;++i)parameters[i]=state.getRawParameterValue(ids[i]);for(int k=2;k<=16;++k){int offset=7+(k-2)*3;const auto suffix=juce::String(k);parameters[offset]=state.getRawParameterValue("frequency"+suffix);parameters[offset+1]=state.getRawParameterValue("gain"+suffix);parameters[offset+2]=state.getRawParameterValue("q"+suffix);}
+ Processor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,&undoManager,"MasterLab",layout()){state.state.setProperty("schemaVersion",22,nullptr);state.state.setProperty("eqInstanceId","eq-0001",nullptr);state.state.setProperty("limiterInstanceId","limiter-0001",nullptr);state.state.setProperty("dynamicEqInstanceId","dynamic-eq-0001",nullptr);state.state.setProperty("dynamicsInstanceId","dynamics-0001",nullptr);state.state.setProperty("stereoInstanceId","stereo-0001",nullptr);state.state.setProperty("stabilizerInstanceId","stabilizer-0001",nullptr);const char* ids[]={"frequency","gain","q","ceiling","eq","lim","order"};for(size_t i=0;i<7;++i)parameters[i]=state.getRawParameterValue(ids[i]);for(int k=2;k<=16;++k){int offset=7+(k-2)*3;const auto suffix=juce::String(k);parameters[offset]=state.getRawParameterValue("frequency"+suffix);parameters[offset+1]=state.getRawParameterValue("gain"+suffix);parameters[offset+2]=state.getRawParameterValue("q"+suffix);}
  parameters[52]=state.getRawParameterValue("limiterDrive");parameters[53]=state.getRawParameterValue("limiterRelease");
  for(int k=1;k<=16;++k){parameters[54+(k-1)*2]=state.getRawParameterValue("bandType"+juce::String(k));parameters[55+(k-1)*2]=state.getRawParameterValue("bandEnabled"+juce::String(k));}
  for(size_t i=0;i<masterlab::moduleParameterIds.size();++i)parameters[86+i]=state.getRawParameterValue(masterlab::moduleParameterIds[i]);
@@ -145,6 +155,7 @@ public:
   limiterMeter.prepare(displayRate.load());inputMeter.prepare(displayRate.load());
   outputMeter.prepare(displayRate.load());inputLoudness.prepare(displayRate.load());
   outputLoudness.prepare(displayRate.load());brain.prepare(displayRate.load());
+  analogizer.prepare(displayRate.load());
   updateModules();
   int totalLatency=engine.latency();
   setLatencySamples(totalLatency);
@@ -154,7 +165,7 @@ public:
  }
  void releaseResources()override{
  }void reset()override{
- brain.cancelRT();engine.reset();updateModules();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;}
+ brain.cancelRT();engine.reset();analogizer.reset();updateModules();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;}
  void processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,false);}
  void processBlockBypassed(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,true);}
  void renderAudio(juce::AudioBuffer<float>& b,bool hostBypassed){
@@ -162,12 +173,19 @@ public:
  if(resetMeterRequest.exchange(false)){inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();}
  auto value=[&](size_t index){return parameters[index]->load();};
  masterlab::configureGraph(engine,value);
+ masterlab::AnalogizerSettings az;
+ az.enabled=value(285)>.5f && value(278)>.5f;
+ az.mode=static_cast<masterlab::AnalogizerMode>(std::clamp(static_cast<int>(value(279)),0,2));
+ az.driveDb=value(280);az.warmth=value(281);az.deFizz=value(282);
+ az.mix=value(283);az.outputDb=value(284);
+ analogizer.settings(az);
  hostBypassTarget=hostBypassed;
  if(hostDryDelay[0].empty()){b.clear();return;}
  for(int offset=0;offset<b.getNumSamples();){int length=std::min(128,b.getNumSamples()-offset);
   for(int i=0;i<length;++i){size_t read=(hostDryPosition+1)%hostDryDelay[0].size();for(int c=0;c<2;++c){inputScratch[c][i]=masterlab::clean(b.getSample(c,offset+i));hostDryDelay[c][hostDryPosition]=inputScratch[c][i];hostDryScratch[c][i]=hostDryDelay[c][read];}hostDryPosition=read;}
   brain.capture(inputScratch[0].data(),inputScratch[1].data(),length);
   engine.process(b.getWritePointer(0,offset),b.getWritePointer(1,offset),length,value(6)>.5f,limiterGainTrace.data());
+  analogizer.process(b.getWritePointer(0,offset),b.getWritePointer(1,offset),length);
   for(int i=0;i<length;++i){hostBypassMix=hostBypassed?std::min(1.f,hostBypassMix+hostBypassStep):std::max(0.f,hostBypassMix-hostBypassStep);limiterGainTrace[i]+=hostBypassMix*(1-limiterGainTrace[i]);for(int c=0;c<2;++c){float wet=b.getSample(c,offset+i);b.setSample(c,offset+i,wet+hostBypassMix*(hostDryScratch[c][i]-wet));}}
   for(int i=0;i<length;++i){
    inputMeter.push(inputScratch[0][i],inputScratch[1][i]);outputMeter.push(b.getSample(0,offset+i),b.getSample(1,offset+i));inputLoudness.push(inputScratch[0][i],inputScratch[1][i]);outputLoudness.push(b.getSample(0,offset+i),b.getSample(1,offset+i));
