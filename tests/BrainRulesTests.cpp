@@ -9,7 +9,7 @@ int main(){
  masterlab::BrainFeatures f;f.rate=48000;f.seconds=8;f.integrated=-22;f.peak=.25f;f.rms=.08f;f.correlation=.5f;f.energy={.04,.11,.6,.2,.05};
  masterlab::BrainConfig c;
  for(int genre=0;genre<9;++genre)for(int style=0;style<4;++style)for(float intensity:{.25f,1.f,1.5f}){
-  c.genre=genre;c.style=style;c.intensity=intensity;auto p=masterlab::proposeMastering(f,c);check(p.valid&&p.changes.size()==161,"complete proposal missing");std::set<std::string> ids;
+  c.genre=genre;c.style=style;c.intensity=intensity;auto p=masterlab::proposeMastering(f,c);check(p.valid&&p.changes.size()==201,"complete eight-band proposal missing");std::set<std::string> ids;
   for(const auto& change:p.changes)check(ids.insert(change.first).second&&std::isfinite(change.second),"duplicate or non-finite proposed setting");
   for(float gain:p.gains)check(std::abs(gain)<=3,"EQ exceeds correction cap");check(p.drive>=0&&p.drive<=12&&value(p,"order")==0,"unsafe drive or chain order");
  }
