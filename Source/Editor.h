@@ -5,6 +5,7 @@
 #include "ParallelPanel.h"
 #include "ExciterPanel.h"
 #include "AnalogColorPanel.h"
+#include "AnalogizerPanel.h"
 #include "BassArchitectPanel.h"
 #include "TransientSculptorPanel.h"
 #include "FinalTruePeakPanel.h"
@@ -23,6 +24,7 @@ class Editor final : public juce::AudioProcessorEditor,
     std::array<std::unique_ptr<ModulePanel>,4> modulePanels;
     ExciterPanel exciterPanel;
     AnalogColorPanel analogPanel;
+    AnalogizerPanel analogizerPanel;
     BassArchitectPanel bassPanel;
     TransientSculptorPanel transientPanel;
     FinalTruePeakPanel truePeakPanel;
@@ -31,7 +33,7 @@ class Editor final : public juce::AudioProcessorEditor,
     juce::TextButton consoleView{"Console"};
     bool showingConsole=false;
     juce::TextButton dynamicView{"Dynamic EQ"},dynamicsView{"Dynamics"},stereoView{"Stereo"},stabilizerView{"Stabilizer"},modulesButton{"+ Modules"};
-    int moduleView=-1,chainDragKind=-1,chainHover=-1;bool chainDragging=false,showingParallel=false,showingExciter=false,showingAnalog=false,showingBass=false,showingTransient=false,showingTruePeak=false;
+    int moduleView=-1,chainDragKind=-1,chainHover=-1;bool chainDragging=false,showingParallel=false,showingExciter=false,showingAnalog=false,showingAnalogizer=false,showingBass=false,showingTransient=false,showingTruePeak=false;
     juce::ComboBox routingChoice;std::unique_ptr<ComboAttachment> routingAttachment;
     inline static constexpr std::array<const char*,11> routePresentIds{
       "dynamicEqPresent","dynamicsPresent","stereoPresent","eqPresent","limPresent","stabilizerPresent",
@@ -77,7 +79,7 @@ class Editor final : public juce::AudioProcessorEditor,
         return result;
     }
     int chainAt(float x)const {auto list=chainModules();if(list.empty()||x<24||x>getWidth()-24)return -1;size_t i=static_cast<size_t>((x-24)/((getWidth()-48.f)/list.size()));return i<list.size()?list[i]:-1;}
-    void hideModules(){showingConsole=false;overviewPanel.setVisible(false);showingTruePeak=false;truePeakPanel.setVisible(false);showingTransient=false;transientPanel.setVisible(false);showingBass=false;bassPanel.setVisible(false);showingAnalog=false;analogPanel.setVisible(false);showingExciter=false;exciterPanel.setVisible(false);moduleView=-1;for(auto& panel:modulePanels)if(panel)panel->setVisible(false);dynamicView.setToggleState(false,juce::dontSendNotification);dynamicsView.setToggleState(false,juce::dontSendNotification);stereoView.setToggleState(false,juce::dontSendNotification);stabilizerView.setToggleState(false,juce::dontSendNotification);}
+    void hideModules(){showingConsole=false;overviewPanel.setVisible(false);showingTruePeak=false;truePeakPanel.setVisible(false);showingTransient=false;transientPanel.setVisible(false);showingBass=false;bassPanel.setVisible(false);showingAnalog=false;analogPanel.setVisible(false);showingAnalogizer=false;analogizerPanel.setVisible(false);showingExciter=false;exciterPanel.setVisible(false);moduleView=-1;for(auto& panel:modulePanels)if(panel)panel->setVisible(false);dynamicView.setToggleState(false,juce::dontSendNotification);dynamicsView.setToggleState(false,juce::dontSendNotification);stereoView.setToggleState(false,juce::dontSendNotification);stabilizerView.setToggleState(false,juce::dontSendNotification);}
     void showConsole(){showInspector();showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);resetMetersButton.setVisible(false);showingConsole=true;overviewPanel.setVisible(true);repaint();}
     void showModule(int kind){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);moduleView=kind;modulePanels[static_cast<size_t>(kind)]->setVisible(true);std::array<juce::TextButton*,4>{&dynamicView,&dynamicsView,&stereoView,&stabilizerView}[static_cast<size_t>(kind)]->setToggleState(true,juce::dontSendNotification);repaint();}
     void toggleParameter(const char* id){auto* parameter=processor.state.getParameter(id);processor.beginUiTransaction("Module chain");parameter->beginChangeGesture();parameter->setValueNotifyingHost(parameter->getValue()>.5f?0.f:1.f);parameter->endChangeGesture();processor.finishUiTransaction();repaint();}
@@ -121,6 +123,7 @@ class Editor final : public juce::AudioProcessorEditor,
     void showFinalTruePeak(){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);showingTruePeak=true;truePeakPanel.setVisible(true);repaint();}
     void showTransient(){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);showingTransient=true;transientPanel.setVisible(true);repaint();}
     void showBass(){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);showingBass=true;bassPanel.setVisible(true);repaint();}
+    void showAnalogizer(){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);showingAnalogizer=true;analogizerPanel.setVisible(true);repaint();}
     void showAnalog(){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);showingAnalog=true;analogPanel.setVisible(true);repaint();}
     void showExciter(){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);showingExciter=true;exciterPanel.setVisible(true);repaint();}
     void showParallel(){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);showingParallel=true;parallelPanel.setVisible(true);repaint();}
@@ -426,7 +429,7 @@ class Editor final : public juce::AudioProcessorEditor,
             for(auto& panel:modulePanels)if(panel)panel->update(response);
             parallelPanel.update(response);exciterPanel.update(response);analogPanel.update(response);
             bassPanel.update(response);transientPanel.update(response);
-            truePeakPanel.update(response);overviewPanel.update(response);
+            truePeakPanel.update(response);overviewPanel.update(response);analogizerPanel.update(response);
             // True, measured 16-band EQ transfer. UI thread only; no synthetic response curve.
             std::array<float,256> curveDb{};
             const double nyquist=juce::jmax(40.,response.rate*.5);
@@ -474,7 +477,7 @@ class Editor final : public juce::AudioProcessorEditor,
         slider.setComponentID(id);slider.setColour(juce::Slider::rotarySliderFillColourId,accent);
     }
 public:
-    explicit Editor(Processor& p) : AudioProcessorEditor(p),processor(p),exciterPanel(processor,theme),analogPanel(processor,theme),bassPanel(processor,theme),transientPanel(processor,theme),truePeakPanel(processor,theme),overviewPanel(processor,theme),parallelPanel(processor,theme) {
+    explicit Editor(Processor& p) : AudioProcessorEditor(p),processor(p),exciterPanel(processor,theme),analogPanel(processor,theme),analogizerPanel(processor,theme),bassPanel(processor,theme),transientPanel(processor,theme),truePeakPanel(processor,theme),overviewPanel(processor,theme),parallelPanel(processor,theme) {
         theme.setColour(juce::ResizableWindow::backgroundColourId,background);
         theme.setColour(juce::Slider::textBoxOutlineColourId,juce::Colours::transparentBlack);
         theme.setColour(juce::Slider::textBoxBackgroundColourId,panel);
@@ -483,6 +486,7 @@ public:
         addChildComponent(parallelPanel);
         addChildComponent(exciterPanel);
         addChildComponent(analogPanel);
+        addChildComponent(analogizerPanel);
         addChildComponent(bassPanel);
         addChildComponent(transientPanel);
         addChildComponent(truePeakPanel);
@@ -513,10 +517,15 @@ public:
                 item.addItem(60+kind,"Open processor");
                 menu.addSubMenu(routeNames[static_cast<size_t>(kind)],item);
             }
+            menu.addSeparator();
+            menu.addItem(200,"Open Analogizer (independent output stage)",true);
+            menu.addItem(201,"Analogizer in chain",true,processor.state.getRawParameterValue("analogizerPresent")->load()>.5f);
             auto safe=juce::Component::SafePointer<Editor>(this);
             menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(modulesButton),[safe](int id){
                 if(!safe)return;
                 auto& self=*safe;
+                if(id==200){self.showAnalogizer();return;}
+                if(id==201){self.toggleParameter("analogizerPresent");return;}
                 if(id==100){
                     self.toggleParameter("fullRouterOn");
                     self.repaint();return;
@@ -679,6 +688,7 @@ public:
         parallelPanel.setBounds(0,134,getWidth(),getHeight()-154);
         exciterPanel.setBounds(0,134,getWidth(),getHeight()-154);
         analogPanel.setBounds(0,134,getWidth(),getHeight()-154);
+        analogizerPanel.setBounds(0,134,getWidth(),getHeight()-154);
         bassPanel.setBounds(0,134,getWidth(),getHeight()-154);
         transientPanel.setBounds(0,134,getWidth(),getHeight()-154);
         truePeakPanel.setBounds(0,134,getWidth(),getHeight()-154);
@@ -791,7 +801,7 @@ public:
         }
         if(showingConsole){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
         if(moduleView>=0){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
-        if(showingParallel||showingExciter||showingAnalog){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
+        if(showingParallel||showingExciter||showingAnalog||showingAnalogizer){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
         if(showingBrain){paintBrain(g);return;}
         if(showingInspector){paintInspector(g);return;}
         if(showingLimiter){paintLimiter(g);g.setColour(juce::Colour(0xff334e63));g.setFont(theme.font(12));g.drawText(processor.state.getRawParameterValue("routingMode")->load()>.5f?"PARALLEL: limiter ceiling applies to its branch, not the full sum":(first?"Processors after limiter may exceed its ceiling":"SAMPLE PEAK  /  True Peak unavailable"),24,getHeight()-25,getWidth()-48,18,juce::Justification::left);return;}
