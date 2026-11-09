@@ -15,6 +15,8 @@ class StemBrainPanel final : public juce::Component,private juce::Timer {
  std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>,12> sliders_{};
  std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>,8> toggles_{};
  juce::ComboBox sourceMode_;
+ juce::ToggleButton live_{"LIVE NEURAL"};
+ std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> liveAttachment_;
  std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAttachment_;
  juce::TextButton split_{"SEPARATE WAV (HTDemucs)"},import_{"LOAD FOUR STEMS"},
                   original_{"ORIGINAL MIX"},natural_{"Natural balance"},
@@ -25,6 +27,7 @@ class StemBrainPanel final : public juce::Component,private juce::Timer {
  std::atomic<int> job_{0}; // 0 idle, 1 running, 2 success, negative failure
  juce::File resultDir_;
  juce::String status_{"Choose WAV to separate with HTDemucs, or import aligned real stems."};
+ bool lastLiveWanted_{false};
  static juce::File engineDirectory(){
   return juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory)
          .getChildFile("JerzyMasterLabX").getChildFile("StemEngine");
@@ -50,17 +53,26 @@ class StemBrainPanel final : public juce::Component,private juce::Timer {
   const auto exe=engine.getChildFile("stems-split.exe");
   const auto model=engine.getChildFile("models").getChildFile("htdemucs-42M-v1.0-F16.gguf");
   if(!exe.existsAsFile()||!model.existsAsFile()){
-   showStatus("HTDemucs native runtime/model missing. Install the complete MasterLabX package using INSTALL_MASTERLABX.cmd.");
+   showStatus("SEPARATE WAV unavailable: offline engine/model not installed.");
+   juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::WarningIcon,
+      "HTDemucs offline separator unavailable",
+      "The LIVE neural model does not separate imported WAV files offline. "
+      "Run INSTALL_OFFLINE_STEMS.cmd from the MasterLabX package once, "
+      "then choose SEPARATE WAV again. The installer downloads and checks "
+      "the upstream stems.cpp engine and HTDemucs model.");
    return;
   }
   resultDir_=song.getParentDirectory().getChildFile(song.getFileNameWithoutExtension()+"_MasterLabX_stems");
-  resultDir_.createDirectory();
+  if(resultDir_.createDirectory().failed()){
+   showStatus("SEPARATE WAV ERROR: cannot create output folder near selected WAV.");
+   return;
+  }
   const auto out=resultDir_.getFullPathName();
   const juce::StringArray args{exe.getFullPathName(),"-m",model.getFullPathName(),
                                 "-i",song.getFullPathName(),"-o",out,"--float32"};
   if(worker_.joinable())worker_.join();
   job_.store(1);
-  showStatus("AI separation running offline (CPU/GPU); original FL Studio playback remains active.");
+  showStatus("HTDemucs offline: processing the selected WAV into four files. This can take time; result folder: "+resultDir_.getFileName());
   worker_=std::jthread([this,args](std::stop_token stop){
    juce::ChildProcess child;
    if(!child.start(args)){job_.store(-2);return;}
@@ -89,10 +101,22 @@ class StemBrainPanel final : public juce::Component,private juce::Timer {
   auto issue=processor_.loadStemsUI(directory);
   if(issue.isNotEmpty()){showStatus(issue);return;}
   const auto bank=processor_.stemRemix.snapshot();
-  showStatus("Four real stems loaded: "+juce::String(bank->samples/bank->sampleRate,1)+
-             " seconds. Play from start in FL Studio; audition gain/tone/width/solo.");
+  showStatus("FOUR WAV STEMS LOADED ("+juce::String(bank->samples/bank->sampleRate,1)+
+             " s). LIVE OFF; press PLAY in FL Studio from 0:00 to hear the four WAV stems.");
  }
  void timerCallback()override{
+  // Synchronize the visible status with actual backend readiness rather than
+  // claiming LIVE is active immediately after a button click.
+  const bool liveWanted=processor_.state.getRawParameterValue("stemLiveOn")->load()>.5f;
+  sourceMode_.setEnabled(!liveWanted);
+  if(liveWanted){
+   if(!processor_.liveNeuralAvailable())processor_.requestLiveNeuralUI();
+   const auto neuralStatus=processor_.liveNeuralStatusUI();
+   if(status_!=neuralStatus)showStatus(neuralStatus);
+  }else if(lastLiveWanted_){
+   showStatus("LIVE OFF: original DAW stream. Offline WAV mode can be selected.");
+  }
+  lastLiveWanted_=liveWanted;
   const auto status=job_.load();
   if(status==1)return;
   if(status==2){
@@ -102,11 +126,20 @@ class StemBrainPanel final : public juce::Component,private juce::Timer {
   }else if(status<0){
    job_.store(0);
    if(worker_.joinable())worker_.join();
-   showStatus(status==-2?"Could not launch native HTDemucs helper. Reinstall StemEngine.":
-              status==-3?"HTDemucs separation failed. WAV/model/driver issue; review native engine.":"Separation cancelled.");
+   showStatus(status==-2?"SEPARATE WAV: failed to launch stems-split.exe (offline engine missing or blocked).":
+              status==-3?"SEPARATE WAV: helper exited with error; verify input WAV, model and helper diagnostics.":"SEPARATE WAV cancelled.");
   }
  }
  void diagnoseStems(){
+  if(processor_.state.getRawParameterValue("stemLiveOn")->load()>.5f){
+   auto report=processor_.liveNeuralStatusUI();
+   report+="\n\nA positive WET count alone does not qualify real-time throughput.";
+   report+="\nAt 44.1 kHz / 128 samples, the audio deadline is about 2.90 ms.";
+   report+="\nCompare hops/output/WET during uninterrupted playback; stopped WET and growing output means results arrive too late or out of alignment.";
+   juce::AlertWindow::showMessageBoxAsync(juce::AlertWindow::InfoIcon,
+      "STEMS LIVE - worker diagnostics",report);
+   return;
+  }
   auto bank=processor_.stemRemix.snapshot();
   if(!bank){showStatus("Separate or import four stems first.");return;}
   juce::String report("MASTER BRAIN — measured STEM diagnostics\n");
@@ -176,6 +209,8 @@ public:
   sourceMode_.addItem("DAW mix unchanged",1);
   sourceMode_.addItem("4 stems replace DAW",2);
   sourceMode_.addItem("4 stems + DAW",3);
+  // This is an OFFLINE WAV routing selector, not the neural LIVE source.
+  // Disable it while LIVE is selected to avoid misleading the user.
   sourceMode_.setComponentID("stem-source-mode");
   modeAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
     p.state,"stemMode",sourceMode_);
@@ -187,25 +222,46 @@ public:
   natural_.setComponentID("stem-variant-a");vocal_.setComponentID("stem-variant-b");
   clear_.setComponentID("stem-unload");diagnose_.setComponentID("stem-diagnose");
   addAndMakeVisible(sourceMode_);
+  live_.setComponentID("stem-live-neural");addAndMakeVisible(live_);
+  liveAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+    p.state,"stemLiveOn",live_);
+  live_.onClick=[this]{
+   processor_.requestLiveNeuralUI();
+   showStatus(processor_.liveNeuralStatusUI());
+  };
   state_.setColour(juce::Label::textColourId,juce::Colour(0xffb9ddeb));
   state_.setFont(theme_.font(13));state_.setJustificationType(juce::Justification::centredLeft);
   state_.setText(status_,juce::dontSendNotification);addAndMakeVisible(state_);
   split_.onClick=[this]{chooseSong();};import_.onClick=[this]{chooseFolder();};
   original_.onClick=[this]{
+   // Original means ORIGINAL: disable neural LIVE as well as offline stem routing.
+   auto* neural=processor_.state.getParameter("stemLiveOn");
+   if(neural->getValue()>.5f){
+    neural->beginChangeGesture();neural->setValueNotifyingHost(0.f);
+    neural->endChangeGesture();processor_.requestLiveNeuralUI();
+   }
    auto* parameter=processor_.state.getParameter("stemMode");
    parameter->beginChangeGesture();parameter->setValueNotifyingHost(parameter->convertTo0to1(0.f));
    parameter->endChangeGesture();
-   showStatus("Original mix only; the source audio is unchanged.");
+   showStatus("ORIGINAL: LIVE off, offline stems off; source DAW mix unchanged.");
   };
   natural_.onClick=[this]{
-   if(!processor_.applyStemVariantUI(0))showStatus("Load stems first.");
-   else showStatus("Natural balance active. Undo restores prior proportions.");
+   if(!processor_.applyStemVariantUI(0))showStatus("Load four offline WAV stems, or enable LIVE first.");
+   else showStatus("Natural: LIVE uses neutral stem gain; offline uses measured balancing.");
   };
   vocal_.onClick=[this]{
-   if(!processor_.applyStemVariantUI(1))showStatus("Load stems first.");
-   else showStatus("Vocal-forward master remix active. Undo restores prior proportions.");
+   if(!processor_.applyStemVariantUI(1))showStatus("Load four offline WAV stems, or enable LIVE first.");
+   else showStatus("Vocal forward: vocal gain +2 dB, backing slightly reduced (LIVE).");
   };
-  clear_.onClick=[this]{processor_.clearStemsUI();showStatus("Stem WAVs unloaded; original DAW mix restored.");};
+  clear_.onClick=[this]{
+   auto* liveParam=processor_.state.getParameter("stemLiveOn");
+   if(liveParam->getValue()>.5f){
+    liveParam->beginChangeGesture();liveParam->setValueNotifyingHost(0.f);
+    liveParam->endChangeGesture();processor_.requestLiveNeuralUI();
+   }
+   processor_.clearStemsUI();
+   showStatus("UNLOAD STEMS: LIVE stopped, offline WAV memory freed, DAW source restored.");
+  };
   diagnose_.onClick=[this]{diagnoseStems();};
   startTimerHz(3);
  }
@@ -219,8 +275,9 @@ public:
   split_.setBounds(margin,24,215,34);
   import_.setBounds(244,24,160,34);
   original_.setBounds(411,24,145,34);
-  sourceMode_.setBounds(568,25,juce::jmax(170,w-590),32);
-  state_.setBounds(margin,66,w-44,42);
+  live_.setBounds(568,24,116,34);
+  sourceMode_.setBounds(692,25,juce::jmax(100,w-714),32);
+  state_.setBounds(margin,64,w-44,56);
   const int cell=(w-54)/4;
   for(int i=0;i<4;++i){
    const int x=18+i*cell;
@@ -262,7 +319,10 @@ public:
    }
   }
   g.setColour(juce::Colour(0xff32536a));g.setFont(theme_.font(12));
-  g.drawFittedText("Real HTDemucs 4-source separation runs offline. Unavoidable bleed/artifacts: compare at matched loudness, check mono and True Peak.",
+  const auto footer=processor_.liveNeuralAvailable()
+       ? "LIVE (44.1 kHz) + offline HTDemucs. Check latency, mono and True Peak."
+       : "HTDemucs offline; LIVE requires StemgenRT noncommercial models, 44.1 kHz and a Live VST3 build.";
+   g.drawFittedText(footer,
         22,getHeight()-34,getWidth()-44,22,juce::Justification::centredLeft,1);
  }
 };
