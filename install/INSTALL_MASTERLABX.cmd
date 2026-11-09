@@ -8,5 +8,5 @@ if errorlevel 1 (
   exit /b 1
 )
 echo.
-echo Ready: scan VST3 plugins in FL Studio and open Stem Brain.
+echo Ready: scan VST3 plugins in FL Studio.
 pause
