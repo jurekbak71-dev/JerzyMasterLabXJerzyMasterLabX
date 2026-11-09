@@ -2,10 +2,8 @@ $ErrorActionPreference = 'Stop'
 $source = Split-Path -Parent $PSCommandPath
 $bundle = Join-Path $source 'JerzyMasterLabX.vst3'
 $srcBinary = Join-Path $bundle 'Contents\x86_64-win\JerzyMasterLabX.vst3'
-$srcOrt = Join-Path $bundle 'Contents\x86_64-win\JerzyMasterLabX_ort_1_26.dll'
 $target = Join-Path $env:CommonProgramFiles 'VST3\JerzyMasterLabX.vst3'
 $targetBin = Join-Path $target 'Contents\x86_64-win\JerzyMasterLabX.vst3'
-$targetOrt = Join-Path $target 'Contents\x86_64-win\JerzyMasterLabX_ort_1_26.dll'
 function HashOf([string] $path) {
  if (!(Test-Path -LiteralPath $path -PathType Leaf)) { return 'MISSING' }
  return (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToUpperInvariant()
@@ -13,9 +11,8 @@ function HashOf([string] $path) {
 # Use the source ZIP as the source of truth. CI-generated manifest binds bytes
 # to the exact tested build; fallback to package hashes for manual rebuilds.
 $sourceBinHash = HashOf $srcBinary
-$sourceOrtHash = HashOf $srcOrt
-if ($sourceBinHash -eq 'MISSING' -or $sourceOrtHash -eq 'MISSING')
- { throw 'The full VST3 and ONNX Runtime package must be unpacked first.' }
+if ($sourceBinHash -eq 'MISSING')
+ { throw 'The full VST3 package must be unpacked first.' }
 $manifest = Join-Path $source 'VST3-SHA256.txt'
 if (Test-Path -LiteralPath $manifest) {
  $expected = (Get-Content -LiteralPath $manifest -TotalCount 1).Trim().ToUpperInvariant()
@@ -40,9 +37,8 @@ try {
  if ($hadOld) { Remove-Item -LiteralPath $target -Recurse -Force }
  Copy-Item -LiteralPath $bundle -Destination $target -Recurse -Force
  $actualBin = HashOf $targetBin
- $actualOrt = HashOf $targetOrt
- if ($actualBin -ne $sourceBinHash -or $actualOrt -ne $sourceOrtHash)
-   { throw ('Installed hash mismatch, VST3=' + $actualBin + ', ONNX=' + $actualOrt) }
+ if ($actualBin -ne $sourceBinHash)
+   { throw ('Installed VST3 hash mismatch: ' + $actualBin) }
 } catch {
  if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
  if ($hadOld -and (Test-Path -LiteralPath $backup))
@@ -51,4 +47,4 @@ try {
 }
 Write-Host ('SUCCESS: installed VST3 SHA256 verified: ' + (HashOf $targetBin)) -ForegroundColor Green
 Write-Host ('Backup: ' + $backupDir)
-Write-Host 'Reopen FL Studio and rescan the VST3. NC models are not reinstalled by this repair.'
+Write-Host 'Reopen FL Studio and rescan the VST3.'
