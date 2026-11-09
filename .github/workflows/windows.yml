@@ -52,7 +52,13 @@ jobs:
         if: failure()
         shell: pwsh
         run: |
-          Get-ChildItem build/Testing/Temporary -Filter '*TestsFailed*' | ForEach-Object { Get-Content $_.FullName | ForEach-Object { Write-Output "::error::Failed CTest: $_" } }
+          if (Test-Path build/Testing/Temporary) {
+            Get-ChildItem build/Testing/Temporary -Filter '*TestsFailed*' | ForEach-Object {
+              Get-Content $_.FullName | ForEach-Object { Write-Output "::error::Failed CTest: $_" }
+            }
+          } else {
+            Write-Output '::notice::CTest did not run; build failed before the test directory was created.'
+          }
           if (Test-Path build/Testing/Temporary/LastTest.log) {
             $report = (Get-Content build/Testing/Temporary/LastTest.log -Raw).Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
             Write-Output "::notice::CTest details: $report"
