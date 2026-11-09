@@ -13,6 +13,7 @@ struct HarmonicExciterSettings {
     bool enabled = false;
     std::array<float,4> amount{0.f,0.f,0.f,0.f};
     float even=0.5f,odd=0.5f,driveDb=0.f,mix=1.f,outputDb=0.f,impact=0.f;
+    bool adaa=false; // first-order anti-derivative anti-aliasing, no added sample delay
     bool oversample2x=false; // experimental non-automatable mode; adds 32 samples of latency
     bool oversample4x=false; // experimental non-automatable mode; adds 48 samples
     std::array<float,3> crossovers{180.f,2400.f,8000.f};
@@ -24,7 +25,8 @@ struct HarmonicExciterReading {
 class HarmonicExciter {
     struct FilterState {
         float a=0.f,b=0.f,c=0.f;
-        std::array<float,4> dc{};
+        std::array<float,4> dc{},previousDrive{};
+        std::array<bool,4> previousValid{};
     } state_[2]{};
     struct ParameterSmoother {
         float value=0.f,coefficient=.001f;
@@ -118,11 +120,26 @@ public:
                 for(size_t k=0;k<4;++k){
                     const float intensity=intensities[k];
                     const auto nonlinear=[&](float v) noexcept -> float {
-                        const float x=std::tanh(v*drive);
-                        const float evenRaw=x*x;
+                        const float driven=finiteClamp(v*drive,-24.f,24.f);
+                        const float x=std::tanh(driven);
+                        float evenRaw=x*x,third=x*x*x;
+                        if(settings_.adaa&&!oversampled&&!oversampled4x){
+                            const float previous=s.previousDrive[k];
+                            const float diff=driven-previous;
+                            if(s.previousValid[k]&&std::abs(diff)>1.e-4f){
+                                const float px=std::tanh(previous);
+                                const float F2=(driven-x)-(previous-px);
+                                const auto F3=[](float z,float tz)noexcept {
+                                    return std::log(std::cosh(z))-.5f*tz*tz;
+                                };
+                                evenRaw=F2/diff;
+                                third=(F3(driven,x)-F3(previous,px))/diff;
+                            }
+                            s.previousDrive[k]=driven;
+                            s.previousValid[k]=true;
+                        }
                         s.dc[k]+=dcAlpha*(evenRaw-s.dc[k]);
                         const float second=evenRaw-s.dc[k];
-                        const float third=x*x*x;
                         return intensity*(0.5f*even*second+0.5f*odd*third);
                     };
                     const float generated=oversampled4x?
