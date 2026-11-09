@@ -18,5 +18,31 @@ int main(){
   juce::MemoryBlock saved;p.getStateInformation(saved);Processor restored;restored.setStateInformation(saved.getData(),static_cast<int>(saved.getSize()));p.prepareToPlay(rate,257);restored.prepareToPlay(rate,257);
   juce::AudioBuffer<float> other(2,257);for(int block=0;block<100;++block){for(int i=0;i<257;++i){audio.setSample(0,i,.15f*std::sin((block*257+i)*.11));audio.setSample(1,i,-audio.getSample(0,i)*.7f);}other.makeCopyOf(audio);audit=true;p.processBlock(audio,midi);restored.processBlock(other,midi);audit=false;for(int c=0;c<2;++c)for(int i=0;i<257;++i)check(std::isfinite(audio.getSample(c,i))&&audio.getSample(c,i)==other.getSample(c,i),"restored modular render differs");}
  }
+ // The INSERT profile must preserve a time-aligned dry reference without
+ // changing the DSP controls or the host-reported processing latency.
+ {
+  Processor insert;
+  set(insert,"workMode",1);set(insert,"insertBlend",0);
+  set(insert,"eqPresent",1);set(insert,"limPresent",1);
+  insert.prepareToPlay(48000.,257);
+  const int delay=insert.getLatencySamples();
+  juce::AudioBuffer<float> signal(2,257);juce::MidiBuffer midi;
+  int samples=0;
+  for(int block=0;block<220;++block){
+   for(int i=0;i<257;++i,++samples){
+    signal.setSample(0,i,.21f*std::sin(samples*.071f));
+    signal.setSample(1,i,.11f*std::cos(samples*.047f));
+   }
+   audit=true;insert.processBlock(signal,midi);audit=false;
+   if(block>150)for(int i=0;i<257;++i){
+    const int t=samples-257+i-delay;
+    const float expectedL=.21f*std::sin(t*.071f),expectedR=.11f*std::cos(t*.047f);
+    check(std::abs(signal.getSample(0,i)-expectedL)<1.e-5f&&
+          std::abs(signal.getSample(1,i)-expectedR)<1.e-5f,
+          "INSERT 0 wet does not preserve latency-aligned input");
+   }
+  }
+  check(insert.getLatencySamples()==delay,"INSERT mode changed host PDC");
+ }
  check(allocations==0,"prepared module chain allocated in callback");std::cout<<"Passed: add/remove transparency and stable PDC, stereo mono sum, Analog/upward/Dynamic EQ state and deterministic audio, no callback allocation at four sample rates\n";
 }
