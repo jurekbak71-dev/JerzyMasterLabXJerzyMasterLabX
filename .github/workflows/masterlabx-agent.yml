@@ -1,0 +1,59 @@
+name: MasterLabX Codex Agent (review-only)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/masterlabx-live-brain-20261107]
+    paths:
+      - '.github/workflows/masterlabx-agent.yml'
+      - 'docs/agents/masterlabx-agent.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: masterlabx-codex-agent
+  cancel-in-progress: false
+
+jobs:
+  propose-fix:
+    if: ${{ vars.MASTERLABX_AGENT_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout working branch without write credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Prepare independent native DSP environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --version
+          c++ --version
+          python3 --version
+      - name: Run one coding-agent work package
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: docs/agents/masterlabx-agent.md
+          sandbox: workspace-write
+          output-file: masterlabx-agent-result.txt
+      - name: Collect proposed changes without committing
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -N .
+          git diff --binary HEAD -- . ':!masterlabx-agent-result.txt' > masterlabx-agent.patch
+          test -f masterlabx-agent.patch
+          echo "Proposed patch bytes: $(wc -c < masterlabx-agent.patch)"
+      - name: Preserve patch and execution report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: masterlabx-agent-review
+          path: |
+            masterlabx-agent.patch
+            masterlabx-agent-result.txt
+          if-no-files-found: warn
