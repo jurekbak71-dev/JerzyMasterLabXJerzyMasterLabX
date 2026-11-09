@@ -33,6 +33,7 @@ public:
  std::array<std::vector<float>,2> hostDryDelay;
  std::array<std::array<float,128>,2> hostDryScratch{};
  size_t hostDryPosition=0;float hostBypassMix=0,hostBypassStep=1.f/960.f;bool hostBypassTarget=false;
+ float profileBlend=1.f,profileStep=1.f/960.f;
  std::array<std::atomic<float>*,masterlab::parameterCount> parameters{};
  juce::AbstractFifo fifo{8192};std::array<float,8192> traceL{},traceR{};
  struct ResponseFrame {std::array<masterlab::Biquad,16> bands;std::array<float,16> blends{};double rate=48000;std::array<float,12> stabilizerGain{};std::array<masterlab::Biquad,12> stabilizerBands{};float stabilizerMix=0;float eqMix=1;masterlab::StereoReading stereo;masterlab::DynamicsReading dynamics;masterlab::ParallelReading parallel;masterlab::HarmonicExciterReading exciter;masterlab::AnalogColorReading analog;masterlab::AnalogizerReading analogizer;masterlab::RestorationReading restoration;masterlab::BassArchitectReading bass;masterlab::TransientSculptorReading transient;masterlab::FinalTruePeakReading truePeak;std::array<float,masterlab::dynamicEqBandCount> dynamicGain{},dynamicBlends{};std::array<masterlab::Biquad,masterlab::dynamicEqBandCount> dynamicBands{};masterlab::MeterReading inputReading,outputReading;masterlab::LoudnessReading inputLufs,outputLufs;};
@@ -90,6 +91,8 @@ public:
  p.add(std::make_unique<juce::AudioParameterFloat>("restoreQuality","Restoration smoothness/quality",0.f,1.f,.5f));
  p.add(std::make_unique<juce::AudioParameterFloat>("restoreProtect","Restoration artifact protection",0.f,1.f,.5f));
  p.add(std::make_unique<juce::AudioParameterFloat>("restoreMix","Restoration wet",0.f,1.f,1.f));
+ p.add(std::make_unique<juce::AudioParameterChoice>("workMode","Processing mode",juce::StringArray{"MASTER","INSERT"},0));
+ p.add(std::make_unique<juce::AudioParameterFloat>("insertBlend","INSERT time-aligned processed blend",0.f,1.f,.65f));
  return p;}
  static void addModuleParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
   auto boolean=[&](const char* id,const char* name,bool initial){p.add(std::make_unique<juce::AudioParameterBool>(id,name,initial));};
@@ -148,7 +151,7 @@ public:
  void updateModules(){
   masterlab::configureModules(engine,[&](size_t i){return parameters[i]->load();});
  }
- Processor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,&undoManager,"MasterLab",layout()){state.state.setProperty("schemaVersion",23,nullptr);state.state.setProperty("eqInstanceId","eq-0001",nullptr);state.state.setProperty("limiterInstanceId","limiter-0001",nullptr);state.state.setProperty("dynamicEqInstanceId","dynamic-eq-0001",nullptr);state.state.setProperty("dynamicsInstanceId","dynamics-0001",nullptr);state.state.setProperty("stereoInstanceId","stereo-0001",nullptr);state.state.setProperty("stabilizerInstanceId","stabilizer-0001",nullptr);const char* ids[]={"frequency","gain","q","ceiling","eq","lim","order"};for(size_t i=0;i<7;++i)parameters[i]=state.getRawParameterValue(ids[i]);for(int k=2;k<=16;++k){int offset=7+(k-2)*3;const auto suffix=juce::String(k);parameters[offset]=state.getRawParameterValue("frequency"+suffix);parameters[offset+1]=state.getRawParameterValue("gain"+suffix);parameters[offset+2]=state.getRawParameterValue("q"+suffix);}
+ Processor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),state(*this,&undoManager,"MasterLab",layout()){state.state.setProperty("schemaVersion",24,nullptr);state.state.setProperty("eqInstanceId","eq-0001",nullptr);state.state.setProperty("limiterInstanceId","limiter-0001",nullptr);state.state.setProperty("dynamicEqInstanceId","dynamic-eq-0001",nullptr);state.state.setProperty("dynamicsInstanceId","dynamics-0001",nullptr);state.state.setProperty("stereoInstanceId","stereo-0001",nullptr);state.state.setProperty("stabilizerInstanceId","stabilizer-0001",nullptr);const char* ids[]={"frequency","gain","q","ceiling","eq","lim","order"};for(size_t i=0;i<7;++i)parameters[i]=state.getRawParameterValue(ids[i]);for(int k=2;k<=16;++k){int offset=7+(k-2)*3;const auto suffix=juce::String(k);parameters[offset]=state.getRawParameterValue("frequency"+suffix);parameters[offset+1]=state.getRawParameterValue("gain"+suffix);parameters[offset+2]=state.getRawParameterValue("q"+suffix);}
  parameters[52]=state.getRawParameterValue("limiterDrive");parameters[53]=state.getRawParameterValue("limiterRelease");
  for(int k=1;k<=16;++k){parameters[54+(k-1)*2]=state.getRawParameterValue("bandType"+juce::String(k));parameters[55+(k-1)*2]=state.getRawParameterValue("bandEnabled"+juce::String(k));}
  for(size_t i=0;i<masterlab::moduleParameterIds.size();++i)parameters[86+i]=state.getRawParameterValue(masterlab::moduleParameterIds[i]);
@@ -173,11 +176,13 @@ public:
   setLatencySamples(totalLatency);
   for(auto& channel:hostDryDelay)channel.assign(static_cast<size_t>(engine.latency()+1),0);
   hostDryPosition=0;hostBypassMix=0;hostBypassTarget=false;
+  profileBlend=parameters[302]->load()>.5f?parameters[303]->load():1.f;
+  profileStep=static_cast<float>(1.-std::exp(-1./(displayRate.load()*.02)));
   hostBypassStep=static_cast<float>(1/(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr*.02:960.));
  }
  void releaseResources()override{
  }void reset()override{
- brain.cancelRT();engine.reset();analogizer.reset();restoration.reset();updateModules();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;}
+ brain.cancelRT();engine.reset();analogizer.reset();restoration.reset();updateModules();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;profileBlend=parameters[302]->load()>.5f?parameters[303]->load():1.f;}
  void processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,false);}
  void processBlockBypassed(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,true);}
  void renderAudio(juce::AudioBuffer<float>& b,bool hostBypassed){
@@ -209,7 +214,13 @@ public:
   engine.process(b.getWritePointer(0,offset),b.getWritePointer(1,offset),length,value(6)>.5f,limiterGainTrace.data());
   analogizer.process(b.getWritePointer(0,offset),b.getWritePointer(1,offset),length);
   restoration.process(b.getWritePointer(0,offset),b.getWritePointer(1,offset),length);
-  for(int i=0;i<length;++i){hostBypassMix=hostBypassed?std::min(1.f,hostBypassMix+hostBypassStep):std::max(0.f,hostBypassMix-hostBypassStep);limiterGainTrace[i]+=hostBypassMix*(1-limiterGainTrace[i]);for(int c=0;c<2;++c){float wet=b.getSample(c,offset+i);b.setSample(c,offset+i,wet+hostBypassMix*(hostDryScratch[c][i]-wet));}}
+  for(int i=0;i<length;++i){
+   const float targetProfile=parameters[302]->load()>.5f?
+      std::clamp(parameters[303]->load(),0.f,1.f):1.f;
+   profileBlend+=profileStep*(targetProfile-profileBlend);
+   hostBypassMix=hostBypassed?std::min(1.f,hostBypassMix+hostBypassStep):std::max(0.f,hostBypassMix-hostBypassStep);limiterGainTrace[i]+=hostBypassMix*(1-limiterGainTrace[i]);for(int c=0;c<2;++c){float wet=b.getSample(c,offset+i);
+    wet=hostDryScratch[c][i]+profileBlend*(wet-hostDryScratch[c][i]);
+    b.setSample(c,offset+i,wet+hostBypassMix*(hostDryScratch[c][i]-wet));}}
   for(int i=0;i<length;++i){
    inputMeter.push(inputScratch[0][i],inputScratch[1][i]);outputMeter.push(b.getSample(0,offset+i),b.getSample(1,offset+i));inputLoudness.push(inputScratch[0][i],inputScratch[1][i]);outputLoudness.push(b.getSample(0,offset+i),b.getSample(1,offset+i));
    masterlab::LimiterFrame frame;
