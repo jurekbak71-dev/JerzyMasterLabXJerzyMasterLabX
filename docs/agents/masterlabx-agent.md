@@ -40,3 +40,8 @@ No fake metrics, no destructive edits, no secrets and no unreviewed model redist
 In the final response include: WYKONANO, ZWERYFIKOWANO, TESTY,
 NIEZWERYFIKOWANE, NIEWYKONANE, ŹRÓDŁA, and criterion PASS/FAIL/BLOCKED.
 If no safe change is possible, provide only evidence and blocker analysis.
+
+Execution activation: changing this contract on the feature branch can trigger the
+review-only GitHub Actions workflow via its configured push event. The job runs
+only when repository variable MASTERLABX_AGENT_ENABLED is true and the secret
+OPENAI_API_KEY has been configured. No automatic merging or publishing occurs.
