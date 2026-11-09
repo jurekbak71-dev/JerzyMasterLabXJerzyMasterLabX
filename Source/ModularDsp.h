@@ -96,37 +96,93 @@ public:
  }
  DynamicsReading read()const noexcept{return reading;}
 };
+inline constexpr size_t dynamicEqBandCount=8;
+inline constexpr int dynamicEqControlPeriod=32;
 struct DynamicBandSettings {float frequency=1000,gain=0,q=1,threshold=-24,range=-3,attack=15,release=150;bool enabled=true;};
-struct DynamicEqSettings {bool enabled=false;std::array<DynamicBandSettings,3> bands{{{150,0,1,-24,-3,25,180,true},{2500,0,1,-24,-3,10,120,true},{7500,0,1,-30,-3,3,80,true}}};};
+struct DynamicEqSettings {
+ bool enabled=false;
+ std::array<DynamicBandSettings,dynamicEqBandCount> bands{{
+   {150,0,1,-24,-3,25,180,true},{2500,0,1,-24,-3,10,120,true},
+   {7500,0,1,-30,-3,3,80,true},{100,0,1,-24,0,15,160,false},
+   {400,0,1,-24,0,15,160,false},{1200,0,1,-24,0,15,160,false},
+   {4500,0,1,-24,0,15,160,false},{11000,0,1,-24,0,15,160,false}
+ }};
+};
 class DynamicEqualizer {
  double rate=48000;DynamicEqSettings config;Slew bypass;
- std::array<std::array<Biquad,3>,2> detectors{},filters{};std::array<Envelope,3> envelopes{};std::array<Slew,3> blends{},gains{};std::array<float,3> activity{};
-public:
- void settings(DynamicEqSettings c)noexcept{config=c;}
- void prepare(double sr){rate=sr;reset();}
- void reset()noexcept {detectors={};filters={};envelopes={};activity={};bypass.prepare(rate,config.enabled?1.f:0.f);for(size_t i=0;i<3;++i){blends[i].prepare(rate,config.bands[i].enabled?1.f:0.f);gains[i].prepare(rate,config.bands[i].gain);}}
- void process(float* left,float* right,int n)noexcept {
-  if(!config.enabled&&bypass.value<1e-6f){bypass.value=0;activity={};return;}
-  const double smooth=1-std::exp(-1/(rate*.005));
-  // Fixed-size microblocks preserve detector/coefficient timing across host buffers.
-  for(int sample=0;sample<n;++sample){const float l=clean(left[sample]),r=clean(right[sample]);float wetL=l,wetR=r;
-   for(size_t i=0;i<3;++i){const auto& band=config.bands[i];
-    Biquad target;target.configure(rate,band.frequency,0,band.q,FilterType::Notch);
-    // Input minus notch is a band-pass detector; never summed with the audio signal.
-    for(int c=0;c<2;++c){auto& d=detectors[c][i];d.b0+=smooth*(target.b0-d.b0);d.b1+=smooth*(target.b1-d.b1);d.b2+=smooth*(target.b2-d.b2);d.a1+=smooth*(target.a1-d.a1);d.a2+=smooth*(target.a2-d.a2);}
-    const float dl=l-detectors[0][i].tick(l),dr=r-detectors[1][i].tick(r);
-    const float detected=envelopes[i].tick(std::max(std::abs(dl),std::abs(dr)),rate,band.attack,band.release);
-    const float amount=std::clamp((levelDb(detected)-band.threshold)/12.f,0.f,1.f);const float mix=blends[i].tick(band.enabled?1.f:0.f);
-    activity[i]=band.range*amount*mix;const float gain=gains[i].tick(band.gain+band.range*amount);
-    target.configure(rate,band.frequency,gain,band.q,FilterType::Bell);
-    for(int c=0;c<2;++c){auto& f=filters[c][i];f.b0+=smooth*(target.b0-f.b0);f.b1+=smooth*(target.b1-f.b1);f.b2+=smooth*(target.b2-f.b2);f.a1+=smooth*(target.a1-f.a1);f.a2+=smooth*(target.a2-f.a2);}
-    const float filteredL=filters[0][i].tick(wetL),filteredR=filters[1][i].tick(wetR);wetL+=mix*(filteredL-wetL);wetR+=mix*(filteredR-wetR);
-   }
-   const float mix=bypass.tick(config.enabled?1.f:0.f);left[sample]=clean(l+mix*(wetL-l));right[sample]=clean(r+mix*(wetR-r));
+ std::array<std::array<Biquad,dynamicEqBandCount>,2> detectors{},filters{};
+ std::array<Biquad,dynamicEqBandCount> detectorTargets{},filterTargets{};
+ std::array<Envelope,dynamicEqBandCount> envelopes{};
+ std::array<Slew,dynamicEqBandCount> blends{},gains{};
+ std::array<float,dynamicEqBandCount> activity{};
+ int controlPhase=0;
+ static void smoothTo(Biquad& current,const Biquad& target,float alpha)noexcept {
+  current.b0+=alpha*(target.b0-current.b0);
+  current.b1+=alpha*(target.b1-current.b1);
+  current.b2+=alpha*(target.b2-current.b2);
+  current.a1+=alpha*(target.a1-current.a1);
+  current.a2+=alpha*(target.a2-current.a2);
+ }
+ void refreshCoefficients()noexcept {
+  for(size_t i=0;i<dynamicEqBandCount;++i){
+   const auto& band=config.bands[i];
+   // Fully bypassed bands neither design coefficients nor process filters.
+   if(!band.enabled && blends[i].value<1.e-6f)continue;
+   detectorTargets[i].configure(rate,band.frequency,0,band.q,FilterType::Notch);
+   const float amount=std::clamp((levelDb(envelopes[i].value)-band.threshold)/12.f,0.f,1.f);
+   filterTargets[i].configure(rate,band.frequency,
+       std::clamp(band.gain+band.range*amount,-24.f,24.f),band.q,FilterType::Bell);
   }
  }
- std::array<float,3> read()const noexcept {auto out=activity;for(auto& x:out)x*=bypass.value;return out;}
- void coefficients(std::array<Biquad,3>& out)const noexcept {out=filters[0];}
- std::array<float,3> bandBlends()const noexcept {std::array<float,3> out{};for(size_t i=0;i<3;++i)out[i]=blends[i].value*bypass.value;return out;}
+public:
+ void settings(DynamicEqSettings c)noexcept {config=c;}
+ void prepare(double sr){rate=std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000;reset();}
+ void reset()noexcept {
+  detectors={};filters={};detectorTargets={};filterTargets={};envelopes={};activity={};controlPhase=0;
+  bypass.prepare(rate,config.enabled?1.f:0.f);
+  for(size_t i=0;i<dynamicEqBandCount;++i){
+   blends[i].prepare(rate,config.bands[i].enabled?1.f:0.f);
+   gains[i].prepare(rate,config.bands[i].gain);
+  }
+  refreshCoefficients();
+  for(size_t i=0;i<dynamicEqBandCount;++i)
+   for(int c=0;c<2;++c){detectors[c][i]=detectorTargets[i];filters[c][i]=filterTargets[i];}
+ }
+ void process(float* left,float* right,int n)noexcept {
+  if(!config.enabled && bypass.value<1.e-6f){bypass.value=0;activity={};return;}
+  const float smooth=static_cast<float>(1-std::exp(-1/(rate*.005)));
+  // Fixed 32-sample control period survives variable DAW buffer boundaries.
+  for(int sample=0;sample<n;++sample){
+   if(controlPhase==0)refreshCoefficients();
+   controlPhase=(controlPhase+1)%dynamicEqControlPeriod;
+   const float l=clean(left[sample]),r=clean(right[sample]);float wetL=l,wetR=r;
+   for(size_t i=0;i<dynamicEqBandCount;++i){
+    const auto& band=config.bands[i];
+    if(!band.enabled && blends[i].value<1.e-6f){activity[i]=0;continue;}
+    for(int c=0;c<2;++c)smoothTo(detectors[c][i],detectorTargets[i],smooth);
+    const float dl=l-detectors[0][i].tick(l),dr=r-detectors[1][i].tick(r);
+    const float detected=envelopes[i].tick(std::max(std::abs(dl),std::abs(dr)),rate,band.attack,band.release);
+    const float amount=std::clamp((levelDb(detected)-band.threshold)/12.f,0.f,1.f);
+    const float mix=blends[i].tick(band.enabled?1.f:0.f);
+    activity[i]=band.range*amount*mix;
+    gains[i].tick(band.gain+band.range*amount);
+    for(int c=0;c<2;++c)smoothTo(filters[c][i],filterTargets[i],smooth);
+    const float filteredL=filters[0][i].tick(wetL),filteredR=filters[1][i].tick(wetR);
+    wetL+=mix*(filteredL-wetL);wetR+=mix*(filteredR-wetR);
+   }
+   const float mix=bypass.tick(config.enabled?1.f:0.f);
+   left[sample]=clean(l+mix*(wetL-l));right[sample]=clean(r+mix*(wetR-r));
+  }
+ }
+ std::array<float,dynamicEqBandCount> read()const noexcept {
+  auto out=activity;for(auto& x:out)x*=bypass.value;return out;
+ }
+ void coefficients(std::array<Biquad,dynamicEqBandCount>& out)const noexcept {out=filters[0];}
+ std::array<float,dynamicEqBandCount> bandBlends()const noexcept {
+  std::array<float,dynamicEqBandCount> out{};
+  for(size_t i=0;i<dynamicEqBandCount;++i)out[i]=blends[i].value*bypass.value;
+  return out;
+ }
 };
+
 }
