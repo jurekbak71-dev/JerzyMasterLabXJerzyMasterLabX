@@ -21,8 +21,9 @@ class ConceptCOverviewPanel final : public juce::Component {
     std::vector<std::unique_ptr<juce::TextButton>> openButtons_;
     Processor::ResponseFrame telemetry_{};
     bool haveTelemetry_=false;
-    std::array<float,256> spectrum_{};
-    bool haveSpectrum_=false;
+    std::array<float,256> spectrum_{},inputSpectrum_{};
+    bool haveSpectrum_=false,haveInputSpectrum_=false;
+    juce::TextButton differenceButton_{"DIFF dB"};
     std::array<float,256> eqCurveDb_{};
     bool haveEqCurve_=false;
     static constexpr std::array<const char*,9> titles_{{
@@ -107,6 +108,8 @@ public:
     std::function<void(int)> onOpen;
     ConceptCOverviewPanel(Processor& p,StudioTheme& theme):processor_(p),theme_(theme){
         setLookAndFeel(&theme_);setComponentID("concept-c-overview");
+        addAndMakeVisible(differenceButton_);differenceButton_.setClickingTogglesState(true);
+        differenceButton_.setComponentID("before-after-difference");differenceButton_.onClick=[this]{repaint();};
         const std::array<std::array<const char*,3>,4> topIds{{
             {{"gain","frequency","q"}},
             {{"dynThreshold","dynRatio","dynMix"}},
@@ -135,10 +138,12 @@ public:
     ~ConceptCOverviewPanel()override{setLookAndFeel(nullptr);}
     void update(const Processor::ResponseFrame& frame){telemetry_=frame;haveTelemetry_=true;repaint();}
     void updateSpectrum(const std::array<float,256>& bins){spectrum_=bins;haveSpectrum_=true;repaint();}
+    void updateInputSpectrum(const std::array<float,256>& bins){inputSpectrum_=bins;haveInputSpectrum_=true;repaint();}
     void updateEqCurve(const std::array<float,256>& curve){eqCurveDb_=curve;haveEqCurve_=true;repaint();}
     bool hasMeasuredSpectrum() const noexcept{return haveSpectrum_;}
     int connectedControlCount() const noexcept{return static_cast<int>(controls_.size());}
     void resized()override{
+        differenceButton_.setBounds(getWidth()-269,static_cast<int>(getHeight()*.305f+35.f),90,22);
         for(size_t i=0;i<openButtons_.size();++i){
             auto r=card(static_cast<int>(i));
             openButtons_[i]->setBounds(static_cast<int>(r.getRight()-62),static_cast<int>(r.getY()+11),54,22);
@@ -216,6 +221,39 @@ public:
         }else{
             g.setColour(juce::Colour(0xff7294aa));g.setFont(theme_.font(10.f));
             g.drawText("Waiting for audio / FFT",plot.toNearestInt(),juce::Justification::centred);
+        }
+        // BEFORE comes from real latency-aligned input audio. AFTER is the
+        // VST3 output. Orange and cyan show simultaneous live FFTs.
+        if(haveInputSpectrum_){
+            juce::Path before;
+            for(size_t i=0;i<inputSpectrum_.size();++i){
+                const float dbValue=juce::Decibels::gainToDecibels(juce::jmax(0.f,inputSpectrum_[i]),-100.f);
+                const float normalized=juce::jlimit(0.f,1.f,(dbValue+90.f)/90.f);
+                const float x=plotX+plotW*static_cast<float>(i)/(inputSpectrum_.size()-1);
+                const float y=plotY+plotH*(1.f-normalized);
+                if(i==0)before.startNewSubPath(x,y);else before.lineTo(x,y);
+            }
+            juce::Graphics::ScopedSaveState clip(g);g.reduceClipRegion(plot.toNearestInt());
+            g.setColour(juce::Colour(0xffffba77));g.strokePath(before,juce::PathStrokeType(1.6f));
+        }
+        if(haveInputSpectrum_&&haveSpectrum_&&differenceButton_.getToggleState()){
+            juce::Path diff;
+            for(size_t i=0;i<inputSpectrum_.size();++i){
+                const float before=juce::Decibels::gainToDecibels(juce::jmax(1.e-9f,inputSpectrum_[i]),-100.f);
+                const float after=juce::Decibels::gainToDecibels(juce::jmax(1.e-9f,spectrum_[i]),-100.f);
+                const float db=juce::jlimit(-18.f,18.f,after-before);
+                const float x=plotX+plotW*static_cast<float>(i)/(inputSpectrum_.size()-1);
+                const float y=plotY+plotH*(.5f-db/36.f);
+                if(i==0)diff.startNewSubPath(x,y);else diff.lineTo(x,y);
+            }
+            juce::Graphics::ScopedSaveState clip(g);g.reduceClipRegion(plot.toNearestInt());
+            g.setColour(juce::Colour(0xffff68be));g.strokePath(diff,juce::PathStrokeType(1.4f));
+        }
+        if(haveInputSpectrum_&&haveSpectrum_){
+            g.setFont(theme_.font(9.f));g.setColour(juce::Colour(0xffffba77));
+            g.drawText("BEFORE",static_cast<int>(plotX+7),static_cast<int>(plot.getBottom()+2),70,15,juce::Justification::left);
+            g.setColour(juce::Colour(0xff4bdfff));
+            g.drawText("AFTER",static_cast<int>(plotX+80),static_cast<int>(plot.getBottom()+2),60,15,juce::Justification::left);
         }
         if(haveEqCurve_){
             juce::Path eq;
