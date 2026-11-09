@@ -12,7 +12,10 @@ class ModulePanel final : public juce::Component {
  std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> enabledAttachment,monoBassAttachment,monoAttachment,bandAttachment;
  std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAttachment;
  Processor::ResponseFrame frame;std::array<juce::Point<float>,1024> scope{};
- std::array<std::array<float,3>,240> history{};size_t historyHead=0,historyCount=0;int selectedBand=1;
+ std::array<std::array<float,3>,240> history{};
+ std::array<std::array<float,masterlab::dynamicEqBandCount>,240> dynamicHeat{};
+ std::array<std::array<float,2>,240> compressorEnergy{};
+ size_t historyHead=0,historyCount=0;int selectedBand=1;
  std::array<float,512> stereoSpectrum{};int draggedSplit=-1;
  std::array<juce::TextButton,4> bandPower,bandSolo;juce::ToggleButton deltaMonitor{"Delta"};std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> deltaAttachment;std::array<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>,4> bandPowerAttachments,bandSoloAttachments;
  std::array<juce::Colour,4> bandColours{juce::Colour(0xff5fcce8),juce::Colour(0xffd67bea),juce::Colour(0xffef907d),juce::Colour(0xffa7dfcb)};
@@ -59,7 +62,14 @@ public:
  }
  void mouseUp(const juce::MouseEvent&)override{if(draggedSplit>=0){processor.state.getParameter(splitIds[draggedSplit])->endChangeGesture();processor.finishUiTransaction();draggedSplit=-1;}}
  void updateScope(const std::array<juce::Point<float>,1024>& points){scope=points;}
- void update(const Processor::ResponseFrame& f){frame=f;history[historyHead]={f.dynamics.reduction,f.dynamics.upward,f.dynamics.punch};historyHead=(historyHead+1)%history.size();historyCount=std::min(history.size(),historyCount+1);repaint();}
+ void update(const Processor::ResponseFrame& f){
+  frame=f;
+  history[historyHead]={f.dynamics.reduction,f.dynamics.upward,f.dynamics.punch};
+  dynamicHeat[historyHead]=f.dynamicGain;
+  compressorEnergy[historyHead]={f.dynamics.measuredInputDb,f.dynamics.measuredOutputDb};
+  historyHead=(historyHead+1)%history.size();
+  historyCount=std::min(history.size(),historyCount+1);repaint();
+ }
  void resized()override{
   present.setBounds(getWidth()-264,10,130,34);enabled.setBounds(getWidth()-128,10,118,34);
   const int side=std::min(340,getWidth()/2-24),left=getWidth()-side-24;
@@ -103,6 +113,19 @@ public:
    const int intensityMode=std::clamp(static_cast<int>(value("dynamicsIntensity")),0,3);const float grScale=std::array<float,4>{1.f,.8f,1.4f,1.9f}[intensityMode],upScale=std::array<float,4>{1.f,.85f,1.2f,1.45f}[intensityMode];juce::Path path;for(int i=0;i<=120;++i){float in=-60+i*.5f,out=in-masterlab::SmartCompressor::reduction(in,value("dynThreshold"),value("dynRatio"),value("dynKnee")+(value("dynamicsMode")>.5f?3:0))*grScale+masterlab::SmartCompressor::upward(in,value("upwardThreshold"),value("upwardAmount"))*upScale+value("dynMakeup");float outMixed=in+20*std::log10(std::max(1e-9f,1-value("dynMix")+value("dynMix")*masterlab::dbGain(out-in)));if(i==0)path.startNewSubPath(px(in),py(outMixed));else path.lineTo(px(in),py(outMixed));}
    g.setColour(accent);g.strokePath(path,juce::PathStrokeType(2));g.setColour(gold);float input=std::clamp(frame.dynamics.inputDb,-60.f,0.f);g.drawVerticalLine(static_cast<int>(px(input)),y,y+h);
    const float historyY=y+h+42,historyH=std::max(20.f,getHeight()-historyY-74);g.setColour(muted);g.drawText("Gain history / GUI snapshots",42,static_cast<int>(historyY)-24,static_cast<int>(plotWidth)-24,20,juce::Justification::left);
+   // Measured full-band input and output energies, not synthetic curves.
+   const float cellW=w/static_cast<float>(history.size());
+   const float cellH=historyH*.5f;
+   for(size_t ix=0;ix<historyCount;++ix){
+    const auto row=(historyHead+history.size()-historyCount+ix)%history.size();
+    const auto levels=compressorEnergy[row];
+    for(int lane=0;lane<2;++lane){
+     const float level=std::clamp((levels[static_cast<size_t>(lane)]+72.f)/72.f,0.f,1.f);
+     const auto colour=lane==0?juce::Colour(0xffdca25d):juce::Colour(0xff55c3e4);
+     g.setColour(colour.withAlpha(.08f+.36f*level));
+     g.fillRect(x+ix*cellW,historyY+lane*cellH,cellW+1.f,cellH);
+    }
+   }
    for(int curve=0;curve<3;++curve){juce::Path line;for(size_t i=0;i<historyCount;++i){auto item=history[(historyHead+history.size()-historyCount+i)%history.size()];float xx=x+w*i/std::max<size_t>(1,historyCount-1),yy=historyY+historyH-std::clamp(item[curve]/18.f,0.f,1.f)*historyH;if(i==0)line.startNewSubPath(xx,yy);else line.lineTo(xx,yy);}g.setColour(curve==0?gold:(curve==1?accent:juce::Colour(0xff6cb5ff)));g.strokePath(line,juce::PathStrokeType(1.5f));}
    g.setColour(gold);g.drawText("Down "+juce::String(frame.dynamics.reduction,1)+" dB",42,getHeight()-66,145,20,juce::Justification::left);g.setColour(accent);g.drawText("Up "+juce::String(frame.dynamics.upward,1)+" dB",195,getHeight()-66,145,20,juce::Justification::left);
   }
@@ -129,7 +152,22 @@ public:
    const float x=44,y=106,w=plotWidth-40,h=std::max(50.f,getHeight()-240.f);
    for(int db=-12;db<=12;db+=6){float yy=y+h*.5f-db*h/24;g.setColour(muted.withAlpha(.2f));g.drawLine(x,yy,x+w,yy);g.setColour(muted);g.drawText(juce::String(db),27,static_cast<int>(yy)-7,16,14,juce::Justification::right);}
    g.setColour(muted);g.drawText("20 Hz",44,static_cast<int>(y+h)+2,60,16,juce::Justification::left);g.drawText("Nyquist",static_cast<int>(x+w)-65,static_cast<int>(y+h)+2,65,16,juce::Justification::right);
-   for(int band=0;band<3;++band){juce::Path path;for(int i=0;i<256;++i){double hz=20*std::pow(frame.rate*.5/20,i/255.);float db=static_cast<float>(20*std::log10(std::max(1e-9,std::abs((1.-frame.dynamicBlends[band])+static_cast<double>(frame.dynamicBlends[band])*frame.dynamicBands[band].response(frame.rate,hz)))));float yy=y+h*.5f-std::clamp(db,-12.f,12.f)*h/24;if(i==0)path.startNewSubPath(x,yy);else path.lineTo(x+w*i/255.f,yy);}g.setColour(juce::Colour(std::array<juce::uint32,3>{0xffe7bb6a,0xff82dfcd,0xffb6a0ff}[static_cast<size_t>(band)]).withAlpha(band==selectedBand-1?1.f:.7f));g.strokePath(path,juce::PathStrokeType(2));g.drawText("Band "+juce::String(band+1)+"  "+juce::String(frame.dynamicGain[band],1)+" dB dynamic",42,static_cast<int>(y+h)+20+band*22,static_cast<int>(plotWidth)-24,22,juce::Justification::left);}
+   for(int band=0;band<8;++band){juce::Path path;for(int i=0;i<256;++i){double hz=20*std::pow(frame.rate*.5/20,i/255.);float db=static_cast<float>(20*std::log10(std::max(1e-9,std::abs((1.-frame.dynamicBlends[band])+static_cast<double>(frame.dynamicBlends[band])*frame.dynamicBands[band].response(frame.rate,hz)))));float yy=y+h*.5f-std::clamp(db,-12.f,12.f)*h/24;if(i==0)path.startNewSubPath(x,yy);else path.lineTo(x+w*i/255.f,yy);}g.setColour(juce::Colour(std::array<juce::uint32,8>{0xffe7bb6a,0xff82dfcd,0xffb6a0ff,0xfff48ea1,0xff73c9f4,0xffc6df77,0xffdf9ded,0xffffa77d}[static_cast<size_t>(band)]).withAlpha(band==selectedBand-1?1.f:.7f));g.strokePath(path,juce::PathStrokeType(band==selectedBand-1?2.f:1.f));}
+   g.setColour(muted);g.drawText("Dynamic EQ  /  measured gain action in each of eight bands",42,static_cast<int>(y+h)+18,static_cast<int>(plotWidth)-24,20,juce::Justification::left);
+   const float heatTop=y+h+42.f,heatBottom=static_cast<float>(getHeight()-44);
+   const float cellHeight=std::max(2.f,(heatBottom-heatTop)/8.f);
+   const float dx=w/static_cast<float>(history.size());
+   for(size_t ix=0;ix<historyCount;++ix){
+    const auto row=(historyHead+history.size()-historyCount+ix)%history.size();
+    for(size_t band=0;band<masterlab::dynamicEqBandCount;++band){
+     const float reduction=std::clamp(dynamicHeat[row][band]/12.f,-1.f,1.f);
+     const float intensity=std::abs(reduction);
+     g.setColour((reduction<0?juce::Colour(0xff4bafff):juce::Colour(0xffffad6a)).withAlpha(.07f+.85f*intensity));
+     g.fillRect(x+ix*dx,heatTop+band*cellHeight,dx+1.f,cellHeight);
+    }
+   }
+   g.setColour(muted);g.setFont(theme.font(10));
+   g.drawText("Selected band "+juce::String(selectedBand)+" action "+juce::String(frame.dynamicGain[static_cast<size_t>(selectedBand-1)],2)+" dB",42,getHeight()-32,static_cast<int>(plotWidth)-24,20,juce::Justification::left);
   }
  }
 };
