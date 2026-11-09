@@ -35,8 +35,28 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force build | Out-Null
-          Invoke-WebRequest https://github.com/microsoft/onnxruntime/releases/download/v1.26.0/onnxruntime-win-x64-1.26.0.zip -OutFile build/ort.zip
-          Expand-Archive build/ort.zip -DestinationPath build
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://github.com/microsoft/onnxruntime/releases/download/v1.26.0/onnxruntime-win-x64-1.26.0.zip'
+          $downloaded = $false
+          for ($attempt = 1; $attempt -le 4; $attempt++) {
+            try {
+              Invoke-WebRequest $url -OutFile build/ort.zip -TimeoutSec 180
+              if ((Get-Item build/ort.zip).Length -lt 1000000) { throw 'Incomplete ONNX Runtime archive' }
+              Expand-Archive build/ort.zip -DestinationPath build -Force
+              if (!(Test-Path 'build/onnxruntime-win-x64-1.26.0/VERSION_NUMBER')) {
+                throw 'Missing ONNX Runtime version file'
+              }
+              $version = (Get-Content 'build/onnxruntime-win-x64-1.26.0/VERSION_NUMBER' -Raw).Trim()
+              if ($version -ne '1.26.0') { throw "Incorrect ONNX Runtime version: $version" }
+              $downloaded = $true
+              break
+            } catch {
+              Write-Warning "ONNX Runtime download attempt $attempt failed: $_"
+              Remove-Item build/ort.zip -ErrorAction SilentlyContinue
+              if ($attempt -lt 4) { Start-Sleep -Seconds (5 * $attempt) }
+            }
+          }
+          if (!$downloaded) { throw 'Cannot retrieve or validate official ONNX Runtime 1.26.0 after four attempts' }
       - name: Validate both PowerShell installers parse without errors
         shell: pwsh
         run: |
