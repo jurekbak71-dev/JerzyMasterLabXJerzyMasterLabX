@@ -61,7 +61,7 @@ public:
  StereoReading read()const noexcept {StereoReading out;for(size_t i=0;i<4;++i){out.correlation[i]=ll[i]*rr[i]>1e-24?static_cast<float>(std::clamp(lr[i]/std::sqrt(ll[i]*rr[i]),-1.,1.)):0;out.width[i]=static_cast<float>(std::sqrt(std::max(0.,ll[i]+rr[i]-2*lr[i])/std::max(1e-20,ll[i]+rr[i]+2*lr[i])));}return out;}
 };
 struct DynamicsSettings {bool enabled=false,analog=false;float threshold=-18,ratio=2,attack=15,release=150,knee=6,makeup=0,mix=1,upward=0,upwardThreshold=-36;int intensity=0;float punch=0;bool delta=false;};
-struct DynamicsReading {float reduction=0,upward=0,inputDb=-180,punch=0;};
+struct DynamicsReading {float reduction=0,upward=0,inputDb=-180,punch=0,measuredInputDb=-180,measuredOutputDb=-180;};
 class SmartCompressor {
  double rate=48000;Envelope detector,transientDetector;Slew bypass,gain,mode,wetMix,delta;DynamicsSettings config;DynamicsReading reading;
 public:
@@ -80,6 +80,7 @@ public:
  void process(float* left,float* right,int n)noexcept {
   if(!config.enabled&&bypass.value<1e-6f){bypass.value=0;reading={};return;}
   const float coefficient=static_cast<float>(1-std::exp(-1/(rate*.001)));
+  double inputEnergy=0.,outputEnergy=0.;
   for(int i=0;i<n;++i){float l=clean(left[i]),r=clean(right[i]);const float analog=mode.tick(config.analog?1.f:0.f);
    const float amplitude=std::max(std::abs(l),std::abs(r));const float envelope=detector.tick(amplitude,rate,config.attack*(1+.5f*analog),config.release*(1+.5f*analog));
    const float db=levelDb(envelope),gr=reduction(db,config.threshold,config.ratio,config.knee+analog*3),up=upward(db,config.upwardThreshold,config.upward);const int intensity=std::clamp(config.intensity,0,3);
@@ -91,8 +92,12 @@ public:
     const float shaped=(positive-negative)/(2.f*(1.15f/(1+.08f*.08f)));
     return v+analog*.15f*(shaped-v);};
    const float wetL=colour(l),wetR=colour(r),normalL=clean(l+blend*(wetL-l)),normalR=clean(r+blend*(wetR-r)),monitor=delta.tick(config.delta?1.f:0.f);left[i]=clean(normalL+monitor*(blend*(wetL-l)-normalL));right[i]=clean(normalR+monitor*(blend*(wetR-r)-normalR));
+   inputEnergy+=.5*(static_cast<double>(l)*l+static_cast<double>(r)*r);
+   outputEnergy+=.5*(static_cast<double>(normalL)*normalL+static_cast<double>(normalR)*normalR);
    reading={gr*grScale*blend,up*upScale*blend,db,punchGain*blend};
   }
+  if(n>0){reading.measuredInputDb=levelDb(static_cast<float>(std::sqrt(inputEnergy/n)));
+           reading.measuredOutputDb=levelDb(static_cast<float>(std::sqrt(outputEnergy/n)));}
  }
  DynamicsReading read()const noexcept{return reading;}
 };
