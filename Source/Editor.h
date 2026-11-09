@@ -359,8 +359,8 @@ class Editor final : public juce::AudioProcessorEditor,
     int fftOrder=13;
     std::unique_ptr<juce::dsp::FFT> fft=std::make_unique<juce::dsp::FFT>(fftOrder);
     std::array<float,65536> fftLeft{},fftRight{};
-    std::array<float,16385> spectrum{};
-    std::array<std::array<float,32768>,2> samples{};
+    std::array<float,16385> spectrum{},beforeSpectrum{};
+    std::array<std::array<float,32768>,2> samples{},beforeSamples{};
     double lastAnalysis=0;
     std::array<juce::Point<float>,1024> scope{};
     int head = 0;
@@ -452,7 +452,11 @@ class Editor final : public juce::AudioProcessorEditor,
             overviewPanel.updateEqCurve(curveDb);
         }
         processor.fifo.prepareToRead(processor.fifo.getNumReady(),start,count,start2,count2);
-        auto consume=[&](int first,int size){for(int i=0;i<size;++i){float l=processor.traceL[first+i],r=processor.traceR[first+i];samples[0][head]=l;samples[1][head]=r;scope[head%1024]={r-l,r+l};head=(head+1)%32768;}};
+        auto consume=[&](int first,int size){for(int i=0;i<size;++i){float l=processor.traceL[first+i],r=processor.traceR[first+i];
+            samples[0][head]=l;samples[1][head]=r;
+            beforeSamples[0][head]=processor.traceBeforeL[first+i];
+            beforeSamples[1][head]=processor.traceBeforeR[first+i];
+            scope[head%1024]={r-l,r+l};head=(head+1)%32768;}};
         consume(start,count);consume(start2,count2);processor.fifo.finishedRead(count+count2);
         if(count+count2&&modulePanels[2])modulePanels[2]->updateScope(scope);
         if(count+count2>0){
@@ -462,6 +466,22 @@ class Editor final : public juce::AudioProcessorEditor,
             fft->performFrequencyOnlyForwardTransform(fftLeft.data());fft->performFrequencyOnlyForwardTransform(fftRight.data());
             double now=juce::Time::getMillisecondCounterHiRes();float release=lastAnalysis>0?static_cast<float>(std::exp(-(now-lastAnalysis)/150.)):0;lastAnalysis=now;
             for(int i=0;i<=size/2;++i){float level=masterlab::stereoSpectrumAmplitude(fftLeft[i],fftRight[i],size);spectrum[i]=level>spectrum[i]?level:release*spectrum[i]+(1-release)*level;}
+            // Same window, FFT and sampling clock for BEFORE (PDC-aligned
+            // input); only the UI thread ever touches these FFT buffers.
+            for(int i=0;i<size;++i){
+                const float window=.5f-.5f*std::cos(juce::MathConstants<float>::twoPi*i/(size-1));
+                const int index=(head+32768-size+i)%32768;
+                fftLeft[i]=beforeSamples[0][index]*window;
+                fftRight[i]=beforeSamples[1][index]*window;
+            }
+            std::fill(fftLeft.begin()+size,fftLeft.begin()+size*2,0);
+            std::fill(fftRight.begin()+size,fftRight.begin()+size*2,0);
+            fft->performFrequencyOnlyForwardTransform(fftLeft.data());
+            fft->performFrequencyOnlyForwardTransform(fftRight.data());
+            for(int i=0;i<=size/2;++i){
+                const float level=masterlab::stereoSpectrumAmplitude(fftLeft[i],fftRight[i],size);
+                beforeSpectrum[i]=level>beforeSpectrum[i]?level:release*beforeSpectrum[i]+(1-release)*level;
+            }
             if(modulePanels[2]){std::array<float,512> bins{};for(size_t i=0;i<bins.size();++i){float hz=20*std::pow(static_cast<float>(sampleRate()*.5)/20,i/511.f),position=std::clamp(hz*size/static_cast<float>(sampleRate()),0.f,static_cast<float>(size/2-1));int bin=static_cast<int>(position);bins[i]=spectrum[bin]+(position-bin)*(spectrum[bin+1]-spectrum[bin]);}modulePanels[2]->updateSpectrum(bins);
                 std::array<float,256> consoleBins{};
                 for(size_t n=0;n<consoleBins.size();++n){
@@ -470,7 +490,15 @@ class Editor final : public juce::AudioProcessorEditor,
                     consoleBins[n]=bins[static_cast<size_t>(ix)]*(1.f-(pos-ix))+
                                    bins[static_cast<size_t>(ix+1)]*(pos-ix);
                 }
-                overviewPanel.updateSpectrum(consoleBins);}
+                std::array<float,256> inputBins{};
+                for(size_t n=0;n<inputBins.size();++n){
+                    const float hz=20.f*std::pow(static_cast<float>(sampleRate()*.5)/20.f,static_cast<float>(n)/255.f);
+                    const float position=std::clamp(hz*size/static_cast<float>(sampleRate()),0.f,static_cast<float>(size/2-1));
+                    const int bin=static_cast<int>(position);
+                    inputBins[n]=beforeSpectrum[bin]+(position-bin)*(beforeSpectrum[bin+1]-beforeSpectrum[bin]);
+                }
+                overviewPanel.updateSpectrum(consoleBins);
+                overviewPanel.updateInputSpectrum(inputBins);}
 
         }
         repaint();
@@ -601,7 +629,7 @@ public:
         for(int order=12;order<=15;++order)fftChoice.addItem("FFT "+juce::String(1<<order),order);
         fftChoice.setSelectedId(fftOrder,juce::dontSendNotification);
         fftChoice.setTooltip("Spectrum resolution only. FFT runs outside the audio callback and does not alter audio latency. L/R energy preserves opposite-phase signals.");
-        fftChoice.onChange=[this]{fftOrder=juce::jlimit(12,15,fftChoice.getSelectedId());fftChoice.setSelectedId(fftOrder,juce::dontSendNotification);fft=std::make_unique<juce::dsp::FFT>(fftOrder);spectrum.fill(0);lastAnalysis=0;};
+        fftChoice.onChange=[this]{fftOrder=juce::jlimit(12,15,fftChoice.getSelectedId());fftChoice.setSelectedId(fftOrder,juce::dontSendNotification);fft=std::make_unique<juce::dsp::FFT>(fftOrder);spectrum.fill(0);beforeSpectrum.fill(0);lastAnalysis=0;};
         for(int i=1;i<=16;++i)bandChoice.addItem("Band "+juce::String(i),i);
         bandChoice.onChange=[this]{endDrag();selectBand(bandChoice.getSelectedId()-1);};
         addAndMakeVisible(eqEnabled);addAndMakeVisible(limiterEnabled);
