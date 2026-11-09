@@ -52,7 +52,7 @@ jobs:
           cmake -S . -B build-live -A x64 -DMASTERLAB_PLUGIN=ON -DMASTERLAB_STEMGENRT=ON -DMASTERLAB_LIVE_STEM_PLUGIN=ON "-DMASTERLAB_ORT_ROOT=$pwd/build/onnxruntime-win-x64-1.26.0" "-DMASTERLAB_STEMGENRT_MODELS=$pwd/build/models" "-DPython3_EXECUTABLE=$py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build LIVE plugin and tests
-        run: cmake --build build-live --config Release --parallel 2
+        run: cmake --build build-live --config Release --parallel 1
       - name: Existing compatibility and native neural tests
         run: ctest --test-dir build-live -C Release --output-on-failure
       - name: Actual streaming integration through JUCE processBlock
