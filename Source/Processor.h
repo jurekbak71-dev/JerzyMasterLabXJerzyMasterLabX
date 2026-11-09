@@ -35,7 +35,7 @@ public:
  size_t hostDryPosition=0;float hostBypassMix=0,hostBypassStep=1.f/960.f;bool hostBypassTarget=false;
  float profileBlend=1.f,profileStep=1.f/960.f;
  std::array<std::atomic<float>*,masterlab::parameterCount> parameters{};
- juce::AbstractFifo fifo{8192};std::array<float,8192> traceL{},traceR{};
+ juce::AbstractFifo fifo{8192};std::array<float,8192> traceL{},traceR{},traceBeforeL{},traceBeforeR{};
  struct ResponseFrame {std::array<masterlab::Biquad,16> bands;std::array<float,16> blends{};double rate=48000;std::array<float,12> stabilizerGain{};std::array<masterlab::Biquad,12> stabilizerBands{};float stabilizerMix=0;float eqMix=1;masterlab::StereoReading stereo;masterlab::DynamicsReading dynamics;masterlab::ParallelReading parallel;masterlab::HarmonicExciterReading exciter;masterlab::AnalogColorReading analog;masterlab::AnalogizerReading analogizer;masterlab::RestorationReading restoration;masterlab::BassArchitectReading bass;masterlab::TransientSculptorReading transient;masterlab::FinalTruePeakReading truePeak;std::array<float,masterlab::dynamicEqBandCount> dynamicGain{},dynamicBlends{};std::array<masterlab::Biquad,masterlab::dynamicEqBandCount> dynamicBands{};masterlab::MeterReading inputReading,outputReading;masterlab::LoudnessReading inputLufs,outputLufs;};
  juce::AbstractFifo responseFifo{4};std::array<ResponseFrame,4> responses{};
  std::atomic<double> displayRate{48000};
@@ -231,6 +231,20 @@ public:
     limiterFifo.finishedWrite(n+n2);
    }
   }
+  // Paired SPSC queue: latency-aligned dry signal and actual final output.
+  int inStart,inCount,inStart2,inCount2;
+  fifo.prepareToWrite(length,inStart,inCount,inStart2,inCount2);
+  for(int j=0;j<inCount;++j){
+   traceBeforeL[inStart+j]=hostDryScratch[0][j];traceBeforeR[inStart+j]=hostDryScratch[1][j];
+   traceL[inStart+j]=b.getSample(0,offset+j);traceR[inStart+j]=b.getSample(1,offset+j);
+  }
+  for(int j=0;j<inCount2;++j){
+   traceBeforeL[inStart2+j]=hostDryScratch[0][inCount+j];
+   traceBeforeR[inStart2+j]=hostDryScratch[1][inCount+j];
+   traceL[inStart2+j]=b.getSample(0,offset+inCount+j);
+   traceR[inStart2+j]=b.getSample(1,offset+inCount+j);
+  }
+  fifo.finishedWrite(inCount+inCount2);
   offset+=length;
  }
  int responseStart,responseCount,responseStart2,responseCount2;
@@ -238,8 +252,7 @@ public:
  if(responseCount+responseCount2){int index=responseCount?responseStart:responseStart2;engine.copyEqCoefficients(responses[index].bands);engine.copyBandBlends(responses[index].blends);responses[index].stereo=engine.stereoRead();responses[index].dynamics=engine.dynamicsRead();responses[index].parallel=engine.parallelRead();responses[index].exciter=engine.harmonicExciterRead();responses[index].analog=engine.analogColorRead();responses[index].analogizer=analogizer.reading();responses[index].restoration=restoration.reading();responses[index].bass=engine.bassArchitectRead();responses[index].transient=engine.transientSculptorRead();responses[index].truePeak=engine.finalTruePeakRead();responses[index].dynamicGain=engine.dynamicRead();responses[index].dynamicBlends=engine.dynamicBlends();engine.dynamicCoefficients(responses[index].dynamicBands);responses[index].stabilizerGain=engine.stabilizerRead();engine.stabilizerCoefficients(responses[index].stabilizerBands);responses[index].stabilizerMix=engine.stabilizerBlend();responses[index].rate=displayRate.load();responses[index].eqMix=engine.eqBlend();responses[index].inputReading=inputMeter.read();responses[index].outputReading=outputMeter.read();responses[index].inputLufs=inputLoudness.read();responses[index].outputLufs=outputLoudness.read();}
  responseFifo.finishedWrite(responseCount+responseCount2);
  const auto reading=outputMeter.read();peak.store(reading.peak);rms.store(reading.rms);correlation.store(reading.correlation);
- int s1,n1,s2,n2;fifo.prepareToWrite(b.getNumSamples(),s1,n1,s2,n2);
- for(int j=0;j<n1;++j){traceL[s1+j]=b.getSample(0,j);traceR[s1+j]=b.getSample(1,j);}for(int j=0;j<n2;++j){traceL[s2+j]=b.getSample(0,n1+j);traceR[s2+j]=b.getSample(1,n1+j);}fifo.finishedWrite(n1+n2);
+
  }
  void getStateInformation(juce::MemoryBlock& dest)override{auto xml=state.copyState().createXml();copyXmlToBinary(*xml,dest);}
  juce::ValueTree parseState(const void* data,int size){
