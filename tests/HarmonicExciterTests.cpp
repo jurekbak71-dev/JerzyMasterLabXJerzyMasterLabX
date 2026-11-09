@@ -148,6 +148,27 @@ int main() {
         std::printf("Full 4x exciter 18k alias: raw %.8f, 4x %.8f\n",aliasRaw,alias4x);
         require(aliasRaw>1e-4&&alias4x<aliasRaw*.25,"4x reduces measured alias");
     }
+    // The VST3 enables 1x ADAA, not the experimental 2x/4x FIR modes.
+    // Verify the third-harmonic fold is attenuated without changing PDC.
+    {
+        HarmonicExciterSettings cfg;cfg.enabled=true;
+        cfg.amount={1,1,1,1};cfg.driveDb=12.f;cfg.even=0;cfg.odd=1;
+        const auto legacy=renderTone(48000,10000,48000,cfg,257);
+        const double aliasBefore=amplitude(legacy,18,1000,48000,24000);
+        cfg.adaa=true;
+        const auto corrected=renderTone(48000,10000,48000,cfg,257);
+        const double aliasAfter=amplitude(corrected,18,1000,48000,24000);
+        std::printf("Exciter 1x ADAA: 18k fold before %.9f after %.9f\\n",aliasBefore,aliasAfter);
+        require(aliasBefore>1e-5&&aliasAfter<aliasBefore*.85,"ADAA third-harmonic alias reduction");
+        const auto oneSample=renderTone(48000,10000,48000,cfg,1);
+        for(size_t i=0;i<corrected.size();++i)
+            require(std::abs(corrected[i]-oneSample[i])<1e-6f,"ADAA block independence");
+        HarmonicExciter probe;probe.settings(cfg);probe.prepare(48000);
+        require(probe.latencySamples()==0,"ADAA has no added latency samples");
+        cfg.even=1;cfg.odd=0;
+        const auto second=render(48000,48000,cfg,128);
+        require(amplitude(second,2,1000,48000,24000)>.001,"ADAA even harmonic must remain active");
+    }
     HarmonicExciter effect;HarmonicExciterSettings on;on.enabled=true;on.amount={1,1,1,1};
     effect.settings(on);effect.prepare(48000);
     std::array<float,128> l{},r{};effect.process(l.data(),r.data(),128);
