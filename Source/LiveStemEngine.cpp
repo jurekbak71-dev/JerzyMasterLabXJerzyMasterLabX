@@ -151,10 +151,13 @@ void LiveStemEngine::process(float* left, float* right, std::size_t count,
         bool available = active && controls.enabled && ready &&
                          findOutput(position_ - latency_, wet, controls);
         if (available) {
-            deliveredWetFrames_.fetch_add(1, std::memory_order_relaxed);
             for (std::size_t c=0;c<2;++c)
                 if (!std::isfinite(wet[c]-dry[c])) available=false;
         }
+        // Count only genuinely usable neural frames, not frames rejected by
+        // the finite-correction guard. The GUI uses this as a LIVE health metric.
+        if (available)
+            deliveredWetFrames_.fetch_add(1, std::memory_order_relaxed);
         if (available && (dry[0] != 0 || dry[1] != 0)) {
             if (starving_) {
                 const auto remaining = static_cast<float>(fadeRemaining_)/static_cast<float>(fade_);
