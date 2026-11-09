@@ -4,7 +4,7 @@
 #include <string>
 namespace masterlab {
 // Current host parameter table without the removed LIVE/OFFLINE STEMS module.
-inline constexpr size_t parameterCount=278;
+inline constexpr size_t parameterCount=286;
 inline constexpr std::array<const char*,140> moduleParameterIds{
  "eqPresent","limPresent","stereoPresent","stereoOn","stereoLowWidth","stereoMidWidth","stereoHighWidth","stereoLowSplit","stereoHighSplit","stereoMonoBass","stereoMono","stereoBalance",
  "dynamicsPresent","dynamicsOn","dynamicsMode","dynThreshold","dynRatio","dynAttack","dynRelease","dynKnee","dynMakeup","dynMix","upwardAmount","upwardThreshold",
@@ -24,6 +24,7 @@ inline std::string parameterId(size_t i){
  if(i==226)return "fullRouterOn";
  if(i<238)return "fullRouteSlot"+std::to_string(i-226);
  if(i<278){constexpr std::array<const char*,8> fields{"deqFreq","deqGain","deqQ","deqThreshold","deqRange","deqAttack","deqRelease","deqBandOn"};return std::string(fields[(i-238)%8])+std::to_string(4+(i-238)/8);}
+ if(i<286){constexpr std::array<const char*,8> names{"analogizerOn","analogizerMode","analogizerDrive","analogizerWarmth","analogizerDeFizz","analogizerMix","analogizerOutput","analogizerPresent"};return names[i-278];}
  return "unknown";
 
 }
