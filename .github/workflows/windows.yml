@@ -20,6 +20,14 @@ jobs:
           cmake -S . -B build -A x64 "-DPython3_EXECUTABLE=$py"
       - name: Build Release
         run: cmake --build build --config Release --parallel 1
+      - name: Diagnose MSVC child-process failure
+        if: failure()
+        shell: pwsh
+        run: |
+          Write-Output 'Build failed before DSP tests. Collecting runner resource evidence; no root cause is assumed.'
+          Get-CimInstance Win32_OperatingSystem | Select-Object TotalVisibleMemorySize,FreePhysicalMemory,TotalVirtualMemorySize,FreeVirtualMemory | Format-List
+          Get-Process cl,c1xx,c2,mspdbsrv,MSBuild -ErrorAction SilentlyContinue | Select-Object ProcessName,Id,WorkingSet64,VirtualMemorySize64 | Format-Table -AutoSize
+          Get-WinEvent -FilterHashtable @{ LogName='Application'; StartTime=(Get-Date).AddMinutes(-20) } -MaxEvents 100 -ErrorAction SilentlyContinue | Where-Object { $_.ProviderName -match 'Application Error|Windows Error Reporting' -or $_.Message -match 'cl.exe|c1xx.dll|c2.dll|mspdbsrv' } | Select-Object TimeCreated,ProviderName,Id,Message | Format-List
       - name: DSP tests
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Measure live callback boundary (no neural model)
