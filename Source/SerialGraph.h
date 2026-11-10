@@ -64,8 +64,9 @@ class SerialGraph {
   std::array<float,6> targetTrimDb{},targetMix{1,1,1,1,1,1},branchEnergy{};
   std::array<Slew,6> trimSlew{},mixSlew{};Slew compensationSlew;float meterCoefficient=.999f;
   std::array<std::array<std::vector<float>,2>,6> alignment;size_t alignPosition=0;
-  std::array<std::array<float,128>,2> branch{},dry{},sum{};std::array<float,128> branchTrace{},weightSum{},limiterDelta{};
-  void prepareParallel(double rate)noexcept{meterCoefficient=static_cast<float>(std::exp(-1/(rate*.4)));branchEnergy={};compensationSlew.prepare(rate,compensated?1.f:0.f);for(size_t i=0;i<6;++i){trimSlew[i].prepare(rate,dbGain(targetTrimDb[i]));mixSlew[i].prepare(rate,targetMix[i]);}}
+  std::array<std::array<float,128>,2> branch{},dry{},sum{},originalInput{};
+  Slew profileSlew;float profileTarget=1.f;std::array<float,128> branchTrace{},weightSum{},limiterDelta{};
+  void prepareParallel(double rate)noexcept{profileSlew.prepare(rate,profileTarget);meterCoefficient=static_cast<float>(std::exp(-1/(rate*.4)));branchEnergy={};compensationSlew.prepare(rate,compensated?1.f:0.f);for(size_t i=0;i<6;++i){trimSlew[i].prepare(rate,dbGain(targetTrimDb[i]));mixSlew[i].prepare(rate,targetMix[i]);}}
   void parallelSettings(bool normalize,std::array<float,6> trims,std::array<float,6> mixes)noexcept{compensated=normalize;targetTrimDb=trims;targetMix=mixes;}
   void parallelProcess(float* l,float* r,int n,float* trace)noexcept{
    for(auto& channel:sum)std::fill_n(channel.data(),n,0.f);std::fill_n(trace,n,1.f);std::fill_n(branchTrace.data(),n,1.f);std::fill_n(weightSum.data(),n,0.f);std::fill_n(limiterDelta.data(),n,0.f);int branches=0;
@@ -95,6 +96,11 @@ class SerialGraph {
     case 9:transientSculptor.process(l,r,n);break;
     case 10:
       // One final limiting stage: sample peak shaping and 4x true-peak safety.
+      if(extended&&!parallel)for(int i=0;i<n;++i){
+       const float blend=profileSlew.tick(profileTarget);
+       l[i]=originalInput[0][i]+blend*(l[i]-originalInput[0][i]);
+       r[i]=originalInput[1][i]+blend*(r[i]-originalInput[1][i]);
+      }
       if(extended)engine.process(l,r,n,false,trace,2);
       finalTruePeak.process(l,r,n);break;
     case 11:restoration.process(l,r,n);break;
@@ -102,6 +108,8 @@ class SerialGraph {
   }
   void process(float* l,float* r,int n,float* trace) noexcept {
    if(extended&&!parallel){
+    std::copy_n(l,n,originalInput[0].data());
+    std::copy_n(r,n,originalInput[1].data());
     for(int kind:fullOrder)processOne(kind,l,r,n,trace);
     return;
    }
@@ -152,6 +160,10 @@ public:
  AnalogColorReading analogColorRead()const noexcept{return banks[active].analogExciter.legacyReading();}
  void topology(bool parallel,std::array<bool,6> present)noexcept{topology(parallel,present,{true,true,true,true,true,true});}
  void topology(bool parallel,std::array<bool,6> present,std::array<bool,6> enabled)noexcept{requestedParallel=parallel;requestedPresent=present;requestedEnabled=enabled;for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.enabled=enabled;}}
+ void profileSettings(float target)noexcept{
+  const float safe=std::isfinite(target)?std::clamp(target,0.f,1.f):1.f;
+  for(int bank=0;bank<2;++bank)banks[bank].profileTarget=safe;
+ }
  void parallelSettings(bool compensated,std::array<float,6> trims,std::array<float,6> mixes)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.parallelSettings(compensated,trims,mixes);}}
  void routing(int code,bool legacy)noexcept{requested=decodeOrder(code,legacy);}
  void extendedRouting(bool enabled,FullModuleOrder sequence)noexcept {
