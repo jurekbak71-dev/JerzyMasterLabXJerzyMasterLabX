@@ -27,7 +27,7 @@ int main(){
    const float expected=i<304?source->getParameters()[i]->getValue():
                             source->getParameters()[i]->getDefaultValue();
    if(std::abs(target->getParameters()[i]->getValue()-expected)>1.e-6f){
-    std::cerr<<"legacy state migration mismatch "<<i;return 1;
+    std::cerr<<"legacy state migration mismatch "<<i<<" id="<<dynamic_cast<juce::RangedAudioParameter*>(target->getParameters()[i])->paramID<<" got="<<target->getParameters()[i]->getValue()<<" expected="<<expected<<" source="<<source->getParameters()[i]->getValue()<<" targetDefault="<<target->getParameters()[i]->getDefaultValue();return 1;
    }
   }
   target->setStateInformation(saved.getData(),static_cast<int>(saved.getSize()));
