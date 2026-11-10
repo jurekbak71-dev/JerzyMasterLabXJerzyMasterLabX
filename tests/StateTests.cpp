@@ -13,6 +13,25 @@ int main(){
  target->setStateInformation(saved.getData(),static_cast<int>(saved.getSize()));
  for(int i=0;i<source->getParameters().size();++i)if(source->getParameters()[i]->getValue()!=target->getParameters()[i]->getValue()){std::cerr<<"full state mismatch: "<<i;return 1;}
  const auto original=juce::ValueTree::fromXml(*xml);
+ // Old FL Studio projects used schema 24 with exactly 304 parameters.
+ // New host parameters must migrate to their factory defaults, while the
+ // original parameter values and their IDs are preserved byte-for-byte.
+ {
+  auto legacy=original.createCopy();
+  if(legacy.getNumChildren()!=316){std::cerr<<"unexpected expanded state count";return 1;}
+  while(legacy.getNumChildren()>304)legacy.removeChild(legacy.getNumChildren()-1,nullptr);
+  auto legacyXml=legacy.createXml();juce::MemoryBlock legacyBlock;
+  juce::AudioProcessor::copyXmlToBinary(*legacyXml,legacyBlock);
+  target->setStateInformation(legacyBlock.getData(),static_cast<int>(legacyBlock.getSize()));
+  for(int i=0;i<source->getParameters().size();++i){
+   const float expected=i<304?source->getParameters()[i]->getValue():
+                            source->getParameters()[i]->getDefaultValue();
+   if(std::abs(target->getParameters()[i]->getValue()-expected)>1.e-6f){
+    std::cerr<<"legacy state migration mismatch "<<i;return 1;
+   }
+  }
+  target->setStateInformation(saved.getData(),static_cast<int>(saved.getSize()));
+ }
  auto unchanged=[&]{for(int i=0;i<source->getParameters().size();++i)if(source->getParameters()[i]->getValue()!=target->getParameters()[i]->getValue())return false;return true;};
  auto reject=[&](const std::function<void(juce::ValueTree&)>& corrupt){auto tree=original.createCopy();tree.getChildWithProperty("id","q16").setProperty("value",3.f,nullptr);corrupt(tree);auto altered=tree.createXml();juce::MemoryBlock block;juce::AudioProcessor::copyXmlToBinary(*altered,block);target->setStateInformation(block.getData(),static_cast<int>(block.getSize()));return unchanged();};
  int rejected=0;
