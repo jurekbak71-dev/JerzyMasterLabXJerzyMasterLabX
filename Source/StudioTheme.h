@@ -245,8 +245,9 @@ public:
   const float dx=x+(width-shown)*.5f;
   const float dy=y+(height-shown)*.5f;
   auto bounds=juce::Rectangle<float>(dx,dy,shown,shown);
-  const auto& led=!slider.isEnabled()?greenOff_:
-                  slider.hasKeyboardFocus(true)?blueOn_:greenOn_;
+  // Rotary values are not binary ON/OFF state. Keyboard focus may outline
+  // the control, but must never change a green indicator to blue.
+  const auto& led=slider.isEnabled()?greenOn_:greenOff_;
   if(!led.isNull()) {
    const auto margin=shown*.02f;
    auto ring=bounds.expanded(margin);
