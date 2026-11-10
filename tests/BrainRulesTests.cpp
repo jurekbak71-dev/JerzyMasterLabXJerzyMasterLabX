@@ -41,6 +41,17 @@ int main(){
        "expanded Brain exciter out of range");
  c.useExciter=c.useAnalog=c.useBass=c.useTransient=c.useTruePeak=false;
  check(!masterlab::proposeMastering(healthy,c).valid,"empty expanded selection should not be applied");
+ // Static EQ and Dynamic EQ must not stack unrestricted nominal attenuation
+ // in the same region when Master Brain proposes both processors.
+ c={};c.automaticModules=false;
+ auto overlapping=f;overlapping.energy={.02,.68,.18,.08,.04};
+ auto coordinated=masterlab::proposeMastering(overlapping,c);
+ check(coordinated.valid,"coordinated proposal missing");
+ if(value(coordinated,"bandEnabled2")>.5f && value(coordinated,"deqBandOn1")>.5f &&
+    value(coordinated,"gain2")<0 && value(coordinated,"deqRange1")<0)
+   check(value(coordinated,"gain2")+value(coordinated,"deqRange1")>=-3.501f,
+         "Master Brain stacks excessive overlapping tonal cuts");
+ check(value(coordinated,"bassMono")==-999,"coordination changed an excluded Bass Architect");
  // Validate tonal estimates against rendered sine energy, independently of magnitude().
  for(double rate:{44100.,48000.,96000.,192000.}){
   c={};c.useLimiter=false;f.rate=rate;const auto proposal=masterlab::proposeMastering(f,c);
