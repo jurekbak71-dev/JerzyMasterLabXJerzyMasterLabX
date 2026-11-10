@@ -11,8 +11,8 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
   HarmonicExciterSettings h;h.enabled=v(180)>.5f&&v(181)>.5f;for(size_t k=0;k<4;++k)h.amount[k]=v(182+k);h.even=v(186);h.odd=v(187);h.driveDb=v(188);h.mix=v(189);h.outputDb=v(190);h.impact=v(201);h.oversample2x=false;h.adaa=true;engine.harmonicExciterSettings(h);
   AnalogColorSettings a;a.enabled=v(191)>.5f&&v(192)>.5f;a.mode=static_cast<AnalogColorMode>(std::clamp(static_cast<int>(v(193)),0,3));a.driveDb=v(194);a.bias=v(195);a.tone=v(196);a.dynamics=v(197);a.mix=v(198);a.outputDb=v(199);a.autoGain=v(200)>.5f;a.impact=v(202);engine.analogColorSettings(a);
   BassArchitectSettings b;b.enabled=v(203)>.5f&&v(204)>.5f;b.sub=v(205);b.body=v(206);b.harmonics=v(207);b.monoBass=0.f; // Stereo Architect alone handles mono bass.
-  b.mix=v(209);b.outputDb=v(210);engine.bassArchitectSettings(b);
-  TransientSculptorSettings t;t.enabled=v(211)>.5f&&v(212)>.5f;for(size_t k=0;k<3;++k){t.attack[k]=v(213+k);t.sustain[k]=v(216+k);}t.mix=v(219);t.outputDb=v(220);engine.transientSculptorSettings(t);
+  b.mix=v(209);b.outputDb=v(210);b.delta=v(310)>.5f;engine.bassArchitectSettings(b);
+  TransientSculptorSettings t;t.enabled=v(211)>.5f&&v(212)>.5f;for(size_t k=0;k<3;++k){t.attack[k]=v(213+k);t.sustain[k]=v(216+k);}t.mix=v(219);t.outputDb=v(220);t.delta=v(311)>.5f;engine.transientSculptorSettings(t);
   FinalTruePeakSettings tp;const bool dedicatedTP=v(221)>.5f&&v(222)>.5f;
   const bool legacyLimiter=v(87)>.5f&&v(5)>.5f;
   tp.enabled=v(222)>.5f&&(v(221)>.5f||legacyLimiter);
