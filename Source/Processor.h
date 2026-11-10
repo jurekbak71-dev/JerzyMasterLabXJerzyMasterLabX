@@ -91,6 +91,8 @@ public:
  p.add(std::make_unique<juce::AudioParameterFloat>("restoreMix","Restoration wet",0.f,1.f,1.f));
  p.add(std::make_unique<juce::AudioParameterChoice>("workMode","Processing mode",juce::StringArray{"MASTER","INSERT"},0));
  p.add(std::make_unique<juce::AudioParameterFloat>("insertBlend","INSERT time-aligned processed blend",0.f,1.f,.65f));
+ p.add(std::make_unique<juce::AudioParameterBool>("dynamicEqDelta","Dynamic EQ Delta monitoring",false));
+ p.add(std::make_unique<juce::AudioParameterFloat>("analogExcite","Analog Exciter master excitement",0.f,1.f,0.f));
  return p;}
  static void addModuleParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
   auto boolean=[&](const char* id,const char* name,bool initial){p.add(std::make_unique<juce::AudioParameterBool>(id,name,initial));};
@@ -197,6 +199,7 @@ public:
  az.driveDb=value(280);az.warmth=value(281);az.deFizz=value(282);
  az.mix=value(283);az.outputDb=value(284);
  engine.analogizerSettings(az);
+ engine.analogExcite(value(305));
  masterlab::RestorationSettings rs;
  rs.enabled=value(286)>.5f&&value(287)>.5f;
  rs.hiss=value(288)>.5f;rs.hum=value(289)>.5f;
