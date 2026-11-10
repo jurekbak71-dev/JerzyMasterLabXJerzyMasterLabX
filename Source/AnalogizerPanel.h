@@ -107,7 +107,7 @@ public:
   g.setFont(juce::FontOptions(23.f));g.drawText("ANALOG EXCITER  /  Tube - FET - Tape",24,50,getWidth()-48,34,juce::Justification::left);
   g.setColour(juce::Colours::lightgrey);g.setFont(juce::FontOptions(14.f));
   if(getHeight()>=440)g.drawText("Input RMS "+juce::String(reading_.inputRms,4)+"   Output RMS "+juce::String(reading_.outputRms,4)+"   Delta RMS "+juce::String(reading_.deltaRms,4),
-      24,getHeight()-108,getWidth()-48,24,juce::Justification::left);
+      24,81,getWidth()-48,20,juce::Justification::left);
   const int meterY=std::min(getHeight()-61,363);
   g.setFont(11.f);
   if(getHeight()>=440)for(size_t band=0;band<4;++band){
