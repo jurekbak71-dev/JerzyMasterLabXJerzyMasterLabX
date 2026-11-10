@@ -66,6 +66,9 @@ public:
  void setBandMode(size_t index,FilterType type,bool enabled) noexcept {if(index<bands.size()){bands[index].type=type;bands[index].enabled=enabled;}}
  void process(float* left,float* right,int count,bool limiterFirst=false,float* gainTrace=nullptr,int stages=3) noexcept {
   if(delay[0].empty())return;
+  // Entirely absent 16-band EQ: skip coefficient construction and all
+  // per-sample work once the bypass ramp has reached silence.
+  if(stages==1&&!eqOn&&eqMix<1e-6f){eqMix=0.f;return;}
   const float smooth=static_cast<float>(1-std::exp(-1/(sr*.02)));
   const float release=static_cast<float>(std::exp(-1/(sr*releaseSeconds)));
   std::array<Biquad,16> targets;
