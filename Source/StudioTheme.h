@@ -47,7 +47,8 @@ public:
   g.drawRoundedRectangle(bounds,6.f,hover?1.4f:.8f);
   const int side=juce::jlimit(17,22,b.getHeight()-10);
   const int lampX=7,lampY=(b.getHeight()-side)/2;
-  auto& lamp=b.hasKeyboardFocus(true)?blueOn_:(b.getToggleState()?greenOn_:greenOff_);
+  // Focus is a separate steel outline; lamp colour always represents DSP state.
+  const auto& lamp=b.getToggleState()?greenOn_:greenOff_;
   if(!lamp.isNull()){
    g.setOpacity(b.isEnabled()?1.f:.7f);
    g.drawImage(lamp,lampX,lampY,side,side,0,0,lamp.getWidth(),lamp.getHeight());
