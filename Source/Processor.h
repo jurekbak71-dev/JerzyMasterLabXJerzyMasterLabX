@@ -273,7 +273,10 @@ public:
  void setStateInformation(const void* data,int size)override{
   auto validated=parseState(data,size);
   if(validated.isValid()){
-   state.replaceState(validated);
+   // JUCE replaceState attaches its parameter adapters to the supplied
+   // ValueTree and may flush live values into it during redirection.
+   // Keep our validated snapshot independent for the appended-field sync.
+   state.replaceState(validated.createCopy());
    // JUCE APVTS may retain a live ParameterAdapter value for newly added
    // parameters when they were absent from an old 304-field project.
    // Synchronize exactly those append-only fields with the validated
