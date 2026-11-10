@@ -66,7 +66,8 @@ public:
   g.setColour(juce::Colour(0xff72d1ef));g.setFont(juce::Font(juce::FontOptions(23.f)));
   g.drawText("BASS ARCHITECT",24,56,getWidth()-48,35,juce::Justification::left);
   g.setColour(juce::Colour(0xffd0dfeb));g.setFont(13.f);
-  const float scopeX=36.f,scopeY=std::max(257.f,static_cast<float>(getHeight()-215)),scopeW=std::max(180.f,static_cast<float>(getWidth()-74)),scopeH=96.f;
+  const bool compact=getHeight()<430;
+  const float scopeX=36.f,scopeY=compact?248.f:std::max(257.f,static_cast<float>(getHeight()-215)),scopeW=std::max(180.f,static_cast<float>(getWidth()-74)),scopeH=compact?65.f:96.f;
   g.setColour(juce::Colour(0xff121c26));g.fillRoundedRectangle(scopeX,scopeY,scopeW,scopeH,10.f);
   for(int grid=1;grid<4;++grid){g.setColour(juce::Colour(0xff556d7d).withAlpha(.22f));g.drawHorizontalLine(static_cast<int>(scopeY+scopeH*grid/4),scopeX,scopeX+scopeW);}
   for(int channel=0;channel<2;++channel){
@@ -81,15 +82,16 @@ public:
   }
   g.setColour(juce::Colour(0xffcbd6e0));g.setFont(11.f);
   g.drawText("REAL BASS DSP   /   INPUT CYAN   OUTPUT AMBER",36,static_cast<int>(scopeY)-24,getWidth()-72,19,juce::Justification::left);
-  const int y=std::max(365,getHeight()-97);
+  const int y=compact?316:std::max(365,getHeight()-97);
   g.drawText("DSP RMS  IN "+juce::String(reading_.inputRms,4)+"   OUT "+juce::String(reading_.outputRms,4)+
      "   DELTA "+juce::String(reading_.deltaRms,4)+"   LOW "+juce::String(reading_.lowRms,4),
      24,y,getWidth()-48,28,juce::Justification::left);
-  g.setColour(juce::Colour(0xff2b4254));g.fillRoundedRectangle(24.f,static_cast<float>(y+33),static_cast<float>(getWidth()-48),12.f,4.f);
+  if(!compact){g.setColour(juce::Colour(0xff2b4254));g.fillRoundedRectangle(24.f,static_cast<float>(y+33),static_cast<float>(getWidth()-48),12.f,4.f);
   g.setColour(juce::Colour(0xff72d1ef));
   g.fillRoundedRectangle(24.f,static_cast<float>(y+33),static_cast<float>(getWidth()-48)*juce::jlimit(0.f,1.f,reading_.deltaRms*5.f),12.f,4.f);
   g.setColour(juce::Colour(0xff8da7b9));g.setFont(12.f);
   g.drawText("SUB "+juce::String(reading_.sectionsRms[0],3)+"    BODY "+juce::String(reading_.sectionsRms[1],3)+"    HARMONIC CONTRIBUTION "+juce::String(reading_.sectionsRms[2],3),
-   24,y+57,getWidth()-48,26,juce::Justification::left);
+   24,y+57,getWidth()-48,26,juce::Justification::left);}
+  else {g.drawText("SUB "+juce::String(reading_.sectionsRms[0],3)+"  BODY "+juce::String(reading_.sectionsRms[1],3)+"  HARM "+juce::String(reading_.sectionsRms[2],3),24,y+28,getWidth()-48,17,juce::Justification::left);}
  }
 };
