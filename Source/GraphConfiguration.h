@@ -12,7 +12,13 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
   AnalogColorSettings a;a.enabled=v(191)>.5f&&v(192)>.5f;a.mode=static_cast<AnalogColorMode>(std::clamp(static_cast<int>(v(193)),0,3));a.driveDb=v(194);a.bias=v(195);a.tone=v(196);a.dynamics=v(197);a.mix=v(198);a.outputDb=v(199);a.autoGain=v(200)>.5f;a.impact=v(202);engine.analogColorSettings(a);
   BassArchitectSettings b;b.enabled=v(203)>.5f&&v(204)>.5f;b.sub=v(205);b.body=v(206);b.harmonics=v(207);b.monoBass=0.f; // Stereo Architect is the sole owner of mono-bass routing; bassMono is retained as a legacy host parameter.b.mix=v(209);b.outputDb=v(210);engine.bassArchitectSettings(b);
   TransientSculptorSettings t;t.enabled=v(211)>.5f&&v(212)>.5f;for(size_t k=0;k<3;++k){t.attack[k]=v(213+k);t.sustain[k]=v(216+k);}t.mix=v(219);t.outputDb=v(220);engine.transientSculptorSettings(t);
-  FinalTruePeakSettings tp;tp.enabled=v(221)>.5f&&v(222)>.5f;tp.ceilingDb=v(223);tp.releaseMs=v(224);tp.driveDb=v(225);engine.finalTruePeakSettings(tp);
+  FinalTruePeakSettings tp;const bool dedicatedTP=v(221)>.5f&&v(222)>.5f;
+  const bool legacyLimiter=v(87)>.5f&&v(5)>.5f;
+  tp.enabled=dedicatedTP||legacyLimiter;
+  tp.ceilingDb=dedicatedTP?v(223):v(3);
+  tp.releaseMs=dedicatedTP?v(224):v(53);
+  tp.driveDb=dedicatedTP?v(225):0.f;
+  engine.finalTruePeakSettings(tp);
   engine.routing(static_cast<int>(v(138)),v(6)>.5f);
   FullModuleOrder full{};
   for(size_t slot=0;slot<full.size();++slot)
@@ -21,11 +27,11 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
 }
 template<class Getter> void configureGraph(SerialGraph& engine,Getter v) noexcept {
  configureModules(engine,v);
- const bool finalOn=v(221)>.5f&&v(222)>.5f;
+ const bool finalOn=(v(221)>.5f&&v(222)>.5f)||(v(87)>.5f&&v(5)>.5f);
  // Combine sample-peak lookahead and true-peak detection under one final ON state.
  // Final-stage drive belongs to TruePeak; do not multiply it twice.
- engine.limiterParameters(finalOn?0.f:v(52),finalOn?v(224):v(53));
- engine.parameters(v(0),v(1),v(2),finalOn?v(223):v(3),
+ engine.limiterParameters(finalOn?0.f:v(52),finalOn?(v(221)>.5f?v(224):v(53)):v(53));
+ engine.parameters(v(0),v(1),v(2),v(221)>.5f&&v(222)>.5f?v(223):v(3),
                    v(4)>.5f&&v(86)>.5f,
                    finalOn||(v(5)>.5f&&v(87)>.5f));
  for(size_t k=1;k<16;++k){size_t i=7+(k-1)*3;engine.setBand(k,v(i),v(i+1),v(i+2));}
