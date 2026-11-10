@@ -35,7 +35,7 @@ public:
   presentAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor_.state,"bassPresent",present_);
   enabledAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor_.state,"bassOn",enabled_);
   knob("Sub level","bassSub");knob("Bass body","bassBody");
-  knob("Harmonics","bassHarmonics");knob("Mono sub","bassMono");
+  knob("Harmonics","bassHarmonics"); // Mono Bass lives exclusively in Stereo Architect.
   knob("Dry / Wet","bassMix");knob("Output dB","bassOutput");
   present_.setTooltip("Optional final post-chain Bass Architect processor. Off in legacy presets.");
   enabled_.setTooltip("Enables the bass processing without changing the six-module routing order.");
