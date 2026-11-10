@@ -14,7 +14,7 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
   TransientSculptorSettings t;t.enabled=v(211)>.5f&&v(212)>.5f;for(size_t k=0;k<3;++k){t.attack[k]=v(213+k);t.sustain[k]=v(216+k);}t.mix=v(219);t.outputDb=v(220);engine.transientSculptorSettings(t);
   FinalTruePeakSettings tp;const bool dedicatedTP=v(221)>.5f&&v(222)>.5f;
   const bool legacyLimiter=v(87)>.5f&&v(5)>.5f;
-  tp.enabled=dedicatedTP||legacyLimiter;
+  tp.enabled=v(222)>.5f&&(v(221)>.5f||legacyLimiter);
   tp.ceilingDb=dedicatedTP?v(223):v(3);
   tp.releaseMs=dedicatedTP?v(224):v(53);
   tp.driveDb=dedicatedTP?v(225):0.f;
@@ -27,7 +27,7 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
 }
 template<class Getter> void configureGraph(SerialGraph& engine,Getter v) noexcept {
  configureModules(engine,v);
- const bool finalOn=(v(221)>.5f&&v(222)>.5f)||(v(87)>.5f&&v(5)>.5f);
+ const bool finalOn=v(222)>.5f&&(v(221)>.5f||(v(87)>.5f&&v(5)>.5f));
  // Combine sample-peak lookahead and true-peak detection under one final ON state.
  // Final-stage drive belongs to TruePeak; do not multiply it twice.
  engine.limiterParameters(finalOn?0.f:v(52),finalOn?(v(221)>.5f?v(224):v(53)):v(53));
