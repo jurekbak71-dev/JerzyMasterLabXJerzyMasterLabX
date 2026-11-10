@@ -40,7 +40,7 @@ class GuiSmoke final : private juce::Timer {
 
         frequency->setValue(3333,juce::sendNotificationSync);gain->setValue(-4.5,juce::sendNotificationSync);q->setValue(1.7,juce::sendNotificationSync);
         if(std::abs(actual("frequency16")-3333)>1||std::abs(actual("gain16")+4.5)>.02f||std::abs(actual("q16")-1.7f)>.02f||actual("gain")!=firstGain)return false;
-        auto position=[](float hz,float db){return juce::Point<float>(48+700*std::log(hz/20)/std::log(24000.f/20),174+306*.5f-db*306/36);};
+        auto position=[](float hz,float db){return juce::Point<float>(48+700*std::log(hz/20)/std::log(24000.f/20),218+262*.5f-db*262/36);};
         auto start=position(3333,-4.5),end=position(2000,6);auto now=juce::Time::getCurrentTime();auto source=juce::Desktop::getInstance().getMainMouseSource();
         auto event=[&](juce::Point<float> point,bool dragged){return juce::MouseEvent(source,point,juce::ModifierKeys(juce::ModifierKeys::leftButtonModifier),1,0,0,0,0,editor.get(),editor.get(),now,start,now,1,dragged);};
         struct Listener:juce::AudioProcessorParameter::Listener{int begins=0,ends=0,changes=0;void parameterValueChanged(int,float)override{++changes;}void parameterGestureChanged(int,bool starting)override{if(starting)++begins;else++ends;}} listener;
@@ -104,13 +104,11 @@ class GuiSmoke final : private juce::Timer {
         auto* bassPanel=editor->findChildWithID("bass-architect-panel");
         if(!bassPanel)return false;
         auto* bassSub=dynamic_cast<juce::Slider*>(bassPanel->findChildWithID("bassSub"));
-        auto* bassMono=dynamic_cast<juce::Slider*>(bassPanel->findChildWithID("bassMono"));
         auto* bassPresent=dynamic_cast<juce::Button*>(bassPanel->findChildWithID("bass-present"));
-        if(!bassSub||!bassMono||!bassPresent)return false;
+        if(!bassSub||!bassPresent||bassPanel->findChildWithID("bassMono"))return false;
         bassPanel->setVisible(true);
         bassSub->setValue(.7,juce::sendNotificationSync);
-        bassMono->setValue(.5,juce::sendNotificationSync);
-        if(std::abs(actual("bassSub")-.7f)>.02f||std::abs(actual("bassMono")-.5f)>.02f)return false;
+        if(std::abs(actual("bassSub")-.7f)>.02f||!parameter("bassMono"))return false;
         bassPresent->setToggleState(true,juce::sendNotificationSync);
         if(actual("bassPresent")!=1.f)return false;
         bassPresent->setToggleState(false,juce::sendNotificationSync);
@@ -140,10 +138,10 @@ class GuiSmoke final : private juce::Timer {
         for(const char* id:{"dynamicEqPresent","dynamicsPresent","stereoPresent"})parameter(id)->setValueNotifyingHost(1);
         // Drop the Imager before Dynamic EQ, then verify Undo restores the route.
         auto* target=dynamic_cast<juce::DragAndDropTarget*>(editor.get());if(!target)return false;
-        const float routeBefore=actual("chainOrder");
+        const float routeBefore=actual("fullRouteSlot1");
         juce::Point<float> chainStart(24+(editor->getWidth()-48.f)/5*2.5f,104),chainEnd(70,104);
         auto chainEvent=[&](juce::Point<float> point,bool dragged){return juce::MouseEvent(source,point,juce::ModifierKeys(juce::ModifierKeys::leftButtonModifier),1,0,0,0,0,editor.get(),editor.get(),now,chainStart,now,1,dragged);};
-        editor->mouseDown(chainEvent(chainStart,false));editor->mouseDrag(chainEvent(chainEnd,true));editor->mouseUp(chainEvent(chainEnd,true));if(actual("chainOrder")==routeBefore)return false;undo->onClick();if(actual("chainOrder")!=routeBefore)return false;
+        editor->mouseDown(chainEvent(chainStart,false));editor->mouseDrag(chainEvent(chainEnd,true));editor->mouseUp(chainEvent(chainEnd,true));if(actual("fullRouteSlot1")==routeBefore)return false;undo->onClick();if(actual("fullRouteSlot1")!=routeBefore)return false;
         auto* routing=dynamic_cast<juce::ComboBox*>(editor->findChildWithID("chain-routing"));if(!routing)return false;routing->setSelectedId(2,juce::sendNotificationSync);if(actual("routingMode")!=1)return false;
         auto* parallel=editor->findChildWithID("parallel-panel");if(!parallel||!parallel->isVisible())return false;
         auto* trim=dynamic_cast<juce::Slider*>(parallel->findChildWithID("parallelTrimDynamics"));auto* mix=dynamic_cast<juce::Slider*>(parallel->findChildWithID("parallelMixDynamics"));auto* compensate=dynamic_cast<juce::Button*>(parallel->findChildWithID("parallel-compensated"));if(!trim||!mix||!compensate||!trim->isVisible()||!mix->isVisible())return false;
