@@ -4,7 +4,7 @@ namespace masterlab {
 template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexcept {
   masterlab::StereoSettings s{v(88)>.5f&&v(89)>.5f,v(95)>.5f,v(96)>.5f,v(90),v(91),v(92),v(93),v(94),v(97),v(136),v(137)};for(size_t i=0;i<4;++i){s.bandEnabled[i]=v(139+i*2)>.5f;s.solo[i]=v(140+i*2)>.5f;}s.amount=v(147);s.delta=v(148)>.5f;s.stereoize=v(162);engine.stereoSettings(s);
   engine.dynamicsSettings({v(98)>.5f&&v(99)>.5f,v(100)>.5f,v(101),v(102),v(103),v(104),v(105),v(106),v(107),v(108),v(109),static_cast<int>(v(176)),v(177),v(178)>.5f});
-  masterlab::DynamicEqSettings c;c.enabled=v(110)>.5f&&v(111)>.5f;for(size_t i=0;i<masterlab::dynamicEqBandCount;++i){size_t k=i<3?112+i*8:238+(i-3)*8;c.bands[i]={v(k),v(k+1),v(k+2),v(k+3),v(k+4),v(k+5),v(k+6),v(k+7)>.5f};}engine.dynamicEqSettings(c);
+  masterlab::DynamicEqSettings c;c.enabled=v(110)>.5f&&v(111)>.5f;c.delta=v(304)>.5f;for(size_t i=0;i<masterlab::dynamicEqBandCount;++i){size_t k=i<3?112+i*8:238+(i-3)*8;c.bands[i]={v(k),v(k+1),v(k+2),v(k+3),v(k+4),v(k+5),v(k+6),v(k+7)>.5f};}engine.dynamicEqSettings(c);
   engine.stabilizerSettings({v(149)>.5f&&v(150)>.5f,v(151)>.5f,v(159)>.5f,v(160)>.5f,static_cast<int>(v(152)),v(153),v(154),v(155),v(156),v(157),v(158),static_cast<int>(v(179))});
   engine.topology(v(161)>.5f,{v(110)>.5f,v(98)>.5f,v(88)>.5f,v(86)>.5f,v(87)>.5f,v(149)>.5f},{v(111)>.5f,v(99)>.5f,v(89)>.5f,v(4)>.5f,v(5)>.5f,v(150)>.5f});
   std::array<float,6> trims{},mixes{};for(size_t i=0;i<6;++i){trims[i]=v(164+i*2);mixes[i]=v(165+i*2);}engine.parallelSettings(v(163)>.5f,trims,mixes);
