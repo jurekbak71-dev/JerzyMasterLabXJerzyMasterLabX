@@ -97,6 +97,8 @@ public:
  p.add(std::make_unique<juce::AudioParameterFloat>("stereoPhaseRotate","Stereo side phase rotation",0.f,1.f,0.f));
  p.add(std::make_unique<juce::AudioParameterFloat>("stereoMotionRate","Stereo motion rate Hz",.05f,8.f,1.f));
  p.add(std::make_unique<juce::AudioParameterFloat>("stereoMotionDepth","Stereo motion depth",0.f,1.f,0.f));
+ p.add(std::make_unique<juce::AudioParameterBool>("bassDelta","Bass Architect Delta monitor",false));
+ p.add(std::make_unique<juce::AudioParameterBool>("transientDelta","Transient Sculptor Delta monitor",false));
  return p;}
  static void addModuleParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
   auto boolean=[&](const char* id,const char* name,bool initial){p.add(std::make_unique<juce::AudioParameterBool>(id,name,initial));};
