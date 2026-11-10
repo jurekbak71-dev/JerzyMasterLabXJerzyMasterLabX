@@ -145,7 +145,7 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
   add("bassPresent",1);add("bassOn",1);
   const bool bassDeficit=p.shares[0]+p.shares[1]<p.targetShares[0]+p.targetShares[1]-.08f;
   add("bassSub",bassDeficit?.06f:0.f);add("bassBody",bassDeficit?.10f:0.f);
-  add("bassHarmonics",.10f*c.intensity);add("bassMono",.8f);
+  add("bassHarmonics",.10f*c.intensity);add("bassMono",0.f); // Legacy host parameter: mono bass belongs to Stereo Architect.
   p.reasons.push_back("Bass Architect: bounded sub/body only if measured low-frequency energy is deficient; verify mono and kick interaction.");
  }
  if(c.useTransient){
@@ -180,6 +180,49 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
  // Only change the full topology when all families are under Brain control.
  if(c.useEq&&c.useLimiter&&c.useStereo&&c.useDynamics&&c.useDynamicEq&&c.useStabilizer){add("chainOrder",0);p.reasons.push_back("Proposed order: Stabilizer, Dynamic EQ, Dynamics, Imager, EQ, Limiter; absent modules are skipped. Limiter is last. One instance per family is currently supported.");}
  refineDetailedProposal(p,f,c);
+ // Coordinate *proposed* tonal actions after detailed refinement. Preserve all
+ // parameter IDs and leave excluded/manual processors entirely untouched.
+ // The predicted overlap is intentionally conservative: actual response depends
+ // on module order, programme material and detector gain reduction.
+ if(c.useEq&&c.useDynamicEq){
+  auto proposed=[&](const std::string& id)->float*{
+   for(auto& change:p.changes)if(change.first==id)return &change.second;
+   return nullptr;
+  };
+  int overlaps=0;
+  for(int band=1;band<=8;++band){
+   const auto suffix=std::to_string(band);
+   auto* dynamicOn=proposed("deqBandOn"+suffix);
+   auto* dynamicRange=proposed("deqRange"+suffix);
+   auto* dynamicHz=proposed("deqFreq"+suffix);
+   if(!dynamicOn||!dynamicRange||!dynamicHz||*dynamicOn<.5f||*dynamicRange>=-.01f)continue;
+   for(int eq=1;eq<=16;++eq){
+    const auto eqSuffix=std::to_string(eq),base=eq==1?std::string{}:eqSuffix;
+    auto* eqOn=proposed("bandEnabled"+eqSuffix);
+    auto* eqGain=proposed("gain"+base);
+    auto* eqHz=proposed("frequency"+base);
+    if(!eqOn||!eqGain||!eqHz||*eqOn<.5f||*eqGain>=-.01f||*eqHz<=0||*dynamicHz<=0)continue;
+    const float octaves=std::abs(std::log2(*eqHz / *dynamicHz));
+    if(octaves>.55f)continue;
+    // Reserve at most 3.5 dB combined nominal downward action at this
+    // centre; actual time-varying gain remains subject to DSP measurement.
+    const float reserved=std::max(0.f,3.5f+*eqGain);
+    const float adjusted=std::max(*dynamicRange,-reserved);
+    if(adjusted>*dynamicRange+.001f){*dynamicRange=adjusted;++overlaps;}
+    break;
+   }
+  }
+  if(overlaps>0){
+   p.reasons.push_back("Tonal coordination: capped overlapping static EQ and Dynamic EQ cuts in "+std::to_string(overlaps)+" proposed bands; review actual module responses.");
+   if(c.useStabilizer){
+    auto* stabilizerAmount=proposed("stabilizerAmount");
+    if(stabilizerAmount&&*stabilizerAmount>15.f){
+     *stabilizerAmount=15.f;
+     p.reasons.push_back("Tonal coordination: limited adaptive Stabilizer amount while static and dynamic EQ share frequency regions.");
+    }
+   }
+  }
+ }
  // Sectional whole-track diagnostics from every captured 3-second window.
  if(f.detail.sectionLevelsDb.size()>1){
   const auto& levels=f.detail.sectionLevelsDb;
