@@ -90,7 +90,13 @@ public:
     const float compensated=settings_.autoGain?
         coloured/(1.f+.30f*(drive-1.f)):coloured;
     st.warmthLow+=warmPole*(compensated-st.warmthLow);
-    float shape=compensated+warmth*.18f*(st.warmthLow-compensated);
+    // Warmth deliberately changes *harmonic generation*, not only EQ:
+    // a level-dependent asymmetric second-order contribution adds H2,
+    // while a gentle low-frequency tilt retains perceived body.
+    // Zero retains the original transfer exactly for old projects.
+    const float warmHarmonic=warmth*.32f*std::tanh(3.f*x)*
+        std::tanh(3.f*x)*(x>=0.f?1.f:-.22f);
+    float shape=compensated+warmth*.36f*(st.warmthLow-compensated)+warmHarmonic;
     st.toneLow+=tonePole*(shape-st.toneLow);
     shape+=tone*.65f*(shape-2.f*st.toneLow);
     st.highLow+=highPole*(shape-st.highLow);
