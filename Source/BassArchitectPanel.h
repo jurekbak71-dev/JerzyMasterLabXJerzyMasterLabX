@@ -5,8 +5,8 @@
 class BassArchitectPanel final : public juce::Component {
  Processor& processor_;
  StudioTheme& theme_;
- juce::ToggleButton present_{"In chain"},enabled_{"Active"};
- std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> presentAttachment_,enabledAttachment_;
+ juce::ToggleButton present_{"In chain"},enabled_{"Active"},delta_{"DELTA"};
+ std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> presentAttachment_,enabledAttachment_,deltaAttachment_;
  struct Knob {
   juce::Label label;
   juce::Slider slider;
@@ -31,7 +31,8 @@ public:
   setComponentID("bass-architect-panel");
   setLookAndFeel(&theme_);
   present_.setComponentID("bass-present");enabled_.setComponentID("bass-enabled");
-  addAndMakeVisible(present_);addAndMakeVisible(enabled_);
+  addAndMakeVisible(present_);addAndMakeVisible(enabled_);addAndMakeVisible(delta_);delta_.setComponentID("bass-delta");
+  deltaAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor_.state,"bassDelta",delta_);
   presentAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor_.state,"bassPresent",present_);
   enabledAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor_.state,"bassOn",enabled_);
   knob("Sub level","bassSub");knob("Bass body","bassBody");
@@ -43,7 +44,7 @@ public:
  ~BassArchitectPanel()override{setLookAndFeel(nullptr);}
  void update(const Processor::ResponseFrame& r){reading_=r.bass;repaint();}
  void resized()override{
-  present_.setBounds(24,12,130,34);enabled_.setBounds(162,12,116,34);
+  present_.setBounds(24,12,130,34);enabled_.setBounds(162,12,116,34);delta_.setBounds(290,12,116,34);
   const int cols=std::max(3,std::min(6,getWidth()/150));
   const int width=(getWidth()-48)/cols;
   for(size_t i=0;i<knobs_.size();++i){
@@ -65,7 +66,22 @@ public:
   g.setColour(juce::Colour(0xff72d1ef));g.setFont(juce::Font(juce::FontOptions(23.f)));
   g.drawText("BASS ARCHITECT",24,56,getWidth()-48,35,juce::Justification::left);
   g.setColour(juce::Colour(0xffd0dfeb));g.setFont(13.f);
-  const int y=std::max(330,getHeight()-126);
+  const float scopeX=36.f,scopeY=std::max(257.f,static_cast<float>(getHeight()-215)),scopeW=std::max(180.f,static_cast<float>(getWidth()-74)),scopeH=96.f;
+  g.setColour(juce::Colour(0xff121c26));g.fillRoundedRectangle(scopeX,scopeY,scopeW,scopeH,10.f);
+  for(int grid=1;grid<4;++grid){g.setColour(juce::Colour(0xff556d7d).withAlpha(.22f));g.drawHorizontalLine(static_cast<int>(scopeY+scopeH*grid/4),scopeX,scopeX+scopeW);}
+  for(int channel=0;channel<2;++channel){
+   const auto& wave=channel==0?reading_.inputWave:reading_.outputWave;
+   juce::Path line;for(size_t i=0;i<wave.size();++i){
+    const float x=scopeX+scopeW*static_cast<float>(i)/(wave.size()-1);
+    const float y=scopeY+scopeH*.5f-juce::jlimit(-1.f,1.f,wave[i])*scopeH*.42f;
+    if(i==0)line.startNewSubPath(x,y);else line.lineTo(x,y);
+   }
+   g.setColour(channel==0?juce::Colour(0xff70becd):juce::Colour(0xffffbf76));
+   g.strokePath(line,juce::PathStrokeType(1.5f));
+  }
+  g.setColour(juce::Colour(0xffcbd6e0));g.setFont(11.f);
+  g.drawText("REAL BASS DSP   /   INPUT CYAN   OUTPUT AMBER",36,static_cast<int>(scopeY)-24,getWidth()-72,19,juce::Justification::left);
+  const int y=std::max(365,getHeight()-97);
   g.drawText("DSP RMS  IN "+juce::String(reading_.inputRms,4)+"   OUT "+juce::String(reading_.outputRms,4)+
      "   DELTA "+juce::String(reading_.deltaRms,4)+"   LOW "+juce::String(reading_.lowRms,4),
      24,y,getWidth()-48,28,juce::Justification::left);
@@ -73,7 +89,7 @@ public:
   g.setColour(juce::Colour(0xff72d1ef));
   g.fillRoundedRectangle(24.f,static_cast<float>(y+33),static_cast<float>(getWidth()-48)*juce::jlimit(0.f,1.f,reading_.deltaRms*5.f),12.f,4.f);
   g.setColour(juce::Colour(0xff8da7b9));g.setFont(12.f);
-  g.drawText("Post-limiter processing can exceed the ceiling. Sub stereo-to-mono may reduce anti-phase bass.",
+  g.drawText("SUB "+juce::String(reading_.sectionsRms[0],3)+"    BODY "+juce::String(reading_.sectionsRms[1],3)+"    HARMONIC CONTRIBUTION "+juce::String(reading_.sectionsRms[2],3),
    24,y+57,getWidth()-48,26,juce::Justification::left);
  }
 };
