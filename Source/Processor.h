@@ -274,6 +274,19 @@ public:
   auto validated=parseState(data,size);
   if(validated.isValid()){
    state.replaceState(validated);
+   // JUCE APVTS may retain a live ParameterAdapter value for newly added
+   // parameters when they were absent from an old 304-field project.
+   // Synchronize exactly those append-only fields with the validated
+   // (and default-completed) state, preserving all original host IDs.
+   for(size_t i=304;i<masterlab::parameterCount;++i){
+    auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(getParameters()[static_cast<int>(i)]);
+    if(parameter==nullptr)continue;
+    auto child=validated.getChildWithProperty("id",parameter->paramID);
+    if(!child.isValid())continue;
+    const float normalized=parameter->convertTo0to1(static_cast<float>(child["value"]));
+    if(std::abs(parameter->getValue()-normalized)>1.e-6f)
+     parameter->setValueNotifyingHost(normalized);
+   }
   }
  }
  // UI/control thread only. Snapshot flushes pending parameter values before transaction boundaries.
