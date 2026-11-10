@@ -88,6 +88,9 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
   const float peakBudget=std::max(0.f,c.ceiling-peakDb-positiveBoost+budget);
   p.drive=std::clamp(wanted,0.f,std::min(maximumDrive,peakBudget));
   add("limiterDrive",p.drive);add("limiterRelease",std::array<float,4>{120,160,70,220}[c.style]);add("ceiling",c.ceiling);add("lim",1);add("limPresent",1);add("order",0);
+  // The old limiter is represented by the single fixed output stage.
+  // Avoid duplicate IDs if the explicit True Peak family is also selected.
+  if(!c.useTruePeak){add("truePeakPresent",1);add("truePeakOn",1);}
   p.reasons.push_back("Limiter: target minus measured input LUFS and estimated EQ level change. Drive is capped by style and estimated peak-reduction budget; limiter moves after EQ.");
   if(wanted<0)p.warnings.push_back("Input is already above the selected target. Drive cannot attenuate it; lower input gain in the DAW.");
   if(wanted>p.drive+.5f)p.warnings.push_back("Drive was restricted to protect dynamics. The requested loudness may not be reached.");
@@ -173,7 +176,7 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
   const bool dynamics=crest>14||(c.style==2&&crest>10),limiting=p.drive>.25f||20*std::log10(f.peak)>c.ceiling;
   int largeRegions=0;for(float gain:p.gains)largeRegions+=std::abs(gain)>1.5f;const bool stabilizing=largeRegions>=3;
   if(c.useStabilizer)replace("stabilizerPresent",stabilizing);
-  if(c.useEq)replace("eqPresent",tonal);if(c.useDynamicEq)replace("dynamicEqPresent",spectral);if(c.useStereo)replace("stereoPresent",stereo);if(c.useDynamics)replace("dynamicsPresent",dynamics);if(c.useLimiter)replace("limPresent",limiting);
+  if(c.useEq)replace("eqPresent",tonal);if(c.useDynamicEq)replace("dynamicEqPresent",spectral);if(c.useStereo)replace("stereoPresent",stereo);if(c.useDynamics)replace("dynamicsPresent",dynamics);if(c.useLimiter){replace("limPresent",limiting);if(!c.useTruePeak)replace("truePeakPresent",limiting);}
   const int count=(c.useStabilizer&&stabilizing)+(c.useEq&&tonal)+(c.useDynamicEq&&spectral)+(c.useStereo&&stereo)+(c.useDynamics&&dynamics)+(c.useLimiter&&limiting);
   p.reasons.push_back("Automatic module selection: "+std::to_string(count)+" processors from the allowed families. EQ: correction above 0.25 dB; Dynamic EQ: regional energy above 1.4 times target; Imager: correlation below 0.2; Dynamics: crest above 14 dB (10 dB Aggressive); Limiter: required drive above 0.25 dB or input above ceiling. Stabilizer: at least three broad corrections above 1.5 dB. Unneeded allowed modules are removed, with settings retained.");
  }
