@@ -276,20 +276,25 @@ public:
    // JUCE replaceState attaches its parameter adapters to the supplied
    // ValueTree and may flush live values into it during redirection.
    // Keep our validated snapshot independent for the appended-field sync.
-   state.replaceState(validated.createCopy());
-   // JUCE APVTS may retain a live ParameterAdapter value for newly added
-   // parameters when they were absent from an old 304-field project.
-   // Synchronize exactly those append-only fields with the validated
-   // (and default-completed) state, preserving all original host IDs.
-   for(size_t i=304;i<masterlab::parameterCount;++i){
-    auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(getParameters()[static_cast<int>(i)]);
-    if(parameter==nullptr)continue;
-    auto child=validated.getChildWithProperty("id",parameter->paramID);
-    if(!child.isValid())continue;
-    const float normalized=parameter->convertTo0to1(static_cast<float>(child["value"]));
-    if(std::abs(parameter->getValue()-normalized)>1.e-6f)
-     parameter->setValueNotifyingHost(normalized);
+   // A legacy schema-24 state contains precisely 304 parameters. Its
+   // appended host parameters did not exist when the DAW saved the session.
+   // JUCE's APVTS can flush their previous live values into the ValueTree on
+   // replaceState(), so reset ONLY absent parameters before redirecting the
+   // parameter adapters. Do not change values on a complete current preset.
+   const auto xml=getXmlFromBinary(data,size);
+   const auto incoming=xml!=nullptr?juce::ValueTree::fromXml(*xml):juce::ValueTree{};
+   const bool legacy304=incoming.getNumChildren()==304;
+   if(legacy304){
+    for(size_t i=304;i<masterlab::parameterCount;++i){
+     auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(getParameters()[static_cast<int>(i)]);
+     if(parameter!=nullptr){
+      const auto factoryDefault=parameter->getDefaultValue();
+      if(std::abs(parameter->getValue()-factoryDefault)>1.e-6f)
+       parameter->setValueNotifyingHost(factoryDefault);
+     }
+    }
    }
+   state.replaceState(validated.createCopy());
   }
  }
  // UI/control thread only. Snapshot flushes pending parameter values before transaction boundaries.
