@@ -99,6 +99,10 @@ public:
  p.add(std::make_unique<juce::AudioParameterFloat>("stereoMotionDepth","Stereo motion depth",0.f,1.f,0.f));
  p.add(std::make_unique<juce::AudioParameterBool>("bassDelta","Bass Architect Delta monitor",false));
  p.add(std::make_unique<juce::AudioParameterBool>("transientDelta","Transient Sculptor Delta monitor",false));
+ p.add(std::make_unique<juce::AudioParameterChoice>("truePeakCharacter","Final Maximizer character",juce::StringArray{"Transparent","Punch","Aggressive"},0));
+ p.add(std::make_unique<juce::AudioParameterBool>("truePeakAutoRelease","Final Maximizer auto release",false));
+ p.add(std::make_unique<juce::AudioParameterFloat>("truePeakSoftClip","Final Maximizer soft clip",0.f,1.f,0.f));
+ p.add(std::make_unique<juce::AudioParameterFloat>("truePeakOutput","Final Maximizer output trim dB",-12.f,6.f,0.f));
  return p;}
  static void addModuleParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
   auto boolean=[&](const char* id,const char* name,bool initial){p.add(std::make_unique<juce::AudioParameterBool>(id,name,initial));};
