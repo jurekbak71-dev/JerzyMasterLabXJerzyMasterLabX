@@ -21,8 +21,6 @@ public:
  int brainAuditionVariant=-1;
  juce::String brainActionMessage{"No Brain proposal applied yet."};
  masterlab::SerialGraph engine;
- masterlab::Analogizer analogizer;
- masterlab::AudioRestoration restoration;
  masterlab::LimiterMeter limiterMeter;
  masterlab::WindowMeter inputMeter,outputMeter;
  masterlab::LoudnessMeter inputLoudness,outputLoudness;
@@ -58,10 +56,10 @@ public:
  p.add(std::make_unique<juce::AudioParameterChoice>("bandType"+suffix,"Band "+suffix+" filter type",juce::StringArray{"Bell","Low Shelf","High Shelf","High Pass 12 dB/oct","Low Pass 12 dB/oct","Notch"},0));
  p.add(std::make_unique<juce::AudioParameterBool>("bandEnabled"+suffix,"Band "+suffix+" enabled",true));}
  addModuleParameters(p);
- p.add(std::make_unique<juce::AudioParameterBool>("fullRouterOn","Full 11-module serial routing enabled",false));
+ p.add(std::make_unique<juce::AudioParameterBool>("fullRouterOn","Full serial routing enabled",true));
  for(int slot=0;slot<11;++slot)
   p.add(std::make_unique<juce::AudioParameterInt>("fullRouteSlot"+juce::String(slot+1),
-       "Full route slot "+juce::String(slot+1),0,10,masterlab::defaultFullOrder[static_cast<size_t>(slot)]));
+       "Full route slot "+juce::String(slot+1),0,11,slot<static_cast<int>(masterlab::defaultFullOrder.size())?masterlab::defaultFullOrder[static_cast<size_t>(slot)]:10));
  for(int i=4;i<=8;++i){auto suffix=juce::String(i);auto title="Dynamic EQ "+suffix+" ";
   const float hz=std::array<float,5>{100.f,400.f,1200.f,4500.f,11000.f}[i-4];
   p.add(std::make_unique<juce::AudioParameterFloat>("deqFreq"+suffix,title+"frequency",juce::NormalisableRange<float>(20,20000,1,.3f),hz));
@@ -74,7 +72,7 @@ public:
   p.add(std::make_unique<juce::AudioParameterBool>("deqBandOn"+suffix,title+"enabled",false));
  }
  p.add(std::make_unique<juce::AudioParameterBool>("analogizerOn","Analogizer enabled",true));
- p.add(std::make_unique<juce::AudioParameterChoice>("analogizerMode","Analogizer model",juce::StringArray{"Tube","Transistor","Tape"},0));
+ p.add(std::make_unique<juce::AudioParameterChoice>("analogizerMode","Analogizer model",juce::StringArray{"Tube","FET","Tape"},0));
  p.add(std::make_unique<juce::AudioParameterFloat>("analogizerDrive","Analogizer drive dB",0.f,18.f,0.f));
  p.add(std::make_unique<juce::AudioParameterFloat>("analogizerWarmth","Analogizer warmth",0.f,1.f,0.f));
  p.add(std::make_unique<juce::AudioParameterFloat>("analogizerDeFizz","Analogizer de-fizz",0.f,1.f,0.f));
@@ -170,7 +168,6 @@ public:
   limiterMeter.prepare(displayRate.load());inputMeter.prepare(displayRate.load());
   outputMeter.prepare(displayRate.load());inputLoudness.prepare(displayRate.load());
   outputLoudness.prepare(displayRate.load());brain.prepare(displayRate.load());
-  analogizer.prepare(displayRate.load());restoration.prepare(displayRate.load());
   updateModules();
   int totalLatency=engine.latency();
   setLatencySamples(totalLatency);
@@ -182,7 +179,7 @@ public:
  }
  void releaseResources()override{
  }void reset()override{
- brain.cancelRT();engine.reset();analogizer.reset();restoration.reset();updateModules();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;profileBlend=parameters[302]->load()>.5f?parameters[303]->load():1.f;}
+ brain.cancelRT();engine.reset();updateModules();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;profileBlend=parameters[302]->load()>.5f?parameters[303]->load():1.f;}
  void processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,false);}
  void processBlockBypassed(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,true);}
  void renderAudio(juce::AudioBuffer<float>& b,bool hostBypassed){
@@ -195,7 +192,7 @@ public:
  az.mode=static_cast<masterlab::AnalogizerMode>(std::clamp(static_cast<int>(value(279)),0,2));
  az.driveDb=value(280);az.warmth=value(281);az.deFizz=value(282);
  az.mix=value(283);az.outputDb=value(284);
- analogizer.settings(az);
+ engine.analogizerSettings(az);
  masterlab::RestorationSettings rs;
  rs.enabled=value(286)>.5f&&value(287)>.5f;
  rs.hiss=value(288)>.5f;rs.hum=value(289)>.5f;
@@ -205,15 +202,13 @@ public:
  rs.humHz=value(296)>.5f?60:50;rs.thresholdDb=value(297);
  rs.reductionDb=value(298);rs.quality=value(299);
  rs.protect=value(300);rs.mix=value(301);
- restoration.settings(rs);
+ engine.restorationSettings(rs);
  hostBypassTarget=hostBypassed;
  if(hostDryDelay[0].empty()){b.clear();return;}
  for(int offset=0;offset<b.getNumSamples();){int length=std::min(128,b.getNumSamples()-offset);
   for(int i=0;i<length;++i){size_t read=(hostDryPosition+1)%hostDryDelay[0].size();for(int c=0;c<2;++c){inputScratch[c][i]=masterlab::clean(b.getSample(c,offset+i));hostDryDelay[c][hostDryPosition]=inputScratch[c][i];hostDryScratch[c][i]=hostDryDelay[c][read];}hostDryPosition=read;}
   brain.capture(inputScratch[0].data(),inputScratch[1].data(),length);
   engine.process(b.getWritePointer(0,offset),b.getWritePointer(1,offset),length,value(6)>.5f,limiterGainTrace.data());
-  analogizer.process(b.getWritePointer(0,offset),b.getWritePointer(1,offset),length);
-  restoration.process(b.getWritePointer(0,offset),b.getWritePointer(1,offset),length);
   for(int i=0;i<length;++i){
    const float targetProfile=parameters[302]->load()>.5f?
       std::clamp(parameters[303]->load(),0.f,1.f):1.f;
@@ -249,7 +244,7 @@ public:
  }
  int responseStart,responseCount,responseStart2,responseCount2;
  responseFifo.prepareToWrite(1,responseStart,responseCount,responseStart2,responseCount2);
- if(responseCount+responseCount2){int index=responseCount?responseStart:responseStart2;engine.copyEqCoefficients(responses[index].bands);engine.copyBandBlends(responses[index].blends);responses[index].stereo=engine.stereoRead();responses[index].dynamics=engine.dynamicsRead();responses[index].parallel=engine.parallelRead();responses[index].exciter=engine.harmonicExciterRead();responses[index].analog=engine.analogColorRead();responses[index].analogizer=analogizer.reading();responses[index].restoration=restoration.reading();responses[index].bass=engine.bassArchitectRead();responses[index].transient=engine.transientSculptorRead();responses[index].truePeak=engine.finalTruePeakRead();responses[index].dynamicGain=engine.dynamicRead();responses[index].dynamicBlends=engine.dynamicBlends();engine.dynamicCoefficients(responses[index].dynamicBands);responses[index].stabilizerGain=engine.stabilizerRead();engine.stabilizerCoefficients(responses[index].stabilizerBands);responses[index].stabilizerMix=engine.stabilizerBlend();responses[index].rate=displayRate.load();responses[index].eqMix=engine.eqBlend();responses[index].inputReading=inputMeter.read();responses[index].outputReading=outputMeter.read();responses[index].inputLufs=inputLoudness.read();responses[index].outputLufs=outputLoudness.read();}
+ if(responseCount+responseCount2){int index=responseCount?responseStart:responseStart2;engine.copyEqCoefficients(responses[index].bands);engine.copyBandBlends(responses[index].blends);responses[index].stereo=engine.stereoRead();responses[index].dynamics=engine.dynamicsRead();responses[index].parallel=engine.parallelRead();responses[index].exciter=engine.harmonicExciterRead();responses[index].analog=engine.analogColorRead();responses[index].analogizer=engine.analogizerRead();responses[index].restoration=engine.restorationRead();responses[index].bass=engine.bassArchitectRead();responses[index].transient=engine.transientSculptorRead();responses[index].truePeak=engine.finalTruePeakRead();responses[index].dynamicGain=engine.dynamicRead();responses[index].dynamicBlends=engine.dynamicBlends();engine.dynamicCoefficients(responses[index].dynamicBands);responses[index].stabilizerGain=engine.stabilizerRead();engine.stabilizerCoefficients(responses[index].stabilizerBands);responses[index].stabilizerMix=engine.stabilizerBlend();responses[index].rate=displayRate.load();responses[index].eqMix=engine.eqBlend();responses[index].inputReading=inputMeter.read();responses[index].outputReading=outputMeter.read();responses[index].inputLufs=inputLoudness.read();responses[index].outputLufs=outputLoudness.read();}
  responseFifo.finishedWrite(responseCount+responseCount2);
  const auto reading=outputMeter.read();peak.store(reading.peak);rms.store(reading.rms);correlation.store(reading.correlation);
 
