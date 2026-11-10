@@ -79,4 +79,31 @@ int main(int argc,char** argv){
  }
  // Bass protection is measured with mono LF, independently of existing Side.
  for(int rate:{44100,48000,96000}){Audio bass;for(auto& c:bass)c.resize(rate*2);for(int i=0;i<rate*2;++i)bass[0][i]=bass[1][i]=.2f*std::sin(6.283185307*45*i/rate);masterlab::StereoSettings c;c.enabled=true;c.stereoize=1;check(measure(render(bass,rate,c,127),rate).width<.01,"generated bass Side exceeds -40 dB");}
+ // Side-only Haas and phase rotation must audibly decorrelate existing Side
+ // while preserving Mid (the two-channel mono sum) at every sample.
+ {
+  constexpr int rate=48000;
+  const auto dry=stimulus(rate,2);
+  masterlab::StereoSettings c;c.enabled=true;c.delayMs=11.f;c.phaseRotate=.8f;c.stereoize=.2f;
+  const auto shifted=render(dry,rate,c,257),single=render(dry,rate,c,1);
+  check(shifted==single,"Haas and phase rotation depend on DAW block size");
+  double changed=0;
+  for(size_t i=rate;i<dry[0].size();++i){
+   const double sum=shifted[0][i]+shifted[1][i]-dry[0][i]-dry[1][i];
+   check(std::abs(sum)<2.e-6,"side-only stereo delay changed centered mono sum");
+   changed+=std::abs(shifted[0][i]-dry[0][i]);
+  }
+  check(changed/(dry[0].size()-rate)>.01,"Haas/phase DSP has negligible effect");
+  c.motionRate=.8f;c.motionDepth=.6f;
+  const auto moving=render(dry,rate,c,257),movingSingle=render(dry,rate,c,1);
+  check(moving==movingSingle,"Stereo Motion LFO depends on DAW buffer size");
+  double motion=0;
+  for(size_t i=rate;i<dry[0].size();++i){
+   check(std::isfinite(moving[0][i])&&std::isfinite(moving[1][i]),
+         "Stereo Motion produced a nonfinite sample");
+   motion+=std::abs(moving[0][i]-shifted[0][i]);
+  }
+  check(motion/(dry[0].size()-rate)>.005,"Stereo Motion control has no actual action");
+ }
+
 }
