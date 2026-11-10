@@ -41,7 +41,8 @@ public:
  void update(const Processor::ResponseFrame& f){reading_=f.transient;repaint();}
  void resized()override{
   present_.setBounds(24,12,130,34);enabled_.setBounds(162,12,116,34);delta_.setBounds(290,12,116,34);
-  const int columns=4;
+  const bool compact=getHeight()<440;
+  const int columns=compact?8:4;
   const int width=(getWidth()-48)/columns;
   for(size_t i=0;i<knobs_.size();++i){
    const int x=24+static_cast<int>(i%columns)*width,y=252+static_cast<int>(i/columns)*85;
@@ -78,11 +79,11 @@ public:
   }
   g.setFont(11.f);g.setColour(juce::Colour(0xffe5d1c0));
   g.drawText("ACTUAL TRANSIENT WAVEFORM   /   INPUT CYAN  OUTPUT AMBER",36,92,getWidth()-72,19,juce::Justification::left);
-  const int y=std::max(412,getHeight()-91);
+  const int y=getHeight()<440?339:std::max(412,getHeight()-91);
   g.drawText("ACTUAL DSP  /  Input "+juce::String(reading_.inputRms,4)+
     "    Output "+juce::String(reading_.outputRms,4)+"    Delta "+juce::String(reading_.deltaRms,4),
     24,y,getWidth()-48,28,juce::Justification::left);
-  for(int k=0;k<3;++k){
+  if(getHeight()>=440)for(int k=0;k<3;++k){
    const int colWidth=(getWidth()-60)/3,x=24+k*colWidth;
    const float strength=juce::jlimit(0.f,1.f,reading_.modulationRms[k]*6.f);
    g.setColour(juce::Colour(0xff4c342d));
@@ -93,7 +94,7 @@ public:
        x,y+51,colWidth-12,20,juce::Justification::left);
   }
   g.setColour(juce::Colour(0xffb5a39b));g.setFont(12.f);
-  g.drawText("Measured transient activity per Low / Mid / High band",
+  if(getHeight()>=440)g.drawText("Measured transient activity per Low / Mid / High band",
     24,y+77,getWidth()-48,19,juce::Justification::left);
  }
 };
