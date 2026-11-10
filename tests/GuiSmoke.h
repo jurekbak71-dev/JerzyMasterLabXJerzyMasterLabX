@@ -259,19 +259,37 @@ class GuiSmoke final : private juce::Timer {
         editor->mouseUp(click);
         if(editor->findChildWithID("eq-frequency")->isVisible())return false;
         limiter->onClick();
+        // Final Limiter now opens the real fixed true-peak panel instead of
+        // the retired legacy limiter graph. Validate the live APVTS controls
+        // and rendered JUCE panel, not a mockup or hidden old widgets.
+        auto* finalPanel=editor->findChildWithID("final-true-peak-panel");
         auto* drive=dynamic_cast<juce::Slider*>(editor->findChildWithID("limiter-drive"));
         auto* release=dynamic_cast<juce::Slider*>(editor->findChildWithID("limiter-release"));
-        if(!drive||!release||!drive->isVisible()||!release->isVisible())return false;
-        drive->setValue(24,juce::sendNotificationSync);release->setValue(150,juce::sendNotificationSync);
-        if(std::abs(actual("limiterDrive")-24)>.01f||std::abs(actual("limiterRelease")-150)>.11f)return false;
         auto* frequency=editor->findChildWithID("eq-frequency");
-        if(!frequency||frequency->isVisible()||!editor->findChildWithID("limiter-ceiling")->isVisible())return false;
+        if(!finalPanel||!finalPanel->isVisible()||!frequency||frequency->isVisible())return false;
+        auto* finalDrive=dynamic_cast<juce::Slider*>(finalPanel->findChildWithID("truePeakDrive"));
+        auto* finalRelease=dynamic_cast<juce::Slider*>(finalPanel->findChildWithID("truePeakRelease"));
+        auto* finalCeiling=dynamic_cast<juce::Slider*>(finalPanel->findChildWithID("truePeakCeiling"));
+        auto* finalEnabled=dynamic_cast<juce::Button*>(finalPanel->findChildWithID("true-peak-enabled"));
+        if(!drive||!release||drive->isVisible()||release->isVisible()||
+           !finalDrive||!finalRelease||!finalCeiling||!finalEnabled||
+           !finalDrive->isVisible()||!finalRelease->isVisible()||!finalCeiling->isVisible())return false;
+        finalDrive->setValue(12,juce::sendNotificationSync);
+        finalRelease->setValue(150,juce::sendNotificationSync);
+        finalCeiling->setValue(-6,juce::sendNotificationSync);
+        if(std::abs(actual("truePeakDrive")-12)>.02f||
+           std::abs(actual("truePeakRelease")-150)>.11f||
+           std::abs(actual("truePeakCeiling")+6)>.02f)return false;
         for(auto size:{juce::Point<int>(750,550),juce::Point<int>(1000,700),juce::Point<int>(2000,1400)}){
-            editor->setSize(size.x,size.y);auto image=editor->createComponentSnapshot(editor->getLocalBounds());
-            int historyPixels=0,reductionPixels=0;for(int y=174;y<size.y-271;++y)for(int x=48;x<size.x-252;++x){auto colour=image.getPixelAt(x,y);if(colour.getRed()>180&&colour.getGreen()>130&&colour.getBlue()<150){++historyPixels;if(y>178)++reductionPixels;}}
-            if(!controlsFit())return false;
-            if(historyPixels<10||reductionPixels<5){std::cerr<<"Limiter history missing from real GUI frame: "<<historyPixels<<'\n';return false;}
-            if(iteration==0&&size.x==1000){auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/limiter-smoke.png");juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return false;}
+            editor->setSize(size.x,size.y);
+            if(!finalPanel->isVisible()||!controlsFit())return false;
+            auto image=editor->createComponentSnapshot(editor->getLocalBounds());
+            if(!image.isValid()||image.getWidth()!=size.x||image.getHeight()!=size.y)return false;
+            if(iteration==0&&size.x==1000){
+                auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/limiter-smoke.png");
+                juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();
+                if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return false;
+            }
         }
         for(const auto& entry:std::array<std::pair<const char*,const char*>,4>{{{"view-dynamic-eq","dynamic-eq"},{"view-dynamics","dynamics"},{"view-stereo","stereo"},{"view-stabilizer","stabilizer"}}}){
             auto* tab=dynamic_cast<juce::Button*>(editor->findChildWithID(entry.first));if(!tab)return false;tab->onClick();
