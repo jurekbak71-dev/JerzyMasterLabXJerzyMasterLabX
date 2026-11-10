@@ -19,7 +19,17 @@ int main(){
  {
   auto legacy=original.createCopy();
   if(legacy.getNumChildren()!=316){std::cerr<<"unexpected expanded state count";return 1;}
-  while(legacy.getNumChildren()>304)legacy.removeChild(legacy.getNumChildren()-1,nullptr);
+  // APVTS stores PARAM children in a map/key order, not necessarily in
+  // parameter registration order. Remove the twelve new *IDs*, not the
+  // last twelve ValueTree children, or this fixture is not a legacy preset.
+  for(int i=304;i<source->getParameters().size();++i){
+   auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(source->getParameters()[i]);
+   if(parameter==nullptr){std::cerr<<"missing ranged parameter";return 1;}
+   const auto child=legacy.getChildWithProperty("id",parameter->paramID);
+   if(!child.isValid()){std::cerr<<"missing appended ID "<<parameter->paramID;return 1;}
+   legacy.removeChild(child,nullptr);
+  }
+  if(legacy.getNumChildren()!=304){std::cerr<<"legacy fixture count mismatch";return 1;}
   auto legacyXml=legacy.createXml();juce::MemoryBlock legacyBlock;
   juce::AudioProcessor::copyXmlToBinary(*legacyXml,legacyBlock);
   target->setStateInformation(legacyBlock.getData(),static_cast<int>(legacyBlock.getSize()));
