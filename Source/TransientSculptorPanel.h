@@ -47,7 +47,7 @@ public:
   for(size_t i=0;i<knobs_.size();++i){
    const int x=24+static_cast<int>(i%columns)*width,y=252+static_cast<int>(i/columns)*85;
    knobs_[i]->label.setBounds(x,y,width-8,24);
-   knobs_[i]->slider.setBounds(x,y+23,width-8,61);
+   knobs_[i]->slider.setBounds(x,y+23,width-8,compact?53:61);
   }
  }
  void paint(juce::Graphics& g)override{
@@ -79,7 +79,7 @@ public:
   }
   g.setFont(11.f);g.setColour(juce::Colour(0xffe5d1c0));
   g.drawText("ACTUAL TRANSIENT WAVEFORM   /   INPUT CYAN  OUTPUT AMBER",36,92,getWidth()-72,19,juce::Justification::left);
-  const int y=getHeight()<440?339:std::max(412,getHeight()-91);
+  const int y=getHeight()<440?330:std::max(412,getHeight()-91);
   g.drawText("ACTUAL DSP  /  Input "+juce::String(reading_.inputRms,4)+
     "    Output "+juce::String(reading_.outputRms,4)+"    Delta "+juce::String(reading_.deltaRms,4),
     24,y,getWidth()-48,28,juce::Justification::left);
