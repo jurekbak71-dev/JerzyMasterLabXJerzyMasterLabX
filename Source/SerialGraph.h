@@ -148,6 +148,7 @@ public:
  HarmonicExciterReading harmonicExciterRead()const noexcept{return banks[active].analogExciter.harmonicReading();}
  void analogColorSettings(AnalogColorSettings c)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.analogExciter.legacySettings(c);}}
  void analogizerSettings(AnalogizerSettings c)noexcept{for(int bank=0;bank<2;++bank)banks[bank].analogExciter.colourSettings(c);}
+ void analogExcite(float amount)noexcept{for(int bank=0;bank<2;++bank)banks[bank].analogExciter.excitement(amount);}
  AnalogizerReading analogizerRead()const noexcept{return banks[active].analogExciter.colourReading();}
  void restorationSettings(RestorationSettings c)noexcept{for(int bank=0;bank<2;++bank)banks[bank].restoration.settings(c);}
  RestorationReading restorationRead()const noexcept{return banks[active].restoration.reading();}
