@@ -173,6 +173,8 @@ class Editor final : public juce::AudioProcessorEditor,
 
     juce::TooltipWindow tooltips{this, 600};
     juce::ComboBox bandChoice, fftChoice, typeChoice;
+    std::array<juce::TextButton,8> eqBandButtons;
+    juce::TextButton eqBandPage{"9–16"};
     juce::ToggleButton bandEnabled{"Band"};
     std::unique_ptr<ComboAttachment> typeAttachment;
     std::unique_ptr<ButtonAttachment> bandEnabledAttachment;
@@ -197,6 +199,9 @@ class Editor final : public juce::AudioProcessorEditor,
     void showLimiter(bool enabled){
         hideModules();endDrag();setBrainVisible(false);parallelPanel.setVisible(false);showingParallel=false;resetMetersButton.setVisible(false);showingInspector=false;showingLimiter=enabled;inspectorView.setToggleState(false,juce::dontSendNotification);
         for(auto* component:std::array<juce::Component*,11>{&bandChoice,&fftChoice,&frequency,&gain,&quality,&frequencyLabel,&gainLabel,&qualityLabel,&eqEnabled,&ceiling,&ceilingLabel})component->setVisible(!enabled);
+        bandChoice.setVisible(false); // Accessibility/legacy host test selector only.
+        for(auto& button:eqBandButtons)button.setVisible(!enabled);
+        eqBandPage.setVisible(!enabled);
         typeChoice.setVisible(!enabled);bandEnabled.setVisible(!enabled);
         ceiling.setVisible(true);ceilingLabel.setVisible(true);limiterEnabled.setVisible(true);
         drive.setVisible(enabled);driveLabel.setVisible(enabled);release.setVisible(enabled);releaseLabel.setVisible(enabled);
@@ -205,6 +210,8 @@ class Editor final : public juce::AudioProcessorEditor,
     void showInspector(){
         hideModules();endDrag();setBrainVisible(false);parallelPanel.setVisible(false);showingParallel=false;resetMetersButton.setVisible(true);showingInspector=true;showingLimiter=false;
         for(auto* component:std::initializer_list<juce::Component*>{&frequency,&gain,&quality,&ceiling,&drive,&release,&frequencyLabel,&gainLabel,&qualityLabel,&ceilingLabel,&driveLabel,&releaseLabel,&bandChoice,&fftChoice,&typeChoice,&bandEnabled,&eqEnabled,&limiterEnabled})component->setVisible(false);
+        for(auto& button:eqBandButtons)button.setVisible(false);
+        eqBandPage.setVisible(false);
         eqView.setToggleState(false,juce::dontSendNotification);limiterView.setToggleState(false,juce::dontSendNotification);inspectorView.setToggleState(true,juce::dontSendNotification);repaint();
     }
     void showFinalTruePeak(){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);showingTruePeak=true;truePeakPanel.setVisible(true);repaint();}
@@ -483,6 +490,16 @@ class Editor final : public juce::AudioProcessorEditor,
         bandEnabledAttachment=std::make_unique<ButtonAttachment>(processor.state,"bandEnabled"+juce::String(selectedBand+1),bandEnabled);
         for(auto* label:{&frequencyLabel,&gainLabel,&qualityLabel})label->setColour(juce::Label::textColourId,bandColour(selectedBand));bandChoice.setColour(juce::ComboBox::textColourId,bandColour(selectedBand));
         bandChoice.setSelectedId(selectedBand+1,juce::dontSendNotification);
+        const int page=selectedBand/8;
+        eqBandPage.setButtonText(page==0?"BANDS 9–16":"BANDS 1–8");
+        for(int i=0;i<8;++i){
+            const int band=page*8+i;
+            auto& button=eqBandButtons[static_cast<size_t>(i)];
+            button.setButtonText(juce::String(band+1));
+            button.setToggleState(band==selectedBand,juce::dontSendNotification);
+            button.setColour(juce::TextButton::buttonOnColourId,bandColour(selectedBand));
+            button.setTooltip("Select EQ band "+juce::String(band+1)+" without changing its enabled state.");
+        }
         repaint();
     }
     void setParameter(const char* base,float number,bool completeGesture=false) {
@@ -686,6 +703,16 @@ public:
         fftChoice.onChange=[this]{fftOrder=juce::jlimit(12,15,fftChoice.getSelectedId());fftChoice.setSelectedId(fftOrder,juce::dontSendNotification);fft=std::make_unique<juce::dsp::FFT>(fftOrder);spectrum.fill(0);beforeSpectrum.fill(0);lastAnalysis=0;};
         for(int i=1;i<=16;++i)bandChoice.addItem("Band "+juce::String(i),i);
         bandChoice.onChange=[this]{endDrag();selectBand(bandChoice.getSelectedId()-1);};
+        for(int i=0;i<8;++i){
+            auto& button=eqBandButtons[static_cast<size_t>(i)];
+            button.setComponentID("eq-select-"+juce::String(i+1));
+            button.setClickingTogglesState(true);
+            addAndMakeVisible(button);
+            button.onClick=[this,i]{endDrag();selectBand((selectedBand/8)*8+i);};
+        }
+        eqBandPage.setComponentID("eq-band-page");
+        addAndMakeVisible(eqBandPage);
+        eqBandPage.onClick=[this]{endDrag();selectBand((selectedBand<8?8:0)+(selectedBand%8));};
         addAndMakeVisible(eqEnabled);addAndMakeVisible(limiterEnabled);
         eqEnabled.setComponentID("eq-active");limiterEnabled.setComponentID("limiter-active");
         eqAttachment=std::make_unique<ButtonAttachment>(processor.state,"eq",eqEnabled);
@@ -778,8 +805,15 @@ public:
         for(int i=0;i<4;++i){auto* label=std::array<juce::Label*,4>{&frequencyLabel,&gainLabel,&qualityLabel,&ceilingLabel}[i];auto* slider=std::array<juce::Slider*,4>{&frequency,&gain,&quality,&ceiling}[i];label->setBounds(32+i*width,top,width-12,22);slider->setBounds(32+i*width,top+22,width-16,113);}
         driveLabel.setBounds(32,top,width-12,22);drive.setBounds(32,top+22,width-16,113);
         releaseLabel.setBounds(32+width,top,width-12,22);release.setBounds(32+width,top+22,width-16,113);
-        bandChoice.setBounds(28,176,110,26);typeChoice.setBounds(148,176,155,26);fftChoice.setBounds(313,176,130,26);bandEnabled.setBounds(453,176,74,26);
-        eqEnabled.setBounds(537,176,72,26);limiterEnabled.setBounds(getWidth()-114,172,90,26);
+        bandChoice.setBounds(28,176,110,26);
+        const int eqWidth=(getWidth()-48)/9;
+        for(int i=0;i<8;++i)eqBandButtons[static_cast<size_t>(i)].setBounds(24+i*eqWidth,176,eqWidth-5,28);
+        eqBandPage.setBounds(24+8*eqWidth,176,eqWidth-5,28);
+        const int eqToolsY=getHeight()-206;
+        typeChoice.setBounds(28,eqToolsY,155,26);fftChoice.setBounds(193,eqToolsY,130,26);
+        bandEnabled.setBounds(333,eqToolsY,105,26);
+        eqEnabled.setBounds(449,eqToolsY,92,26);
+        limiterEnabled.setBounds(getWidth()-114,eqToolsY,90,26);
         const int navWidth=(getWidth()-48)/9;int nav=0;for(auto* button:{&consoleView,&eqView,&dynamicView,&dynamicsView,&stereoView,&stabilizerView,&limiterView,&inspectorView,&brainView}){button->setBounds(24+nav*navWidth,48,navWidth-5,26);++nav;}
         modulesButton.setBounds(602,14,120,26);routingChoice.setBounds(448,14,134,26);
         for(auto& panel:modulePanels)panel->setBounds(0,170,getWidth(),getHeight()-190);
