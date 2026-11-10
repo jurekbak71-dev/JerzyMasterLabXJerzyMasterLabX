@@ -275,6 +275,9 @@ class GuiSmoke final : private juce::Timer {
         if(!drive||!release||drive->isVisible()||release->isVisible()||
            !finalDrive||!finalRelease||!finalCeiling||!finalEnabled||
            !finalDrive->isVisible()||!finalRelease->isVisible()||!finalCeiling->isVisible())return captureError(__LINE__);
+        const float previousFinalDrive=actual("truePeakDrive");
+        const float previousFinalRelease=actual("truePeakRelease");
+        const float previousFinalCeiling=actual("truePeakCeiling");
         finalDrive->setValue(12,juce::sendNotificationSync);
         finalRelease->setValue(150,juce::sendNotificationSync);
         finalCeiling->setValue(-6,juce::sendNotificationSync);
@@ -292,6 +295,16 @@ class GuiSmoke final : private juce::Timer {
                 if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return captureError(__LINE__);
             }
         }
+        // Restore the exact baseline captured before Master Brain analysis.
+        // Otherwise changing the ceiling during GUI smoke correctly marks
+        // the Brain's verified proposal STALE and makes Apply unavailable.
+        finalDrive->setValue(previousFinalDrive,juce::sendNotificationSync);
+        finalRelease->setValue(previousFinalRelease,juce::sendNotificationSync);
+        finalCeiling->setValue(previousFinalCeiling,juce::sendNotificationSync);
+        if(std::abs(actual("truePeakDrive")-previousFinalDrive)>.001f||
+           std::abs(actual("truePeakRelease")-previousFinalRelease)>.001f||
+           std::abs(actual("truePeakCeiling")-previousFinalCeiling)>.001f)
+           return captureError(__LINE__);
         for(const auto& entry:std::array<std::pair<const char*,const char*>,4>{{{"view-dynamic-eq","dynamic-eq"},{"view-dynamics","dynamics"},{"view-stereo","stereo"},{"view-stabilizer","stabilizer"}}}){
             auto* tab=dynamic_cast<juce::Button*>(editor->findChildWithID(entry.first));if(!tab)return captureError(__LINE__);tab->onClick();
             if(juce::String(entry.second)=="dynamics"){auto* panel=dynamic_cast<ModulePanel*>(editor->findChildWithID("module-panel-1"));auto* intensity=panel?dynamic_cast<juce::ComboBox*>(panel->findChildWithID("dynamics-intensity")):nullptr;auto* punch=panel?panel->controlForParameter("dynPunch"):nullptr;auto* delta=panel?dynamic_cast<juce::Button*>(panel->findChildWithID("dynamics-delta")):nullptr;if(!intensity||!punch||!delta){std::cerr<<"Dynamics Hybrid Studio controls missing: panel="<<(panel!=nullptr)<<" intensity="<<(intensity!=nullptr)<<" punch="<<(punch!=nullptr)<<" delta="<<(delta!=nullptr)<<'\n';return captureError(__LINE__);}if(intensity->getSelectedId()!=3||std::abs(punch->getValue()-70)>.01f||actual("dynamicsIntensity")!=2||std::abs(actual("dynPunch")-70)>.01f||actual("dynDelta")!=0){std::cerr<<"Dynamics Hybrid Studio attachment mismatch: intensity="<<actual("dynamicsIntensity")<<" punch="<<actual("dynPunch")<<" delta="<<actual("dynDelta")<<'\n';return captureError(__LINE__);}feed(24);}
