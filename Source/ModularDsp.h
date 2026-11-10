@@ -155,7 +155,7 @@ public:
    for(int c=0;c<2;++c){detectors[c][i]=detectorTargets[i];filters[c][i]=filterTargets[i];}
  }
  void process(float* left,float* right,int n)noexcept {
-  if(!config.enabled && bypass.value<1.e-6f){bypass.value=0;activity={};return;}
+  if(!config.enabled && bypass.value<1.e-6f){bypass.value=0;activity={};if(config.delta)for(int i=0;i<n;++i)left[i]=right[i]=0.f;return;}
   const float smooth=static_cast<float>(1-std::exp(-1/(rate*.005)));
   // Fixed 32-sample control period survives variable DAW buffer boundaries.
   for(int sample=0;sample<n;++sample){
