@@ -11,9 +11,11 @@ namespace masterlab {
 struct FinalTruePeakSettings {
  bool enabled=false;
  float ceilingDb=-1.f,releaseMs=120.f,driveDb=0.f;
+ int character=0;bool autoRelease=false;float softClip=0.f,outputDb=0.f;
 };
 struct FinalTruePeakReading {
  float detectedTruePeak=0.f,outputSamplePeak=0.f,gainReductionDb=0.f;
+ std::array<float,64> inputWave{},outputWave{},gainEnvelope{};
 };
 class FinalTruePeak {
 public:
@@ -89,8 +91,14 @@ public:
   // The host's dry bypass path is aligned with latencySamples.
   const float ceiling=std::pow(10.f,sane(settings_.ceilingDb,-12.f,-.1f)*.05f);
   const float drive=std::pow(10.f,sane(settings_.driveDb,0.f,18.f)*.05f);
+  const float outputGain=std::pow(10.f,sane(settings_.outputDb,-12.f,6.f)*.05f);
+  const float characterScale=settings_.character==1?1.45f:(settings_.character==2?.52f:1.f);
   const float release=std::exp(-1.f/(static_cast<float>(sampleRate_)*.001f*
-                                      sane(settings_.releaseMs,10.f,1000.f)));
+                                      sane(settings_.releaseMs*characterScale,10.f,1400.f)));
+  const float clip=std::clamp(settings_.softClip,0.f,1.f);
+  const float clipHardness=1.f+3.f*clip;
+  const float clipNorm=clip>0.f?std::tanh(clipHardness):1.f;
+  std::array<float,64> inputWave{},outputWave{},gainEnvelope{};
   float detected=0.f,outputPeak=0.f,minGain=1.f;
   for(int i=0;i<count;++i){
    const float input[2]{
@@ -113,6 +121,8 @@ public:
     peak=std::max(peak,static_cast<float>(std::abs(value)));
    }
    detected=std::max(detected,peak);
+   const size_t scopeIndex=static_cast<size_t>(i)*64/static_cast<size_t>(count);
+   inputWave[scopeIndex]=.5f*(input[0]+input[1]);
    // Sliding maximum of the most recent 129 peak estimates.
    // Equal peaks evict older duplicates. No allocation or linear scan.
    // Evict expired indices before insertion (inclusive 129-sample window).
@@ -131,25 +141,34 @@ public:
    // Conservative true-peak reconstruction safety margin: the 4x input
    // detector alone cannot bound the interpolated output after gain changes.
    // Measured independently against 8x / 49-tap reconstruction stress cases.
-   const float threshold=ceiling*.90f;
+   const float threshold=ceiling*.90f/std::max(1.e-6f,outputGain);
    const float desired=futurePeak>threshold?threshold/futurePeak:1.f;
-   gain_=desired<gain_?desired:release*gain_+(1.f-release)*desired;
+   const float adaptive=settings_.autoRelease?std::clamp((1.f-gain_)*.48f,0.f,.48f):0.f;
+   const float recovery=release+(1.f-release)*adaptive;
+   gain_=desired<gain_?desired:recovery*gain_+(1.f-recovery)*desired;
+   gainEnvelope[scopeIndex]=gain_;
    minGain=std::min(minGain,gain_);
    const int outputPosition=(delayPosition_+1)%static_cast<int>(delay_[0].size());
    const float y[2]{
-    delay_[0][outputPosition]*gain_,
-    delay_[1][outputPosition]*gain_
+    delay_[0][outputPosition]*gain_*outputGain,
+    delay_[1][outputPosition]*gain_*outputGain
    };
    delayPosition_=outputPosition;
-   left[i]=settings_.enabled?std::clamp(y[0],-ceiling,ceiling):
-                               delay_[0][outputPosition];
-   right[i]=settings_.enabled?std::clamp(y[1],-ceiling,ceiling):
-                                delay_[1][outputPosition];
+   auto shape=[&](float v){
+    if(clip<=0.f)return v;
+    const float normalized=std::clamp(v/ceiling,-1.f,1.f);
+    const float curved=std::tanh(normalized*clipHardness)/clipNorm*ceiling;
+    return v+clip*(curved-v);
+   };
+   left[i]=std::clamp(shape(y[0]),-ceiling,ceiling);
+   right[i]=std::clamp(shape(y[1]),-ceiling,ceiling);
+   outputWave[scopeIndex]=.5f*(left[i]+right[i]);
    outputPeak=std::max(outputPeak,std::max(std::abs(left[i]),std::abs(right[i])));
   }
   reading_.detectedTruePeak=detected;
   reading_.outputSamplePeak=outputPeak;
   reading_.gainReductionDb=-20.f*std::log10(std::max(1e-9f,minGain));
+  reading_.inputWave=inputWave;reading_.outputWave=outputWave;reading_.gainEnvelope=gainEnvelope;
  }
 };
 }
