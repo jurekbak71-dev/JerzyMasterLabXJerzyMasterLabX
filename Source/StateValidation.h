@@ -12,7 +12,11 @@ inline juce::ValueTree validateState(const juce::ValueTree& candidate,
                                     juce::AudioProcessorValueTreeState& parameters,
                                     const juce::Array<juce::AudioProcessorParameter*>& expected) {
     const auto schema=candidate["schemaVersion"].toString();
-    const int sourceCount=schema=="24"?static_cast<int>(parameterCount):0;
+    // Schema 24 originally shipped with 304 parameters; later append-only fields
+    // may be absent from a saved DAW project. Accept only complete historical
+    // snapshots (304) or the full current state, never a truncated subset.
+    const int supplied=candidate.getNumChildren();
+    const int sourceCount=schema=="24" && (supplied==304 || supplied==static_cast<int>(parameterCount))?supplied:0;
     if (!candidate.hasType("MasterLab") || sourceCount==0 || expected.size()!=static_cast<int>(parameterCount)
         || candidate["eqInstanceId"].toString() != "eq-0001"
         || candidate["limiterInstanceId"].toString() != "limiter-0001"
@@ -49,6 +53,11 @@ inline juce::ValueTree validateState(const juce::ValueTree& candidate,
         node.setProperty("value", value, nullptr);
         canonical.appendChild(node, nullptr);
     }
+    // Reject a 304-entry file that omits any legacy parameter while including
+    // a new one; that would otherwise turn a truncated/corrupt preset into
+    // a seemingly valid historic state.
+    if(sourceCount==304)for(int i=0;i<304;++i)
+        if(!seen.contains(juce::String(parameterId(static_cast<size_t>(i)))))return {};
     // Append only newly introduced fields, using version-independent factory defaults.
     for(int i=sourceCount;i<expected.size();++i){
         auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(expected[i]);if(!parameter)return {};
