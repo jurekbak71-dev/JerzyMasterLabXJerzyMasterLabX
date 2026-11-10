@@ -4,7 +4,7 @@
 #include <string>
 namespace masterlab {
 // Current host parameter table without the removed LIVE/OFFLINE STEMS module.
-inline constexpr size_t parameterCount=310;
+inline constexpr size_t parameterCount=312;
 inline constexpr std::array<const char*,140> moduleParameterIds{
  "eqPresent","limPresent","stereoPresent","stereoOn","stereoLowWidth","stereoMidWidth","stereoHighWidth","stereoLowSplit","stereoHighSplit","stereoMonoBass","stereoMono","stereoBalance",
  "dynamicsPresent","dynamicsOn","dynamicsMode","dynThreshold","dynRatio","dynAttack","dynRelease","dynKnee","dynMakeup","dynMix","upwardAmount","upwardThreshold",
@@ -34,6 +34,8 @@ inline std::string parameterId(size_t i){
   if(i==307)return "stereoPhaseRotate";
   if(i==308)return "stereoMotionRate";
   if(i==309)return "stereoMotionDepth";
+  if(i==310)return "bassDelta";
+  if(i==311)return "transientDelta";
  return "unknown";
 
 }
