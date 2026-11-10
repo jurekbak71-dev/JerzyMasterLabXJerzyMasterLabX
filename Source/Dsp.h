@@ -68,7 +68,10 @@ public:
   if(delay[0].empty())return;
   const float smooth=static_cast<float>(1-std::exp(-1/(sr*.02)));
   const float release=static_cast<float>(std::exp(-1/(sr*releaseSeconds)));
-  std::array<Biquad,16> targets;for(size_t k=0;k<bands.size();++k)targets[k].configure(sr,bands[k].frequency,bands[k].db,bands[k].q,bands[k].type);
+  std::array<Biquad,16> targets;
+  // Do not redesign sixteen EQ filters for a limiter-only processing stage.
+  if(stages&1)for(size_t k=0;k<bands.size();++k)
+   targets[k].configure(sr,bands[k].frequency,bands[k].db,bands[k].q,bands[k].type);
   for(int i=0;i<count;++i){
    if(stages&1)for(auto& channel:eq)for(size_t k=0;k<bands.size();++k){auto& b=channel[k];const auto& t=targets[k];b.b0+=smooth*(t.b0-b.b0);b.b1+=smooth*(t.b1-b.b1);b.b2+=smooth*(t.b2-b.b2);b.a1+=smooth*(t.a1-b.a1);b.a2+=smooth*(t.a2-b.a2);}
    if(stages&1)for(size_t k=0;k<bandMix.size();++k)bandMix[k]+=smooth*((bands[k].enabled?1.f:0.f)-bandMix[k]);
