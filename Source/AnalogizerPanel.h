@@ -89,27 +89,28 @@ public:
   present_.setBounds(24,12,130,30);enabled_.setBounds(162,12,110,30);
   harmonicsPresent_.setBounds(282,12,145,30);harmonicsEnabled_.setBounds(438,12,145,30);
   mode_.setBounds(596,12,170,30);
+  const bool compact=getHeight()<440;
   const int centre=getWidth()/2;
-  excite_.setBounds(centre-122,101,244,253);
+  excite_.setBounds(centre-(compact?100:122),compact?88:101,compact?200:244,compact?205:253);
   const int sideWidth=std::max(76,std::min(132,(getWidth()-294)/3));
   for(size_t i=0;i<controls_.size();++i){
    int x=0,y=0,width=sideWidth;
-   if(i<4){x=22;y=102+static_cast<int>(i)*75;}
-   else if(i<8){x=getWidth()-sideWidth-22;y=102+static_cast<int>(i-4)*75;}
-   else {width=std::max(70,(getWidth()-44)/7);x=22+static_cast<int>(i-8)*width;y=std::max(395,getHeight()-105);}
-   controls_[i]->label.setBounds(x,y,width-4,18);
-   controls_[i]->slider.setBounds(x,y+18,width-4,54);
+   if(i<4){x=22;y=(compact?90:102)+static_cast<int>(i)*(compact?50:75);}
+   else if(i<8){x=getWidth()-sideWidth-22;y=(compact?90:102)+static_cast<int>(i-4)*(compact?50:75);}
+   else {width=std::max(70,(getWidth()-44)/7);x=22+static_cast<int>(i-8)*width;y=compact?getHeight()-64:getHeight()-105;}
+   controls_[i]->label.setBounds(x,y,width-4,compact?15:18);
+   controls_[i]->slider.setBounds(x,y+(compact?15:18),width-4,compact?39:54);
   }
  }
  void paint(juce::Graphics& g)override{
   g.fillAll(juce::Colour(0xff20303e));g.setColour(juce::Colour(0xffe9c190));
   g.setFont(juce::FontOptions(23.f));g.drawText("ANALOG EXCITER  /  Tube - FET - Tape",24,50,getWidth()-48,34,juce::Justification::left);
   g.setColour(juce::Colours::lightgrey);g.setFont(juce::FontOptions(14.f));
-  g.drawText("Input RMS "+juce::String(reading_.inputRms,4)+"   Output RMS "+juce::String(reading_.outputRms,4)+"   Delta RMS "+juce::String(reading_.deltaRms,4),
+  if(getHeight()>=440)g.drawText("Input RMS "+juce::String(reading_.inputRms,4)+"   Output RMS "+juce::String(reading_.outputRms,4)+"   Delta RMS "+juce::String(reading_.deltaRms,4),
       24,getHeight()-108,getWidth()-48,24,juce::Justification::left);
   const int meterY=std::min(getHeight()-61,363);
   g.setFont(11.f);
-  for(size_t band=0;band<4;++band){
+  if(getHeight()>=440)for(size_t band=0;band<4;++band){
    const float energy=harmonicReading_.generatedRms[band];
    const float normalized=juce::jlimit(0.f,1.f,(20.f*std::log10(std::max(1.e-8f,energy))+72.f)/48.f);
    const float width=std::max(32.f,static_cast<float>(getWidth()-328)/4.f);
@@ -118,7 +119,7 @@ public:
    g.setColour(juce::Colour(0xffffb969));g.fillRoundedRectangle(x,meterY,std::max(0.1f,(width-9.f)*normalized),9.f,4.f);
    g.setColour(juce::Colour(0xffcbd6e0));g.drawText(juce::String(std::array<const char*,4>{"LOW H","MID H","HIGH H","AIR H"}[band]),static_cast<int>(x),meterY+10,static_cast<int>(width-9),18,juce::Justification::left);
   }
-  g.drawText("Actual harmonic DSP RMS / Tube - FET - Tape / EXCITE macro",
+  if(getHeight()>=440)g.drawText("Actual harmonic DSP RMS / Tube - FET - Tape / EXCITE macro",
       24,getHeight()-53,getWidth()-48,24,juce::Justification::left);
  }
 };
