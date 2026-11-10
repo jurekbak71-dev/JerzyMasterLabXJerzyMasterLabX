@@ -793,30 +793,44 @@ public:
         overviewPanel.setBounds(0,134,getWidth(),getHeight()-154);
 
     }
-    bool isInterestedInDragSource(const SourceDetails& details) override {return details.description.toString().startsWith("module:");}
+    bool isInterestedInDragSource(const SourceDetails& details) override {
+        return details.description.toString().startsWith("module:");
+    }
     void itemDropped(const SourceDetails& details) override {
-        if(details.localPosition.y<82||details.localPosition.y>132)return;
-        const int destination=chainAt(static_cast<float>(details.localPosition.x));
+        const auto position=details.localPosition.toFloat();
+        const int destination=chainAt(position.x,position.y);
         const int source=details.description.toString().fromFirstOccurrenceOf(":",false,false).getIntValue();
-        if(source<0||source>=11||destination<0||source==destination)return;
+        if(destination<0||source<0||source==destination||source==10||destination==10)return;
         if(usingFullRouter()){
-          auto order=fullRouteOrder();
-          auto from=std::find(order.begin(),order.end(),source),to=std::find(order.begin(),order.end(),destination);
-          if(from==order.end()||to==order.end())return;
-          if(from<to)std::rotate(from,from+1,to+1);else std::rotate(to,from,from+1);
-          writeFullRoute(order);
-          return;
+            auto order=fullRouteOrder();
+            auto from=std::find(order.begin(),order.end(),source);
+            auto to=std::find(order.begin(),order.end(),destination);
+            if(from==order.end()||to==order.end())return;
+            if(from<to)std::rotate(from,from+1,to+1);
+            else std::rotate(to,from,from+1);
+            writeFullRoute(order);
+            return;
         }
+        // Retained compatibility routing for the independent parallel mixer.
         if(source>=6||destination>=6)return;
         const bool legacy=processor.state.getRawParameterValue("order")->load()>.5f;
         auto order=masterlab::decodeOrder(static_cast<int>(processor.state.getRawParameterValue("chainOrder")->load()),legacy);
         auto from=std::find(order.begin(),order.end(),source),to=std::find(order.begin(),order.end(),destination);
         if(from<to)std::rotate(from,from+1,to+1);else std::rotate(to,from,from+1);
-        auto* parameter=processor.state.getParameter("chainOrder");processor.beginUiTransaction("Move module");parameter->beginChangeGesture();parameter->setValueNotifyingHost(parameter->convertTo0to1(static_cast<float>(masterlab::encodeOrder(order,legacy))));parameter->endChangeGesture();processor.finishUiTransaction();repaint();
+        auto* parameter=processor.state.getParameter("chainOrder");
+        processor.beginUiTransaction("Move module");
+        parameter->beginChangeGesture();
+        parameter->setValueNotifyingHost(parameter->convertTo0to1(static_cast<float>(masterlab::encodeOrder(order,legacy))));
+        parameter->endChangeGesture();
+        processor.finishUiTransaction();
+        repaint();
     }
     void mouseDown(const juce::MouseEvent& event) override {
         chainDragKind=-1;chainDragging=false;chainHover=-1;
-        if(event.position.y>=84&&event.position.y<=132){chainDragKind=chainAt(event.position.x);return;}
+        if(event.position.y>=80&&event.position.y<168){
+            chainDragKind=chainAt(event.position.x,event.position.y);
+            return;
+        }
         if(moduleView>=0||showingParallel||showingExciter||showingAnalog||showingBrain||showingInspector||showingLimiter||!plot().expanded(12).contains(event.position))return;
         int nearest=selectedBand;float distance=event.position.getDistanceFrom(node(nearest));
         for(int i=0;i<16;++i){if(i!=selectedBand&&bandType(i)==0&&std::abs(value("gain",i))<.01f)continue;float d=event.position.getDistanceFrom(node(i));if(d<distance){distance=d;nearest=i;}}
@@ -830,24 +844,57 @@ public:
         if(draggingNode){auto area=plot();float normal=juce::jlimit(0.f,1.f,(event.position.x-area.getX())/area.getWidth());
             setParameter("frequency",static_cast<float>(20*std::pow(sampleRate()*.5/20,normal)));
             if(gainApplies(selectedBand))setParameter("gain",juce::jlimit(-18.f,18.f,(area.getCentreY()-event.position.y)*36/area.getHeight()));repaint();return;}
-        if(chainDragKind<0)return;
-        chainDragging=event.getDistanceFromDragStart()>4;chainHover=chainAt(event.position.x);repaint();
+        if(chainDragKind<0||chainDragKind==10)return;
+        chainDragging=event.getDistanceFromDragStart()>4;
+        chainHover=chainAt(event.position.x,event.position.y);
+        repaint();
     }
     void mouseUp(const juce::MouseEvent& event) override {
-        const bool moved=event.mouseWasDraggedSinceMouseDown();endDrag();
-        if(chainDragging&&chainDragKind>=0){itemDropped(SourceDetails("module:"+juce::String(chainDragKind),this,event.position.toInt()));chainDragKind=-1;chainDragging=false;chainHover=-1;repaint();return;}
+        const bool moved=event.mouseWasDraggedSinceMouseDown();
+        endDrag();
+        if(chainDragging&&chainDragKind>=0){
+            itemDropped(SourceDetails("module:"+juce::String(chainDragKind),this,event.position.toInt()));
+            chainDragKind=-1;chainDragging=false;chainHover=-1;repaint();return;
+        }
         chainDragKind=-1;chainHover=-1;
-        if(event.mods.isPopupMenu()&&event.position.y>=84&&event.position.y<=132){const int kind=chainAt(event.position.x);if(kind<0)return;auto list=chainModules();auto position=std::find(list.begin(),list.end(),kind);int index=static_cast<int>(position-list.begin());juce::PopupMenu menu;menu.addItem(1,"Move earlier",index>0);menu.addItem(2,"Move later",index+1<static_cast<int>(list.size()));menu.addItem(3,"Remove from chain");auto safe=juce::Component::SafePointer<Editor>(this);menu.showMenuAsync({},[safe,kind,list,index](int action){if(!safe)return;if(action==3){if(kind<6)safe->processor.setModulePresentUI(kind,false);else if(safe->processor.state.getRawParameterValue(routePresentIds[static_cast<size_t>(kind)])->load()>.5f)safe->toggleParameter(routePresentIds[static_cast<size_t>(kind)]);}if(action==1||action==2){int target=index+(action==1?-1:1);if(target<0||target>=static_cast<int>(list.size()))return;float x=24+(safe->getWidth()-48.f)/list.size()*(target+.5f);safe->itemDropped(SourceDetails("module:"+juce::String(kind),safe.getComponent(),{static_cast<int>(x),104}));}safe->repaint();});return;}
-        if(!moved&&event.position.y>=84&&event.position.y<=132){const int kind=chainAt(event.position.x);if(kind<0)return;
-            const auto modules=chainModules();const float width=(getWidth()-48.f)/modules.size();const float local=std::fmod(event.position.x-24,width);
-            if(local<30){toggleParameter(routeOnIds[static_cast<size_t>(kind)]);return;}
+        if(event.position.y<80||event.position.y>=168)return;
+        const int kind=chainAt(event.position.x,event.position.y);
+        if(kind<0)return;
+        const auto list=chainModules();
+        const auto position=std::find(list.begin(),list.end(),kind);
+        const int index=static_cast<int>(position-list.begin());
+        if(event.mods.isPopupMenu()){
+            juce::PopupMenu menu;
+            menu.addItem(1,"Move earlier",kind!=10&&index>0);
+            menu.addItem(2,"Move later",kind!=10&&index+1<static_cast<int>(list.size())-1);
+            menu.addItem(3,chainActive(kind)?"Disable processor":"Enable processor");
+            auto safe=juce::Component::SafePointer<Editor>(this);
+            menu.showMenuAsync({},[safe,kind,index,list](int action){
+                if(!safe)return;
+                if(action==3){safe->toggleChainStage(kind);return;}
+                if(action==1||action==2){
+                    const int target=index+(action==1?-1:1);
+                    if(target<0||target>=static_cast<int>(list.size())||list[static_cast<size_t>(target)]==10)return;
+                    const float cell=(safe->getWidth()-48.f)/5.f;
+                    const float x=24.f+cell*(target%5+.5f);
+                    const float y=80.f+44.f*(target/5)+22.f;
+                    safe->itemDropped(SourceDetails("module:"+juce::String(kind),safe.getComponent(),{juce::roundToInt(x),juce::roundToInt(y)}));
+                }
+            });
+            return;
+        }
+        if(!moved){
+            const float cell=(getWidth()-48.f)/5.f;
+            const float local=std::fmod(event.position.x-24.f,cell);
+            if(usingFullRouter()&&local>cell-38.f){toggleChainStage(kind);return;}
             if(kind<3||kind==5)showModule(kind==5?3:kind);
-            else if(kind==3||kind==4)showLimiter(kind==4);
-            else if(kind==6)showExciter();
-            else if(kind==7)showAnalog();
+            else if(kind==3)showLimiter(false);
+            else if(kind==4)showLimiter(true);
+            else if(kind==6)showAnalogizer();
             else if(kind==8)showBass();
             else if(kind==9)showTransient();
             else if(kind==10)showFinalTruePeak();
+            else if(kind==11)showRestoration();
         }
     }
     void mouseWheelMove(const juce::MouseEvent& event,const juce::MouseWheelDetails& wheel) override {
