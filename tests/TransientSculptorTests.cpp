@@ -44,6 +44,31 @@ int main(){
   check(distance(bypass,dry)<1e-7,"wet zero equals dry");
   std::printf("%.0f Hz transient sculptor passed\n",rate);
  }
+ // Delta and scope are calculated from the actual processed samples.
+ {
+  TransientSculptorSettings cfg;cfg.enabled=true;cfg.attack={.85f,.65f,.75f};cfg.sustain={-.3f,.3f,.4f};
+  auto monitoring=cfg;monitoring.delta=true;
+  TransientSculptor normal,delta;normal.settings(cfg);delta.settings(monitoring);
+  normal.prepare(48000);delta.prepare(48000);
+  std::array<float,257> a{},b{},c{},d{},raw{};
+  double totalDifference=0;
+  for(int block=0;block<120;++block){
+   for(int i=0;i<257;++i){
+    const int time=block*257+i;
+    const float v=.16f*std::sin(time*.19f)+(time%997<14?.75f:0.f);
+    a[i]=b[i]=c[i]=d[i]=raw[i]=v;
+   }
+   normal.process(a.data(),b.data(),257);delta.process(c.data(),d.data(),257);
+   for(int i=0;i<257;++i){
+    check(std::abs(c[i]-(raw[i]-a[i]))<1.e-5f,"Transient Delta differs from processed-minus-input");
+    totalDifference+=std::abs(a[i]-raw[i]);
+   }
+  }
+  check(totalDifference>1.,"Transient controls have no audible action");
+  const auto reading=normal.reading();
+  check(std::any_of(reading.outputWave.begin(),reading.outputWave.end(),[](float x){return std::abs(x)>.001f;}),
+        "Transient output waveform is not actual DSP telemetry");
+ }
  TransientSculptor d;TransientSculptorSettings p;p.enabled=true;p.attack={1,1,1};
  d.settings(p);d.prepare(48000);
  std::array<float,512> a{},b{};a[0]=std::numeric_limits<float>::quiet_NaN();
