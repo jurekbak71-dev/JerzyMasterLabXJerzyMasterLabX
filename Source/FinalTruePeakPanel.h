@@ -5,7 +5,7 @@
 class FinalTruePeakPanel final : public juce::Component {
  Processor& processor_;
  StudioTheme& theme_;
- juce::ToggleButton included_{"In chain"},enabled_{"Active"};
+ juce::ToggleButton included_{"Fixed slot"},enabled_{"Active"};
  std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> includedAttachment_,enabledAttachment_;
  struct Knob {juce::Label name;juce::Slider slider;
   std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;};
@@ -27,13 +27,13 @@ public:
   setLookAndFeel(&theme_);setComponentID("final-true-peak-panel");
   included_.setComponentID("true-peak-present");
   enabled_.setComponentID("true-peak-enabled");
-  addAndMakeVisible(included_);addAndMakeVisible(enabled_);
+  addAndMakeVisible(included_);addAndMakeVisible(enabled_);included_.setEnabled(false);
   includedAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.state,"truePeakPresent",included_);
   enabledAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.state,"truePeakOn",enabled_);
   addKnob("Ceiling dBTP (target)","truePeakCeiling");
   addKnob("Release ms","truePeakRelease");
   addKnob("Drive dB","truePeakDrive");
-  included_.setTooltip("Adds final limiter after every other DSP stage. Host latency includes fixed 128 samples even when off.");
+  included_.setTooltip("Final limiter occupies the last slot; Active switches it OFF without changing host PDC.");
  }
  ~FinalTruePeakPanel()override{setLookAndFeel(nullptr);}
  void update(const Processor::ResponseFrame& response){reading_=response.truePeak;repaint();}
@@ -57,7 +57,7 @@ public:
   g.drawVerticalLine(10,0.f,static_cast<float>(getHeight()));
   g.drawVerticalLine(juce::jmax(10,getWidth()-11),0.f,static_cast<float>(getHeight()));
   g.setColour(juce::Colour(0xffb3e2ce));g.setFont(juce::Font(juce::FontOptions(23.f)));
-  g.drawText("FINAL TRUE-PEAK",24,56,getWidth()-48,37,juce::Justification::left);
+  g.drawText("FINAL TRUE-PEAK LIMITER",24,56,getWidth()-48,37,juce::Justification::left);
   // A red warning light is driven strictly by a measured sample clipping condition.
   // Inter-sample conformity remains separately audited, not inferred here.
   const bool sampleClip=reading_.outputSamplePeak>1.f;
