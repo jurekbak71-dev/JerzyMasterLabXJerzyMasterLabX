@@ -105,7 +105,7 @@ inline constexpr size_t dynamicEqBandCount=8;
 inline constexpr int dynamicEqControlPeriod=32;
 struct DynamicBandSettings {float frequency=1000,gain=0,q=1,threshold=-24,range=-3,attack=15,release=150;bool enabled=true;};
 struct DynamicEqSettings {
- bool enabled=false;
+ bool enabled=false,delta=false;
  std::array<DynamicBandSettings,dynamicEqBandCount> bands{{
    {150,0,1,-24,-3,25,180,true},{2500,0,1,-24,-3,10,120,true},
    {7500,0,1,-30,-3,3,80,true},{100,0,1,-24,0,15,160,false},
@@ -114,7 +114,7 @@ struct DynamicEqSettings {
  }};
 };
 class DynamicEqualizer {
- double rate=48000;DynamicEqSettings config;Slew bypass;
+ double rate=48000;DynamicEqSettings config;Slew bypass,delta;
  std::array<std::array<Biquad,dynamicEqBandCount>,2> detectors{},filters{};
  std::array<Biquad,dynamicEqBandCount> detectorTargets{},filterTargets{};
  std::array<Envelope,dynamicEqBandCount> envelopes{};
@@ -145,6 +145,7 @@ public:
  void reset()noexcept {
   detectors={};filters={};detectorTargets={};filterTargets={};envelopes={};activity={};controlPhase=0;
   bypass.prepare(rate,config.enabled?1.f:0.f);
+  delta.prepare(rate,config.delta?1.f:0.f);
   for(size_t i=0;i<dynamicEqBandCount;++i){
    blends[i].prepare(rate,config.bands[i].enabled?1.f:0.f);
    gains[i].prepare(rate,config.bands[i].gain);
@@ -176,7 +177,10 @@ public:
     wetL+=mix*(filteredL-wetL);wetR+=mix*(filteredR-wetR);
    }
    const float mix=bypass.tick(config.enabled?1.f:0.f);
-   left[sample]=clean(l+mix*(wetL-l));right[sample]=clean(r+mix*(wetR-r));
+   const float normalL=clean(l+mix*(wetL-l)),normalR=clean(r+mix*(wetR-r));
+   const float monitoring=delta.tick(config.delta?1.f:0.f);
+   left[sample]=clean(normalL+monitoring*(l-normalL-normalL));
+   right[sample]=clean(normalR+monitoring*(r-normalR-normalR));
   }
  }
  std::array<float,dynamicEqBandCount> read()const noexcept {
