@@ -8,9 +8,12 @@ namespace masterlab {
 struct BassArchitectSettings {
  bool enabled=false;
  float sub=0.f,body=0.f,harmonics=0.f,monoBass=0.f,mix=1.f,outputDb=0.f;
+ bool delta=false;
 };
 struct BassArchitectReading {
  float inputRms=0.f,outputRms=0.f,deltaRms=0.f,lowRms=0.f;
+ std::array<float,3> sectionsRms{};
+ std::array<float,64> inputWave{},outputWave{};
 };
 class BassArchitect {
  struct Smoother {
@@ -24,7 +27,7 @@ class BassArchitect {
   float sub=0.f,body=0.f,dc=0.f;
  };
  std::array<Channel,2> state_{};
- Smoother enabled_{},sub_{},body_{},harmonics_{},mono_{},mix_{},out_{};
+ Smoother enabled_{},sub_{},body_{},harmonics_{},mono_{},mix_{},out_{},deltaMonitor_{};
  BassArchitectSettings settings_{};
  BassArchitectReading reading_{};
  double sr_=48000.;
@@ -46,15 +49,18 @@ public:
   mono_.prepare(sr_,finite(settings_.monoBass,0.f,1.f));
   mix_.prepare(sr_,finite(settings_.mix,0.f,1.f));
   out_.prepare(sr_,finite(settings_.outputDb,-12.f,12.f));
+  deltaMonitor_.prepare(sr_,settings_.delta?1.f:0.f);
  }
  BassArchitectReading reading()const noexcept{return reading_;}
  void process(float* left,float* right,int n)noexcept{
   if(!left||!right||n<=0)return;
-  if(!settings_.enabled&&enabled_.current<1e-6f){reading_={};return;}
+  if(!settings_.enabled&&enabled_.current<1e-6f){reading_={};if(settings_.delta)for(int i=0;i<n;++i)left[i]=right[i]=0.f;return;}
   const float lp90=static_cast<float>(1.-std::exp(-6.283185307179586*90./sr_));
   const float lp250=static_cast<float>(1.-std::exp(-6.283185307179586*250./sr_));
   const float dcPole=static_cast<float>(1.-std::exp(-6.283185307179586*10./sr_));
   double input2=0.,output2=0.,difference2=0.,low2=0.;
+  std::array<double,3> componentEnergy{};
+  std::array<float,64> inWave{},outWave{};
   for(int i=0;i<n;++i){
    const float on=enabled_.tick(settings_.enabled?1.f:0.f);
    const float sub= sub_.tick(finite(settings_.sub,-1.f,1.f));
@@ -90,14 +96,22 @@ public:
     output2+=static_cast<double>(out[c])*out[c];
     const double d=out[c]-dry[c];difference2+=d*d;
     low2+=static_cast<double>(bass)*bass;
+    componentEnergy[0]+=static_cast<double>(bass)*bass;
+    componentEnergy[1]+=static_cast<double>(mid[c])*mid[c];
+    componentEnergy[2]+=static_cast<double>(enhancement)*enhancement;
    }
-   left[i]=out[0];right[i]=out[1];
+   const size_t scopeIndex=static_cast<size_t>(i)*64/static_cast<size_t>(n);
+   inWave[scopeIndex]=.5f*(dry[0]+dry[1]);outWave[scopeIndex]=.5f*(out[0]+out[1]);
+   const float delta=deltaMonitor_.tick(settings_.delta?1.f:0.f);
+   left[i]=out[0]+delta*(dry[0]-2.f*out[0]);right[i]=out[1]+delta*(dry[1]-2.f*out[1]);
   }
   const double div=1./(2.*n);
   reading_={static_cast<float>(std::sqrt(input2*div)),
     static_cast<float>(std::sqrt(output2*div)),
     static_cast<float>(std::sqrt(difference2*div)),
     static_cast<float>(std::sqrt(low2*div))};
+  for(size_t i=0;i<3;++i)reading_.sectionsRms[i]=static_cast<float>(std::sqrt(componentEnergy[i]*div));
+  reading_.inputWave=inWave;reading_.outputWave=outWave;
  }
 };
 }
