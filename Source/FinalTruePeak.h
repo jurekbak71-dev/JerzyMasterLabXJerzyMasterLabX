@@ -96,14 +96,20 @@ public:
   const float release=std::exp(-1.f/(static_cast<float>(sampleRate_)*.001f*
                                       sane(settings_.releaseMs*characterScale,10.f,1400.f)));
   const float clip=std::clamp(settings_.softClip,0.f,1.f);
-  const float clipHardness=1.f+3.f*clip;
-  const float clipNorm=clip>0.f?std::tanh(clipHardness):1.f;
+  // Nonlinear saturation must run *before* the lookahead true-peak detector:
+  // shaping after gain control creates new, undetected intersample peaks.
+  const float clipThreshold=std::max(.1f,ceiling*.75f);
+  auto preShape=[&](float x)noexcept {
+   if(clip<=0.f)return x;
+   const float saturation=clipThreshold*std::tanh(x/clipThreshold);
+   return x+clip*(saturation-x);
+  };
   std::array<float,64> inputWave{},outputWave{},gainEnvelope{};
   float detected=0.f,outputPeak=0.f,minGain=1.f;
   for(int i=0;i<count;++i){
    const float input[2]{
-    sane(left[i],-16.f,16.f)*drive,
-    sane(right[i],-16.f,16.f)*drive
+    preShape(sane(left[i],-16.f,16.f)*drive),
+    preShape(sane(right[i],-16.f,16.f)*drive)
    };
    for(int c=0;c<2;++c){
     history_[c][histPosition_]=input[c];
@@ -154,14 +160,10 @@ public:
     delay_[1][outputPosition]*gain_*outputGain
    };
    delayPosition_=outputPosition;
-   auto shape=[&](float v){
-    if(clip<=0.f)return v;
-    const float normalized=std::clamp(v/ceiling,-1.f,1.f);
-    const float curved=std::tanh(normalized*clipHardness)/clipNorm*ceiling;
-    return v+clip*(curved-v);
-   };
-   left[i]=std::clamp(shape(y[0]),-ceiling,ceiling);
-   right[i]=std::clamp(shape(y[1]),-ceiling,ceiling);
+   // This stage is now linear after the detector, preserving the
+   // detector's conservative 8x reconstructed output safety margin.
+   left[i]=std::clamp(y[0],-ceiling,ceiling);
+   right[i]=std::clamp(y[1],-ceiling,ceiling);
    outputWave[scopeIndex]=.5f*(left[i]+right[i]);
    outputPeak=std::max(outputPeak,std::max(std::abs(left[i]),std::abs(right[i])));
   }
