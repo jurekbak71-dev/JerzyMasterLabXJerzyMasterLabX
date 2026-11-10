@@ -26,7 +26,13 @@ class Analogizer {
  float smooth_=0.001f;
  static float safe(float x)noexcept {return std::isfinite(x)?std::clamp(x,-8.f,8.f):0.f;}
  static float sat(float x,AnalogizerMode mode,float memory)noexcept {
-  if(mode==AnalogizerMode::Transistor)return x/(1.f+.22f*std::abs(x)+.055f*x*x);
+  if(mode==AnalogizerMode::FET){
+   // FET-inspired stiffer asymmetric pinch-off: a deliberately distinct
+   // nonlinear transfer, not an alias of the earlier transistor model.
+   const float bias=.14f;
+   return .70f*(std::atan(2.35f*(x+bias))-std::atan(2.35f*bias))/
+          (1.f+.035f*x*x);
+  }
   if(mode==AnalogizerMode::Tape)return std::tanh(.85f*(x+.16f*memory));
   return std::tanh(x+.065f)-std::tanh(.065f);
  }
