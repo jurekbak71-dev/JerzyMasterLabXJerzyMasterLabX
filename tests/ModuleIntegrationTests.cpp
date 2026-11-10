@@ -44,5 +44,27 @@ int main(){
   }
   check(insert.getLatencySamples()==delay,"INSERT mode changed host PDC");
  }
+ // INSERT 0% must be blended ahead of the *physical final* true-peak
+ // limiter. A high-level dry signal may not bypass the output ceiling.
+ {
+  Processor insert;
+  set(insert,"workMode",1);set(insert,"insertBlend",0);
+  set(insert,"truePeakPresent",1);set(insert,"truePeakOn",1);
+  set(insert,"truePeakCeiling",-6.f);
+  insert.prepareToPlay(48000.,257);
+  const float ceiling=std::pow(10.f,-6.f/20.f);
+  juce::AudioBuffer<float> signal(2,257);juce::MidiBuffer midi;
+  for(int block=0;block<160;++block){
+   for(int i=0;i<257;++i){
+    const float sample=.96f*std::sin((block*257+i)*.17f);
+    signal.setSample(0,i,sample);signal.setSample(1,i,sample);
+   }
+   audit=true;insert.processBlock(signal,midi);audit=false;
+   if(block>60)for(int i=0;i<257;++i)
+    check(std::abs(signal.getSample(0,i))<=ceiling+1.e-4f&&
+          std::abs(signal.getSample(1,i))<=ceiling+1.e-4f,
+          "INSERT dry blend bypassed fixed final limiter");
+  }
+ }
  check(allocations==0,"prepared module chain allocated in callback");std::cout<<"Passed: add/remove transparency and stable PDC, stereo mono sum, Analog/upward/Dynamic EQ state and deterministic audio, no callback allocation at four sample rates\n";
 }
