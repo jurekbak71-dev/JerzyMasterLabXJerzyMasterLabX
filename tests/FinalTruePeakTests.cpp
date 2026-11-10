@@ -85,6 +85,28 @@ int main(){
   check(amplitude(quiet,sr,991.)>.2,"quiet signal passes");
   std::printf("%.0f true-peak prototype: fixed latency, finite, peak bound, partition tests pass\n",sr);
  }
+ // Expanded Maximizer controls must change the real signal but preserve
+ // deterministic block processing and respect the requested output ceiling.
+ {
+  FinalTruePeakSettings style;style.enabled=true;style.ceilingDb=-6;style.driveDb=12;
+  style.character=2;style.autoRelease=true;style.softClip=.75f;style.outputDb=2.f;
+  const auto processed=render(48000,style,257,true);
+  const auto single=render(48000,style,1,true);
+  const auto wide=render(48000,style,4097,true);
+  const float ceiling=std::pow(10.f,style.ceilingDb/20.f);
+  for(size_t i=0;i<processed.size();++i){
+   check(std::isfinite(processed[i])&&std::abs(processed[i])<=ceiling+1.e-6f,
+         "expanded maximizer exceeded selected output ceiling");
+   check(processed[i]==single[i]&&processed[i]==wide[i],
+         "expanded maximizer depends on callback buffer size");
+  }
+  auto base=style;base.character=0;base.autoRelease=false;base.softClip=0;base.outputDb=0;
+  const auto transparent=render(48000,base,257,true);
+  double difference=0;for(size_t i=1024;i<processed.size();++i)difference+=std::abs(processed[i]-transparent[i]);
+  check(difference>2.,"expanded maximizer controls do not affect actual audio");
+  check(outputTruePeak8x(processed)<=ceiling*1.012,
+        "expanded maximizer output violates independently reconstructed 8x ceiling");
+ }
  FinalTruePeak dsp;FinalTruePeakSettings s;s.enabled=true;
  dsp.settings(s);dsp.prepare(48000);
  std::array<float,512> a{},b{};a[0]=std::numeric_limits<float>::quiet_NaN();
