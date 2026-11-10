@@ -305,7 +305,7 @@ class Editor final : public juce::AudioProcessorEditor,
         if(report!=previousBrainReport){brainReport.setText(report,false);previousBrainReport=report;}
     }
     void paintBrain(juce::Graphics& g){
-        g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);
+        g.setColour(background);g.fillRect(0,170,getWidth(),getHeight()-170);
         g.setColour(panel);g.fillRoundedRectangle(24.f,154.f,getWidth()-48.f,178.f,18);
         g.setColour(juce::Colour(0xff284760));g.setFont(theme.font(14));g.drawText("Master Brain  /  Guided mastering",40,134,getWidth()-80,20,juce::Justification::left);
         g.setColour(juce::Colour(0xff0a1119));g.fillRoundedRectangle(40.f,294.f,getWidth()-80.f,18.f,4.f);
@@ -456,7 +456,7 @@ class Editor final : public juce::AudioProcessorEditor,
     }
     double sampleRate() const { return processor.displayRate.load(); }
     juce::Rectangle<float> plot() const {
-        return {48.f, 174.f, std::max(200.f, getWidth() - 300.f), std::max(100.f, getHeight() - 394.f)};
+        return {48.f, 218.f, std::max(200.f, getWidth() - 300.f), std::max(100.f, getHeight() - 438.f)};
     }
     float xForFrequency(double hz) const {
         auto area = plot();
@@ -762,7 +762,7 @@ public:
     }
     ~Editor() override {stopTimer();endDrag();setLookAndFeel(nullptr);}
     void resized() override {
-        resetMetersButton.setBounds(getWidth()-210,136,186,26);
+        resetMetersButton.setBounds(getWidth()-210,172,186,26);
         newButton.setBounds(211,13,52,30);presetButton.setBounds(267,13,89,30);
         undoButton.setBounds(360,13,40,30);redoButton.setBounds(404,13,40,30);
         eqView.setBounds(getWidth()-432,48,98,26);limiterView.setBounds(getWidth()-326,48,98,26);inspectorView.setBounds(getWidth()-220,48,98,26);brainView.setBounds(getWidth()-114,48,98,26);
@@ -776,21 +776,21 @@ public:
         for(int i=0;i<4;++i){auto* label=std::array<juce::Label*,4>{&frequencyLabel,&gainLabel,&qualityLabel,&ceilingLabel}[i];auto* slider=std::array<juce::Slider*,4>{&frequency,&gain,&quality,&ceiling}[i];label->setBounds(32+i*width,top,width-12,22);slider->setBounds(32+i*width,top+22,width-16,113);}
         driveLabel.setBounds(32,top,width-12,22);drive.setBounds(32,top+22,width-16,113);
         releaseLabel.setBounds(32+width,top,width-12,22);release.setBounds(32+width,top+22,width-16,113);
-        bandChoice.setBounds(28,140,110,26);typeChoice.setBounds(148,140,155,26);fftChoice.setBounds(313,140,130,26);bandEnabled.setBounds(453,140,74,26);
-        eqEnabled.setBounds(537,140,72,26);limiterEnabled.setBounds(getWidth()-114,136,90,26);
+        bandChoice.setBounds(28,176,110,26);typeChoice.setBounds(148,176,155,26);fftChoice.setBounds(313,176,130,26);bandEnabled.setBounds(453,176,74,26);
+        eqEnabled.setBounds(537,176,72,26);limiterEnabled.setBounds(getWidth()-114,172,90,26);
         const int navWidth=(getWidth()-48)/9;int nav=0;for(auto* button:{&consoleView,&eqView,&dynamicView,&dynamicsView,&stereoView,&stabilizerView,&limiterView,&inspectorView,&brainView}){button->setBounds(24+nav*navWidth,48,navWidth-5,26);++nav;}
         modulesButton.setBounds(602,14,120,26);routingChoice.setBounds(448,14,134,26);
-        for(auto& panel:modulePanels)panel->setBounds(0,134,getWidth(),getHeight()-154);
-        parallelPanel.setBounds(0,134,getWidth(),getHeight()-154);
-        exciterPanel.setBounds(0,134,getWidth(),getHeight()-154);
-        analogPanel.setBounds(0,134,getWidth(),getHeight()-154);
-        analogizerPanel.setBounds(0,134,getWidth(),getHeight()-154);
-        restorationPanel.setBounds(0,134,getWidth(),getHeight()-154);
-        modePanel.setBounds(0,134,getWidth(),getHeight()-154);
-        bassPanel.setBounds(0,134,getWidth(),getHeight()-154);
-        transientPanel.setBounds(0,134,getWidth(),getHeight()-154);
-        truePeakPanel.setBounds(0,134,getWidth(),getHeight()-154);
-        overviewPanel.setBounds(0,134,getWidth(),getHeight()-154);
+        for(auto& panel:modulePanels)panel->setBounds(0,170,getWidth(),getHeight()-190);
+        parallelPanel.setBounds(0,170,getWidth(),getHeight()-190);
+        exciterPanel.setBounds(0,170,getWidth(),getHeight()-190);
+        analogPanel.setBounds(0,170,getWidth(),getHeight()-190);
+        analogizerPanel.setBounds(0,170,getWidth(),getHeight()-190);
+        restorationPanel.setBounds(0,170,getWidth(),getHeight()-190);
+        modePanel.setBounds(0,170,getWidth(),getHeight()-190);
+        bassPanel.setBounds(0,170,getWidth(),getHeight()-190);
+        transientPanel.setBounds(0,170,getWidth(),getHeight()-190);
+        truePeakPanel.setBounds(0,170,getWidth(),getHeight()-190);
+        overviewPanel.setBounds(0,170,getWidth(),getHeight()-190);
 
     }
     bool isInterestedInDragSource(const SourceDetails& details) override {
@@ -928,25 +928,51 @@ public:
         const int dock=getHeight()-174,cell=(getWidth()-64)/4;
         g.setColour(panel);g.fillRoundedRectangle(24.f,static_cast<float>(dock),getWidth()-48.f,146.f,20.f);
         const auto modules=chainModules();
-        bool first=std::find(modules.begin(),modules.end(),4)<std::find(modules.begin(),modules.end(),3);
-        if(modules.empty()){g.setColour(juce::Colour(0xff344b60));g.setFont(theme.font(14));g.drawText("Empty chain / use + Modules to add processors",24,84,getWidth()-48,48,juce::Justification::centred);}
-        for(size_t i=0;i<modules.size();++i){int kind=modules[i];const float width=(getWidth()-48.f)/modules.size(),x=24+i*width;const bool active=(kind<3||kind==5)?moduleView==(kind==5?3:kind):(!showingParallel&&!showingBrain&&!showingInspector&&moduleView<0&&(kind==3?!showingLimiter:showingLimiter));const bool on=processor.state.getRawParameterValue(routeOnIds[static_cast<size_t>(kind)])->load()>.5f;
-            const auto colour=kind==4?curve:accent;
-            const juce::Rectangle<float> slot(x+1.f,84.f,width-10.f,48.f);
-            g.setGradientFill(juce::ColourGradient(active?juce::Colour(0xfff9fbfc):juce::Colour(0xffedf0f3),
-                                                     x,84.f,juce::Colour(0xffc7d2dc),x,132.f,false));
-            g.fillRoundedRectangle(slot,5.f);
-            g.setColour(active?juce::Colour(0xff087cff):juce::Colour(0xff96a8b5));
-            g.drawRoundedRectangle(slot,5.f,active?1.8f:.8f);
-            if(chainDragging&&chainHover==kind){g.setColour(juce::Colour(0xff086bff));g.drawRoundedRectangle(slot,5.f,2.f);}
-            theme.paintPowerLed(g,juce::roundToInt(x+10.f),98,22,on);
-            g.setColour(juce::Colour(0xff172936));g.setFont(theme.font(modules.size()>7?9.f:modules.size()>3?12.f:16.f));g.drawText(routeNames[static_cast<size_t>(kind)],static_cast<int>(x)+34,90,static_cast<int>(width)-48,22,juce::Justification::left);
-            g.setColour(juce::Colour(0xff566b7b));g.setFont(theme.font(modules.size()>7?8.f:10.f));
-            g.drawText(on?std::array<const char*,11>{"3 detectors","Down / upward","4-band M/S","16 bands","5 ms lookahead","Adaptive tone","Harmonics","Color","Sub/bass","Envelope","True Peak"}[static_cast<size_t>(kind)]:"Bypassed",static_cast<int>(x)+34,111,static_cast<int>(width)-48,16,juce::Justification::left);
+        const bool first=std::find(modules.begin(),modules.end(),4)<std::find(modules.begin(),modules.end(),3);
+        const float cardWidth=(getWidth()-48.f)/5.f;
+        g.setColour(juce::Colour(0xff15202a));
+        g.fillRoundedRectangle(19.f,79.f,getWidth()-38.f,90.f,7.f);
+        for(size_t i=0;i<modules.size();++i){
+            const int kind=modules[i];
+            const int col=static_cast<int>(i)%5,row=static_cast<int>(i)/5;
+            const float x=24.f+col*cardWidth,y=82.f+row*43.f;
+            const juce::Rectangle<float> slot(x+1.f,y,cardWidth-7.f,40.f);
+            const bool on=chainActive(kind);
+            const bool selected=(kind==6&&showingAnalogizer)||(kind==11&&showingRestoration)||
+                                (kind==10&&showingTruePeak)||(kind==8&&showingBass)||
+                                (kind==9&&showingTransient)||(kind==3&&!showingLimiter&&moduleView<0&&!showingBrain);
+            const auto face=kind==10?juce::Colour(0xff283e36):juce::Colour(0xff293643);
+            g.setColour(face);g.fillRoundedRectangle(slot,5.f);
+            g.setColour(chainDragging&&chainHover==kind?juce::Colour(0xff69d4fc):
+                        selected?juce::Colour(0xff7faecb):
+                        kind==10?juce::Colour(0xff468b6b):juce::Colour(0xff536776));
+            g.drawRoundedRectangle(slot,5.f,selected?1.7f:1.f);
+            g.setColour(juce::Colour(0xff9dadbd));g.setFont(theme.font(9.f));
+            g.drawText(juce::String(static_cast<int>(i+1)).paddedLeft('0',2),
+                       juce::roundToInt(x+7),juce::roundToInt(y+4),19,13,juce::Justification::left);
+            drawChainIcon(g,kind,x+26.f,y+10.f);
+            g.setColour(on?juce::Colour(0xffeff5f8):juce::Colour(0xff9ba8b3));
+            g.setFont(theme.font(10.5f));
+            g.drawFittedText(routeNames[static_cast<size_t>(kind)],
+                             juce::Rectangle<int>(juce::roundToInt(x+52.f),juce::roundToInt(y+5.f),
+                              juce::jmax(1,juce::roundToInt(cardWidth-91.f)),30),
+                             juce::Justification::centredLeft,2);
+            // Only actual processing activation drives this LED; mouse focus
+            // is represented by the separate card outline, never by blue.
+            const float lampX=x+cardWidth-24.f,lampY=y+20.f;
+            g.setColour(juce::Colour(0xffc4cdd3));
+            g.drawEllipse(lampX-6.f,lampY-6.f,12.f,12.f,1.2f);
+            g.setColour(on?juce::Colour(0xff29d77b):juce::Colour(0xff77838c));
+            g.fillEllipse(lampX-4.4f,lampY-4.4f,8.8f,8.8f);
+            if(kind==10){
+                g.setColour(juce::Colour(0xffa3c5b6));g.setFont(theme.font(7.5f));
+                g.drawText("FIXED",juce::roundToInt(x+cardWidth-59.f),juce::roundToInt(y+28.f),
+                           37,10,juce::Justification::centred);
+            }
         }
-        if(showingConsole){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
-        if(moduleView>=0){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
-        if(showingParallel||showingExciter||showingAnalog||showingAnalogizer||showingRestoration||showingMode){g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);return;}
+        if(showingConsole){g.setColour(background);g.fillRect(0,170,getWidth(),getHeight()-170);return;}
+        if(moduleView>=0){g.setColour(background);g.fillRect(0,170,getWidth(),getHeight()-170);return;}
+        if(showingParallel||showingExciter||showingAnalog||showingAnalogizer||showingRestoration||showingMode){g.setColour(background);g.fillRect(0,170,getWidth(),getHeight()-170);return;}
         if(showingBrain){paintBrain(g);return;}
         if(showingInspector){paintInspector(g);return;}
         if(showingLimiter){paintLimiter(g);g.setColour(juce::Colour(0xff334e63));g.setFont(theme.font(12));g.drawText(processor.state.getRawParameterValue("routingMode")->load()>.5f?"PARALLEL: limiter ceiling applies to its branch, not the full sum":(first?"Processors after limiter may exceed its ceiling":"SAMPLE PEAK  /  True Peak unavailable"),24,getHeight()-25,getWidth()-48,18,juce::Justification::left);return;}
