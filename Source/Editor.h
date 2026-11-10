@@ -39,18 +39,19 @@ class Editor final : public juce::AudioProcessorEditor,
     juce::TextButton dynamicView{"Dynamic EQ"},dynamicsView{"Dynamics"},stereoView{"Stereo"},stabilizerView{"Stabilizer"},modulesButton{"+ Modules"};
     int moduleView=-1,chainDragKind=-1,chainHover=-1;bool chainDragging=false,showingParallel=false,showingExciter=false,showingAnalog=false,showingAnalogizer=false,showingRestoration=false,showingMode=false,showingBass=false,showingTransient=false,showingTruePeak=false;
     juce::ComboBox routingChoice;std::unique_ptr<ComboAttachment> routingAttachment;
-    inline static constexpr std::array<const char*,11> routePresentIds{
+    // Legacy kind IDs remain stable for host automation. Only these ten DSP
+    // stages are active in serial routing; kind 10 is locked at the tail.
+    inline static constexpr std::array<const char*,12> routePresentIds{
       "dynamicEqPresent","dynamicsPresent","stereoPresent","eqPresent","limPresent","stabilizerPresent",
-      "exciterPresent","analogPresent","bassPresent","transientPresent","truePeakPresent"};
-    inline static constexpr std::array<const char*,11> routeOnIds{
+      "exciterPresent","analogPresent","bassPresent","transientPresent","truePeakPresent","restorationPresent"};
+    inline static constexpr std::array<const char*,12> routeOnIds{
       "dynamicEqOn","dynamicsOn","stereoOn","eq","lim","stabilizerOn",
-      "exciterOn","analogOn","bassOn","transientOn","truePeakOn"};
-    inline static constexpr std::array<const char*,11> routeNames{
-      "Dynamic EQ","Dynamics","Stereo","Spectral EQ","Limiter","Stabilizer",
-      "Exciter","Analog Color","Bass","Transient","True Peak"};
+      "exciterOn","analogOn","bassOn","transientOn","truePeakOn","restorationOn"};
+    inline static constexpr std::array<const char*,12> routeNames{
+      "Dynamic EQ","Smart Dynamics","Stereo Architect","Spectral EQ","Legacy Limiter","Stabilizer",
+      "Analog Exciter","Legacy Color","Bass Architect","Transient","Final Limiter","Restoration"};
     bool usingFullRouter()const {
-      return processor.state.getRawParameterValue("fullRouterOn")->load()>.5f &&
-             processor.state.getRawParameterValue("routingMode")->load()<.5f;
+      return processor.state.getRawParameterValue("routingMode")->load()<.5f;
     }
     masterlab::FullModuleOrder fullRouteOrder()const {
       masterlab::FullModuleOrder result{};
@@ -60,7 +61,8 @@ class Editor final : public juce::AudioProcessorEditor,
       return masterlab::sanitizeFullOrder(result);
     }
     void writeFullRoute(masterlab::FullModuleOrder newOrder) {
-      processor.beginUiTransaction("Reorder full 11-module chain");
+      newOrder=masterlab::sanitizeFullOrder(newOrder);
+      processor.beginUiTransaction("Reorder ten-stage audio chain");
       for(size_t i=0;i<newOrder.size();++i){
        auto* p=processor.state.getParameter("fullRouteSlot"+juce::String(static_cast<int>(i+1)));
        p->beginChangeGesture();
@@ -71,18 +73,97 @@ class Editor final : public juce::AudioProcessorEditor,
       repaint();
     }
     std::vector<int> chainModules() const {
-        std::vector<int> result;
-        if(usingFullRouter()){
-            for(int kind:fullRouteOrder())
-             if(processor.state.getRawParameterValue(routePresentIds[static_cast<size_t>(kind)])->load()>.5f)
-              result.push_back(kind);
-            return result;
-        }
+      std::vector<int> result;
+      if(usingFullRouter()){
+        for(int kind:fullRouteOrder())result.push_back(kind); // OFF cards remain visible
+      }else{
         const auto order=masterlab::decodeOrder(static_cast<int>(processor.state.getRawParameterValue("chainOrder")->load()),processor.state.getRawParameterValue("order")->load()>.5f);
-        for(int kind:order)if(processor.state.getRawParameterValue(routePresentIds[static_cast<size_t>(kind)])->load()>.5f)result.push_back(kind);
-        return result;
+        for(int kind:order)result.push_back(kind);
+      }
+      return result;
     }
-    int chainAt(float x)const {auto list=chainModules();if(list.empty()||x<24||x>getWidth()-24)return -1;size_t i=static_cast<size_t>((x-24)/((getWidth()-48.f)/list.size()));return i<list.size()?list[i]:-1;}
+    bool chainActive(int kind)const {
+      auto on=[this](const char* present,const char* active){
+       return processor.state.getRawParameterValue(present)->load()>.5f &&
+              processor.state.getRawParameterValue(active)->load()>.5f;
+      };
+      if(kind==6)return on("exciterPresent","exciterOn")||
+                         on("analogizerPresent","analogizerOn")||
+                         on("analogPresent","analogOn");
+      if(kind==10)return on("truePeakPresent","truePeakOn");
+      return kind>=0&&kind<static_cast<int>(routeOnIds.size()) &&
+             on(routePresentIds[static_cast<size_t>(kind)],routeOnIds[static_cast<size_t>(kind)]);
+    }
+    void toggleChainStage(int kind) {
+      if(kind<0||kind>=static_cast<int>(routeOnIds.size()))return;
+      const bool target=!chainActive(kind);
+      processor.beginUiTransaction(target?"Enable DSP stage":"Disable DSP stage");
+      auto assign=[this,target](const char* id){
+       auto* p=processor.state.getParameter(id);
+       p->beginChangeGesture();
+       p->setValueNotifyingHost(p->convertTo0to1(target?1.f:0.f));
+       p->endChangeGesture();
+      };
+      if(kind==6){
+       for(const char* id:{"exciterPresent","exciterOn","analogPresent","analogOn",
+                           "analogizerPresent","analogizerOn"})assign(id);
+      }else if(kind==10){
+       for(const char* id:{"truePeakPresent","truePeakOn","limPresent","lim"})assign(id);
+      }else {
+       assign(routePresentIds[static_cast<size_t>(kind)]);
+       assign(routeOnIds[static_cast<size_t>(kind)]);
+      }
+      processor.finishUiTransaction();
+      repaint();
+    }
+    int chainAt(float x,float y)const {
+      auto list=chainModules();
+      if(list.empty()||x<24.f||x>getWidth()-24.f)return -1;
+      if(usingFullRouter()){
+       if(y<80.f||y>=168.f)return -1;
+       const int col=std::clamp(static_cast<int>((x-24.f)/((getWidth()-48.f)/5.f)),0,4);
+       const int row=y<124.f?0:1;
+       const size_t index=static_cast<size_t>(row*5+col);
+       return index<list.size()?list[index]:-1;
+      }
+      if(y<80.f||y>132.f)return -1;
+      size_t i=static_cast<size_t>((x-24.f)/((getWidth()-48.f)/list.size()));
+      return i<list.size()?list[i]:-1;
+    }
+    void drawChainIcon(juce::Graphics& g,int kind,float x,float y)const {
+      const auto tint=juce::Colour(0xffd7e4ed);
+      g.setColour(tint);
+      auto line=[&](float x1,float y1,float x2,float y2){g.drawLine(x+x1,y+y1,x+x2,y+y2,1.6f);};
+      switch(kind){
+       case 3: // Spectral EQ — sliders
+        for(int a=0;a<3;++a){line(1.f,3.f+a*6.f,19.f,3.f+a*6.f);
+          g.fillEllipse(x+(a==1?11.f:6.f),y+1.f+a*6.f,4.f,4.f);}break;
+       case 0:case 1:case 9:{ // Dynamics and transients — actual wave motif
+        juce::Path p;p.startNewSubPath(x+1.f,y+10.f);
+        p.lineTo(x+5.f,y+10.f);p.lineTo(x+8.f,y+3.f);
+        p.lineTo(x+12.f,y+17.f);p.lineTo(x+15.f,y+8.f);
+        p.lineTo(x+19.f,y+10.f);g.strokePath(p,juce::PathStrokeType(1.6f));break;}
+       case 2: // Stereo
+        g.drawEllipse(x+1.f,y+4.f,10.f,12.f,1.5f);
+        g.drawEllipse(x+9.f,y+4.f,10.f,12.f,1.5f);break;
+       case 5:case 11: // Stabilizer / Restoration
+        for(int a=0;a<3;++a)line(1.f,y-y+4.f+a*6.f,19.f,4.f+a*6.f);break;
+       case 6:{ // Analog Exciter — lightning
+        juce::Path p;p.startNewSubPath(x+11.f,y+1.f);p.lineTo(x+4.f,y+11.f);
+        p.lineTo(x+10.f,y+11.f);p.lineTo(x+8.f,y+19.f);
+        p.lineTo(x+18.f,y+7.f);p.lineTo(x+12.f,y+7.f);
+        p.closeSubPath();g.strokePath(p,juce::PathStrokeType(1.5f));break;}
+       case 8: // Bass spectrum
+        g.fillRect(x+2.f,y+12.f,3.f,7.f);g.fillRect(x+8.f,y+4.f,3.f,15.f);
+        g.fillRect(x+14.f,y+9.f,3.f,10.f);break;
+       case 10:{ // Final limiter shield
+        juce::Path p;p.startNewSubPath(x+10.f,y+1.f);p.lineTo(x+18.f,y+5.f);
+        p.lineTo(x+17.f,y+13.f);p.lineTo(x+10.f,y+19.f);
+        p.lineTo(x+3.f,y+13.f);p.lineTo(x+2.f,y+5.f);
+        p.closeSubPath();g.strokePath(p,juce::PathStrokeType(1.6f));break;}
+       default:line(2.f,10.f,18.f,10.f);break;
+      }
+    }
     void hideModules(){showingConsole=false;overviewPanel.setVisible(false);showingTruePeak=false;truePeakPanel.setVisible(false);showingTransient=false;transientPanel.setVisible(false);showingBass=false;bassPanel.setVisible(false);showingAnalog=false;analogPanel.setVisible(false);showingAnalogizer=false;analogizerPanel.setVisible(false);showingRestoration=false;restorationPanel.setVisible(false);showingMode=false;modePanel.setVisible(false);showingExciter=false;exciterPanel.setVisible(false);moduleView=-1;for(auto& panel:modulePanels)if(panel)panel->setVisible(false);dynamicView.setToggleState(false,juce::dontSendNotification);dynamicsView.setToggleState(false,juce::dontSendNotification);stereoView.setToggleState(false,juce::dontSendNotification);stabilizerView.setToggleState(false,juce::dontSendNotification);}
     void showConsole(){showInspector();showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);resetMetersButton.setVisible(false);showingConsole=true;overviewPanel.setVisible(true);repaint();}
     void showModule(int kind){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);moduleView=kind;modulePanels[static_cast<size_t>(kind)]->setVisible(true);std::array<juce::TextButton*,4>{&dynamicView,&dynamicsView,&stereoView,&stabilizerView}[static_cast<size_t>(kind)]->setToggleState(true,juce::dontSendNotification);repaint();}
