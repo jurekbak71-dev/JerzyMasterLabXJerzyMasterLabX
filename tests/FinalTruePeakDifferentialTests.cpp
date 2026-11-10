@@ -52,10 +52,17 @@ int main(){
     // DSP meter monitors a detector that keeps running while bypassed.
     // A stricter internal ceiling changes its reported reduction even when
     // the bypass AUDIO is required to stay bit-exact.
-    check(newReading.gainReductionDb+1e-4f>=oldReading.gainReductionDb,
-          "increased safety margin unexpectedly reduced limiting");
-    check(std::abs(newReading.detectedTruePeak-oldReading.detectedTruePeak)<1e-5f,
-          "detected true peak telemetry changed");
+    if(s.enabled){
+     check(newReading.gainReductionDb+1e-4f>=oldReading.gainReductionDb,
+           "increased safety margin unexpectedly reduced limiting");
+     check(std::abs(newReading.detectedTruePeak-oldReading.detectedTruePeak)<1e-5f,
+           "active true peak telemetry changed");
+    }else{
+     // Disabled DSP is intentionally silent in metering as well as bypassed
+     // at fixed latency: the expensive 4x detector must not run.
+     check(newReading.detectedTruePeak==0.f&&newReading.gainReductionDb==0.f,
+           "disabled true-peak stage performs detector work");
+    }
     offset+=n;
    }
    // Ensure automation at block boundary does not change reference behavior.
