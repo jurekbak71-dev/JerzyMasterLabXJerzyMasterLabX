@@ -90,7 +90,9 @@ class Editor final : public juce::AudioProcessorEditor,
       if(kind==6)return on("exciterPresent","exciterOn")||
                          on("analogizerPresent","analogizerOn")||
                          on("analogPresent","analogOn");
-      if(kind==10)return on("truePeakPresent","truePeakOn");
+      if(kind==10)return processor.state.getRawParameterValue("truePeakOn")->load()>.5f &&
+        (processor.state.getRawParameterValue("truePeakPresent")->load()>.5f ||
+         on("limPresent","lim"));
       return kind>=0&&kind<static_cast<int>(routeOnIds.size()) &&
              on(routePresentIds[static_cast<size_t>(kind)],routeOnIds[static_cast<size_t>(kind)]);
     }
