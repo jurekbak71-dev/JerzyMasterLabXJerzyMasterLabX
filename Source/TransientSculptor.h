@@ -9,10 +9,12 @@ struct TransientSculptorSettings {
  bool enabled=false;
  std::array<float,3> attack{},sustain{};
  float mix=1.f,outputDb=0.f;
+ bool delta=false;
 };
 struct TransientSculptorReading {
  float inputRms=0.f,outputRms=0.f,deltaRms=0.f;
  std::array<float,3> modulationRms{};
+ std::array<float,64> inputWave{},outputWave{};
 };
 class TransientSculptor {
  struct Slew {
@@ -31,7 +33,7 @@ class TransientSculptor {
  };
  std::array<Channel,2> channels_{};
  std::array<Slew,3> attack_{},sustain_{};
- Slew active_{},mix_{},output_{};
+ Slew active_{},mix_{},output_{},deltaMonitor_{};
  TransientSculptorSettings settings_{};
  TransientSculptorReading reading_{};
  double rate_=48000.;
@@ -49,6 +51,7 @@ public:
   active_.prepare(rate_,settings_.enabled?1.f:0.f);
   mix_.prepare(rate_,safe(settings_.mix,0.f,1.f));
   output_.prepare(rate_,safe(settings_.outputDb,-12.f,12.f));
+  deltaMonitor_.prepare(rate_,settings_.delta?1.f:0.f);
   for(int k=0;k<3;++k){
    attack_[k].prepare(rate_,safe(settings_.attack[k],-1.f,1.f));
    sustain_[k].prepare(rate_,safe(settings_.sustain[k],-1.f,1.f));
@@ -57,7 +60,7 @@ public:
  TransientSculptorReading reading()const noexcept{return reading_;}
  void process(float* left,float* right,int n)noexcept{
   if(!left||!right||n<=0)return;
-  if(!settings_.enabled&&active_.value<1e-6f){reading_={};return;}
+  if(!settings_.enabled&&active_.value<1e-6f){reading_={};if(settings_.delta)for(int i=0;i<n;++i)left[i]=right[i]=0.f;return;}
   const float splitLow=static_cast<float>(1.-std::exp(-6.283185307179586*170./rate_));
   const float splitMid=static_cast<float>(1.-std::exp(-6.283185307179586*3400./rate_));
   const float fastRise=static_cast<float>(1.-std::exp(-1./(rate_*.0015)));
@@ -65,6 +68,7 @@ public:
   const float slowStep=static_cast<float>(1.-std::exp(-1./(rate_*.055)));
   double input2=0.,out2=0.,delta2=0.;
   std::array<double,3> modulation2{};
+  std::array<float,64> inWave{},outWave{};
   for(int i=0;i<n;++i){
    const float wet=active_.tick(settings_.enabled?1.f:0.f)*mix_.tick(safe(settings_.mix,0.f,1.f));
    const float output=std::pow(10.f,output_.tick(safe(settings_.outputDb,-12.f,12.f))*.05f);
@@ -73,6 +77,7 @@ public:
     attack[k]=attack_[k].tick(safe(settings_.attack[k],-1.f,1.f));
     sustain[k]=sustain_[k].tick(safe(settings_.sustain[k],-1.f,1.f));
    }
+   float inputMono=0.f,outputMono=0.f;
    for(int ch=0;ch<2;++ch){
     float& io=(ch==0?left[i]:right[i]);
     const float dry=safe(io,-8.f,8.f);
@@ -96,18 +101,24 @@ public:
      modulation2[k]+=static_cast<double>(gain-1.f)*(gain-1.f)*b[k]*b[k];
     }
     const float y=safe(dry+wet*(processed*output-dry),-16.f,16.f);
-    io=y;
+    const float deltaMonitor=deltaMonitor_.value;
+    io=y+deltaMonitor*(dry-2.f*y);
+    inputMono+=.5f*dry;outputMono+=.5f*y;
     const double diff=static_cast<double>(y)-dry;
     input2+=static_cast<double>(dry)*dry;
     out2+=static_cast<double>(y)*y;
     delta2+=diff*diff;
    }
+   deltaMonitor_.tick(settings_.delta?1.f:0.f);
+   const size_t scopeIndex=static_cast<size_t>(i)*64/static_cast<size_t>(n);
+   inWave[scopeIndex]=inputMono;outWave[scopeIndex]=outputMono;
   }
   const double inv=1./(2.*n);
   reading_.inputRms=static_cast<float>(std::sqrt(input2*inv));
   reading_.outputRms=static_cast<float>(std::sqrt(out2*inv));
   reading_.deltaRms=static_cast<float>(std::sqrt(delta2*inv));
   for(int k=0;k<3;++k)reading_.modulationRms[k]=static_cast<float>(std::sqrt(modulation2[k]*inv));
+  reading_.inputWave=inWave;reading_.outputWave=outWave;
  }
 };
 }
