@@ -13,8 +13,21 @@ class AnalogExciter {
  HarmonicExciterSettings harmonics_{};
  AnalogColorSettings legacyColour_{};
  AnalogizerSettings modernColour_{};
+ float excitement_=0.f;
  void update()noexcept {
-  harmonic_.settings(harmonics_);
+  auto harmonics=harmonics_;
+  // Master excitement is a parameter macro, not output gain: at 0 legacy
+  // presets retain their existing behaviour. At 1, all four harmonic
+  // bands contribute, while their existing Amount/Even/Odd remain editable.
+  const float excite=std::clamp(excitement_,0.f,1.f);
+  const bool colourActive=modernColour_.enabled||legacyColour_.enabled;
+  harmonics.enabled=harmonics.enabled||(excite>1.e-5f&&colourActive);
+  for(auto& band:harmonics.amount)band=std::clamp(band+(1.f-band)*.65f*excite,0.f,1.f);
+  harmonics.impact=std::clamp(harmonics.impact+.45f*excite,0.f,1.f);
+  harmonics.driveDb=std::clamp(harmonics.driveDb+10.f*excite,0.f,24.f);
+  harmonics.even=std::clamp(harmonics.even+.25f*excite,0.f,1.f);
+  harmonics.odd=std::clamp(harmonics.odd+.25f*excite,0.f,1.f);
+  harmonic_.settings(harmonics);
   auto settings=modernColour_;
   settings.enabled=modernColour_.enabled||legacyColour_.enabled;
   if(legacyColour_.enabled && !modernColour_.enabled){
@@ -25,6 +38,8 @@ class AnalogExciter {
    settings.mix=legacyColour_.mix;
    settings.outputDb=legacyColour_.outputDb;
   }
+  settings.driveDb=std::clamp(settings.driveDb+9.f*excite,0.f,18.f);
+  settings.impact=std::clamp(settings.impact+.26f*excite,0.f,1.f);
   settings.bias=legacyColour_.bias;
   settings.tone=legacyColour_.tone;
   settings.dynamics=legacyColour_.dynamics;
@@ -40,6 +55,7 @@ public:
  void harmonicSettings(HarmonicExciterSettings settings)noexcept {harmonics_=settings;update();}
  void legacySettings(AnalogColorSettings settings)noexcept {legacyColour_=settings;update();}
  void colourSettings(AnalogizerSettings settings)noexcept {modernColour_=settings;update();}
+ void excitement(float value)noexcept {excitement_=std::isfinite(value)?std::clamp(value,0.f,1.f):0.f;update();}
  void process(float* left,float* right,int count)noexcept {
   harmonic_.process(left,right,count);
   colour_.process(left,right,count);
