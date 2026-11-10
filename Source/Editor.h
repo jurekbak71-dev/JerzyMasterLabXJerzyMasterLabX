@@ -177,7 +177,7 @@ class Editor final : public juce::AudioProcessorEditor,
     juce::TextButton resetMetersButton{"RESET METERS"};
     juce::TextButton undoButton{"Undo"},redoButton{"Redo"},presetButton{"Presets"},newButton{"NEW"};
     std::unique_ptr<juce::FileChooser> presetChooser;
-    juce::TextButton eqView{"Spectral EQ"}, limiterView{"Limiter"}, inspectorView{"Inspector"}, brainView{"Master Brain"};
+    juce::TextButton eqView{"Spectral EQ"}, limiterView{"Final Limiter"}, inspectorView{"Inspector"}, brainView{"Master Brain"};
     bool showingLimiter=false,showingInspector=false,showingBrain=false;
     juce::ComboBox brainGenre,brainStyle,brainDuration;
     juce::Slider brainTarget,brainCeiling,brainIntensity;
@@ -613,7 +613,7 @@ public:
         overviewPanel.onOpen=[this](int index){switch(index){
             case 0:showLimiter(false);break;case 1:showModule(1);break;
             case 2:showModule(2);break;case 3:showFinalTruePeak();break;
-            case 4:showAnalog();break;case 5:showBass();break;
+            case 4:showAnalogizer();break;case 5:showBass();break;
             case 6:showTransient();break;case 7:showModule(3);break;
             case 8:showBrain();break;default:break;}};
         for(auto* button:{&dynamicView,&dynamicsView,&stereoView,&stabilizerView,&modulesButton})addAndMakeVisible(button);
@@ -622,64 +622,35 @@ public:
         addAndMakeVisible(routingChoice);routingChoice.setComponentID("chain-routing");routingChoice.addItem("Serial",1);routingChoice.addItem("Parallel",2);routingAttachment=std::make_unique<ComboAttachment>(processor.state,"routingMode",routingChoice);routingChoice.setTooltip("Serial: modules process in card order. Parallel: each present module receives aligned input and uses explicit trim/wet controls. A limiter branch does not limit the whole sum.");routingChoice.onChange=[this]{if(routingChoice.getSelectedId()==2)showParallel();else showLimiter(false);};
         modulesButton.onClick=[this]{
             juce::PopupMenu menu;
-            const bool full=processor.state.getRawParameterValue("fullRouterOn")->load()>.5f;
-            menu.addItem(100,"Full 11-module serial routing (drag cards to reorder)",true,full);
-            menu.addSeparator();
-            for(int kind=0;kind<11;++kind){
+            menu.addSectionHeader("AUDIO CHAIN - ALL DSP STAGES");
+            for(int kind:masterlab::allowedFullModules){
                 juce::PopupMenu item;
-                const bool present=processor.state.getRawParameterValue(routePresentIds[static_cast<size_t>(kind)])->load()>.5f;
-                const bool enabled=processor.state.getRawParameterValue(routeOnIds[static_cast<size_t>(kind)])->load()>.5f;
-                item.addItem(10+kind,present?"Remove from chain":"Add to chain");
-                item.addItem(30+kind,"Enabled",present,enabled);
+                const bool active=chainActive(kind);
+                item.addItem(10+kind,active?"Disable processor":"Enable processor");
                 item.addItem(60+kind,"Open processor");
+                if(kind==10)item.addSectionHeader("Final position locked");
                 menu.addSubMenu(routeNames[static_cast<size_t>(kind)],item);
             }
             menu.addSeparator();
-            menu.addItem(200,"Open Analogizer (independent output stage)",true);
-            menu.addItem(201,"Analogizer in chain",true,processor.state.getRawParameterValue("analogizerPresent")->load()>.5f);
-            menu.addSeparator();
-            menu.addItem(202,"Open Audio Restoration",true);
-            menu.addItem(203,"Audio Restoration in chain",true,processor.state.getRawParameterValue("restorationPresent")->load()>.5f);
-            menu.addSeparator();
             menu.addItem(204,"MASTER / INSERT processing mode");
+            menu.addItem(205,"Legacy parallel mixer");
             auto safe=juce::Component::SafePointer<Editor>(this);
             menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(modulesButton),[safe](int id){
                 if(!safe)return;
                 auto& self=*safe;
                 if(id==204){self.showWorkMode();return;}
-                if(id==202){self.showRestoration();return;}
-                if(id==203){self.toggleParameter("restorationPresent");return;}
-                if(id==200){self.showAnalogizer();return;}
-                if(id==201){self.toggleParameter("analogizerPresent");return;}
-                if(id==100){
-                    self.toggleParameter("fullRouterOn");
-                    self.repaint();return;
-                }
-                if(id>=10&&id<21){
-                    const int kind=id-10;
-                    if(kind<6){
-                        const bool add=self.processor.state.getRawParameterValue(
-                            routePresentIds[static_cast<size_t>(kind)])->load()<.5f;
-                        self.processor.setModulePresentUI(kind,add);
-                    }else{
-                        self.toggleParameter(routePresentIds[static_cast<size_t>(kind)]);
-                    }
-                    self.repaint();return;
-                }
-                if(id>=30&&id<41){
-                    self.toggleParameter(routeOnIds[static_cast<size_t>(id-30)]);
-                    self.repaint();return;
-                }
-                if(id>=60&&id<71){
+                if(id==205){self.showParallel();return;}
+                if(id>=10&&id<22){self.toggleChainStage(id-10);return;}
+                if(id>=60&&id<72){
                     const int kind=id-60;
                     if(kind<3||kind==5)self.showModule(kind==5?3:kind);
-                    else if(kind==3||kind==4)self.showLimiter(kind==4);
-                    else if(kind==6)self.showExciter();
-                    else if(kind==7)self.showAnalog();
+                    else if(kind==3)self.showLimiter(false);
+                    else if(kind==6)self.showAnalogizer();
                     else if(kind==8)self.showBass();
                     else if(kind==9)self.showTransient();
                     else if(kind==10)self.showFinalTruePeak();
-                    self.repaint();return;
+                    else if(kind==11)self.showRestoration();
+                    self.repaint();
                 }
             });
         };
@@ -721,7 +692,7 @@ public:
         ceilingAttachment=std::make_unique<SliderAttachment>(processor.state,"ceiling",ceiling);
         addAndMakeVisible(eqView);addAndMakeVisible(limiterView);addAndMakeVisible(inspectorView);inspectorView.setComponentID("view-inspector");inspectorView.onClick=[this]{showInspector();};
         eqView.setComponentID("view-eq");limiterView.setComponentID("view-limiter");
-        eqView.onClick=[this]{showLimiter(false);};limiterView.onClick=[this]{showLimiter(true);};
+        eqView.onClick=[this]{showLimiter(false);};limiterView.onClick=[this]{showFinalTruePeak();};
         eqView.setClickingTogglesState(false);limiterView.setClickingTogglesState(false);
         addAndMakeVisible(resetMetersButton);resetMetersButton.setComponentID("reset-meters");resetMetersButton.onClick=[this]{processor.resetMeterRequest.store(true);};resetMetersButton.setTooltip("Reset RMS, sample peaks and LUFS at the next audio callback. Audio settings and processing are preserved.");resetMetersButton.setVisible(false);
         addAndMakeVisible(undoButton);addAndMakeVisible(redoButton);addAndMakeVisible(presetButton);addAndMakeVisible(newButton);
