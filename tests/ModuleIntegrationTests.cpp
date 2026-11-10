@@ -66,5 +66,30 @@ int main(){
           "INSERT dry blend bypassed fixed final limiter");
   }
  }
+ // Dynamic EQ DELTA compares its own unprocessed input against its actual
+ // eight-band signal output. A static gain within Dynamic EQ is included.
+ {
+  masterlab::DynamicEqSettings s;s.enabled=true;s.delta=false;
+  for(auto& band:s.bands)band.enabled=false;
+  s.bands[0].enabled=true;s.bands[0].gain=9.f;s.bands[0].range=0;
+  s.bands[0].frequency=997.f;s.bands[0].q=1.3f;
+  auto deltaSettings=s;deltaSettings.delta=true;
+  masterlab::DynamicEqualizer normal,monitor;
+  normal.settings(s);monitor.settings(deltaSettings);
+  normal.prepare(48000);monitor.prepare(48000);
+  std::array<float,257> a{},b{},c{},d{},input{};
+  double effect=0;
+  for(int block=0;block<120;++block){
+   for(int i=0;i<257;++i){const float x=.2f*std::sin((block*257+i)*.13f);
+    a[i]=b[i]=c[i]=d[i]=input[i]=x;}
+   audit=true;normal.process(a.data(),b.data(),257);monitor.process(c.data(),d.data(),257);audit=false;
+   for(int i=0;i<257;++i){
+    check(std::abs(c[i]-(input[i]-a[i]))<1.e-5f,
+          "Dynamic EQ DELTA fails input minus processed comparison");
+    effect+=std::abs(a[i]-input[i]);
+   }
+  }
+  check(effect>1.,"Dynamic EQ eight-band static processing is ineffective");
+ }
  check(allocations==0,"prepared module chain allocated in callback");std::cout<<"Passed: add/remove transparency and stable PDC, stereo mono sum, Analog/upward/Dynamic EQ state and deterministic audio, no callback allocation at four sample rates\n";
 }
