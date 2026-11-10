@@ -71,8 +71,22 @@ public:
  FinalTruePeakReading reading()const noexcept{return reading_;}
  void process(float* left,float* right,int count)noexcept{
   if(!left||!right||count<=0)return;
-  // Experimental engine operates with fixed latency even in disabled state.
-  // Caller must align the global dry bypass path with latencySamples.
+  // Inactive stage keeps only its fixed PDC delay. Skip all 4x polyphase
+  // convolution, peak queue updates and gain control to avoid DSP CPU waste.
+  // Delay is still required by the host's constant latency contract.
+  if(!settings_.enabled){
+   for(int i=0;i<count;++i){
+    delay_[0][delayPosition_]=sane(left[i],-16.f,16.f);
+    delay_[1][delayPosition_]=sane(right[i],-16.f,16.f);
+    const int read=(delayPosition_+1)%static_cast<int>(delay_[0].size());
+    left[i]=delay_[0][read];right[i]=delay_[1][read];
+    delayPosition_=read;
+   }
+   history_={};histPosition_=0;peakHead_=peakTail_=0;
+   sampleClock_+=static_cast<std::uint64_t>(count);gain_=1.f;reading_={};
+   return;
+  }
+  // The host's dry bypass path is aligned with latencySamples.
   const float ceiling=std::pow(10.f,sane(settings_.ceilingDb,-12.f,-.1f)*.05f);
   const float drive=std::pow(10.f,sane(settings_.driveDb,0.f,18.f)*.05f);
   const float release=std::exp(-1.f/(static_cast<float>(sampleRate_)*.001f*
