@@ -40,38 +40,39 @@ int main(){
   for(int block=0;block<200;++block){for(int i=0;i<257;++i)l[i]=r[i]=.3f*std::sin((block*257+i)*.17f);ll=l;rr=r;a.process(l.data(),r.data(),257,false,trace.data());b.process(ll.data(),rr.data(),257,false,trace.data());if(block>100)for(int i=0;i<257;++i)difference+=std::abs(l[i]-ll[i]);}
   check(difference>1,"module order does not affect audio");
  }
- // A full routing permutation must contain exactly one of each of the
- // 11 real processors, including the five formerly fixed post-chain modules.
- for(int first=0;first<11;++first){
+ // Nine independently movable modules; final combined limiter is pinned.
+ for(int shift=0;shift<9;++shift){
   auto candidate=masterlab::defaultFullOrder;
-  std::rotate(candidate.begin(),candidate.begin()+first,candidate.end());
+  std::rotate(candidate.begin(),candidate.begin()+shift,candidate.end()-1);
   auto sanitized=masterlab::sanitizeFullOrder(candidate);
-  check(sanitized==candidate,"valid 11-node permutation was changed");
+  check(sanitized==candidate,"a valid movable route changed");
+  check(sanitized.back()==10,"final limiter is not locked at chain tail");
   auto sorted=sanitized;std::sort(sorted.begin(),sorted.end());
-  check(sorted==masterlab::FullModuleOrder{0,1,2,3,4,5,6,7,8,9,10},
-        "full 11-node route lost/duplicated a processor");
+  check(sorted==masterlab::FullModuleOrder{0,1,2,3,5,6,8,9,10,11},
+        "router lost or duplicated one of ten real modules");
  }
  {
-  const auto repaired=masterlab::sanitizeFullOrder({7,7,7,7,7,7,7,7,7,7,255});
+  const auto repaired=masterlab::sanitizeFullOrder({6,6,6,6,6,6,6,6,10,255});
   auto sorted=repaired;std::sort(sorted.begin(),sorted.end());
-  check(sorted==masterlab::FullModuleOrder{0,1,2,3,4,5,6,7,8,9,10},
+  check(sorted==masterlab::FullModuleOrder{0,1,2,3,5,6,8,9,10,11},
         "corrupt intermediate host automation duplicates processors");
+  check(repaired.back()==10,"host tried to move final limiter away from tail");
  }
- // A genuine change to routing the final true-peak limiter before EQ changes
- // audio, rather than merely updating a UI order label.
+ // Moving Analog Exciter before the spectral EQ alters real processed audio,
+ // while the true-peak limiter remains the last module in both routes.
  for(double rate:{44100.,48000.}){
   masterlab::SerialGraph standard,moved;
   for(auto* g:{&standard,&moved}){
    g->parameters(2000,12,1,-1,true,true);
    g->limiterParameters(5,120);
+   masterlab::AnalogColorSettings color;color.enabled=true;color.driveDb=15;color.bias=.3f;color.mix=.85f;
+   g->analogColorSettings(color);
    masterlab::FinalTruePeakSettings peak;peak.enabled=true;peak.ceilingDb=-6;peak.driveDb=6;
    g->finalTruePeakSettings(peak);
    g->prepare(rate);
   }
   auto changed=masterlab::defaultFullOrder;
-  std::rotate(changed.begin(),changed.begin()+1,changed.end());
-  auto first=std::find(changed.begin(),changed.end(),10);
-  std::rotate(changed.begin(),first,first+1); // final true peak first
+  std::swap(changed[4],changed[5]);
   standard.extendedRouting(true,masterlab::defaultFullOrder);
   moved.extendedRouting(true,changed);
   std::array<float,257> a{},b{},c{},d{},trace{};
@@ -92,7 +93,9 @@ int main(){
    }
   }
   check(standard.fullRouterActive()&&moved.fullRouterActive(),"full route not activated");
-  check(delta>.01,"real 11-node DSP order did not change rendered audio");
+  check(delta>.01,"real Analog Exciter/EQ reorder did not change audio");
+  check(standard.fullModuleOrder().back()==10&&moved.fullModuleOrder().back()==10,
+        "final limiter moved from end");
   check(standard.latency()==moved.latency(),"full router changed reported PDC");
  }
  check(allocations==0,"routing allocated in callback");std::cout<<"Passed: 720 complete permutations, legacy sound, allocation-free live changes, finite output, stable PDC and audible topology at four rates\n";
