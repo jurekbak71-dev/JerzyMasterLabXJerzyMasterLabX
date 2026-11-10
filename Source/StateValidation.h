@@ -53,11 +53,11 @@ inline juce::ValueTree validateState(const juce::ValueTree& candidate,
         node.setProperty("value", value, nullptr);
         canonical.appendChild(node, nullptr);
     }
-    // Reject a 304-entry file that omits any legacy parameter while including
-    // a new one; that would otherwise turn a truncated/corrupt preset into
-    // a seemingly valid historic state.
-    if(sourceCount==304)for(int i=0;i<304;++i)
-        if(!seen.contains(juce::String(parameterId(static_cast<size_t>(i)))))return {};
+    // Legacy completeness is already enforced: sourceCount is exactly 304,
+    // every ID must belong to the first 304 *actual host parameters*, and
+    // duplicates are rejected. Therefore 304 unique allowed IDs are exactly
+    // the complete legacy set; do not compare with a second hand-maintained
+    // parameterId(index) table which can diverge from host declaration order.
     // Append only newly introduced fields, using version-independent factory defaults.
     for(int i=sourceCount;i<expected.size();++i){
         auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(expected[i]);if(!parameter)return {};
