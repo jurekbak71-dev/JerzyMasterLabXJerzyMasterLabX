@@ -163,6 +163,7 @@ public:
  bool isBusesLayoutSupported(const BusesLayout& l)const override{return l.getMainInputChannelSet()==juce::AudioChannelSet::stereo()&&l.getMainOutputChannelSet()==juce::AudioChannelSet::stereo();}
  void prepareToPlay(double sr,int)override{
   masterlab::configureGraph(engine,[&](size_t i){return parameters[i]->load();});
+  engine.profileSettings(parameters[302]->load()>.5f?parameters[303]->load():1.f);
   engine.prepare(sr,parameters[6]->load()>.5f,static_cast<int>(parameters[138]->load()));
   displayRate.store(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000);
   limiterMeter.prepare(displayRate.load());inputMeter.prepare(displayRate.load());
@@ -187,6 +188,9 @@ public:
  if(resetMeterRequest.exchange(false)){inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();}
  auto value=[&](size_t index){return parameters[index]->load();};
  masterlab::configureGraph(engine,value);
+ const bool serialRouter=value(161)<.5f;
+ const float requestedBlend=value(302)>.5f?std::clamp(value(303),0.f,1.f):1.f;
+ engine.profileSettings(serialRouter?requestedBlend:1.f);
  masterlab::AnalogizerSettings az;
  az.enabled=value(285)>.5f && value(278)>.5f;
  az.mode=static_cast<masterlab::AnalogizerMode>(std::clamp(static_cast<int>(value(279)),0,2));
@@ -210,11 +214,9 @@ public:
   brain.capture(inputScratch[0].data(),inputScratch[1].data(),length);
   engine.process(b.getWritePointer(0,offset),b.getWritePointer(1,offset),length,value(6)>.5f,limiterGainTrace.data());
   for(int i=0;i<length;++i){
-   const float targetProfile=parameters[302]->load()>.5f?
-      std::clamp(parameters[303]->load(),0.f,1.f):1.f;
-   profileBlend+=profileStep*(targetProfile-profileBlend);
+   if(!serialRouter)profileBlend+=profileStep*(requestedBlend-profileBlend);
    hostBypassMix=hostBypassed?std::min(1.f,hostBypassMix+hostBypassStep):std::max(0.f,hostBypassMix-hostBypassStep);limiterGainTrace[i]+=hostBypassMix*(1-limiterGainTrace[i]);for(int c=0;c<2;++c){float wet=b.getSample(c,offset+i);
-    wet=hostDryScratch[c][i]+profileBlend*(wet-hostDryScratch[c][i]);
+    if(!serialRouter)wet=hostDryScratch[c][i]+profileBlend*(wet-hostDryScratch[c][i]);
     b.setSample(c,offset+i,wet+hostBypassMix*(hostDryScratch[c][i]-wet));}}
   for(int i=0;i<length;++i){
    inputMeter.push(inputScratch[0][i],inputScratch[1][i]);outputMeter.push(b.getSample(0,offset+i),b.getSample(1,offset+i));inputLoudness.push(inputScratch[0][i],inputScratch[1][i]);outputLoudness.push(b.getSample(0,offset+i),b.getSample(1,offset+i));
