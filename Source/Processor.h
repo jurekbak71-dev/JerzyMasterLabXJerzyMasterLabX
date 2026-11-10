@@ -93,6 +93,10 @@ public:
  p.add(std::make_unique<juce::AudioParameterFloat>("insertBlend","INSERT time-aligned processed blend",0.f,1.f,.65f));
  p.add(std::make_unique<juce::AudioParameterBool>("dynamicEqDelta","Dynamic EQ Delta monitoring",false));
  p.add(std::make_unique<juce::AudioParameterFloat>("analogExcite","Analog Exciter master excitement",0.f,1.f,0.f));
+ p.add(std::make_unique<juce::AudioParameterFloat>("stereoDelayMs","Stereo side Haas delay ms",0.f,30.f,0.f));
+ p.add(std::make_unique<juce::AudioParameterFloat>("stereoPhaseRotate","Stereo side phase rotation",0.f,1.f,0.f));
+ p.add(std::make_unique<juce::AudioParameterFloat>("stereoMotionRate","Stereo motion rate Hz",.05f,8.f,1.f));
+ p.add(std::make_unique<juce::AudioParameterFloat>("stereoMotionDepth","Stereo motion depth",0.f,1.f,0.f));
  return p;}
  static void addModuleParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
   auto boolean=[&](const char* id,const char* name,bool initial){p.add(std::make_unique<juce::AudioParameterBool>(id,name,initial));};
