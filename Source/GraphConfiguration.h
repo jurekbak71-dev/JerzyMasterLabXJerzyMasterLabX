@@ -17,11 +17,17 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
   FullModuleOrder full{};
   for(size_t slot=0;slot<full.size();++slot)
    full[slot]=std::clamp(static_cast<int>(v(227+slot)),0,11);
-  engine.extendedRouting(v(226)>.5f,full);
+  engine.extendedRouting(v(161)<.5f,full); // Every serial chain uses the full validated router.
 }
 template<class Getter> void configureGraph(SerialGraph& engine,Getter v) noexcept {
- configureModules(engine,v);engine.limiterParameters(v(52),v(53));
- engine.parameters(v(0),v(1),v(2),v(3),v(4)>.5f&&v(86)>.5f,v(5)>.5f&&v(87)>.5f);
+ configureModules(engine,v);
+ const bool finalOn=v(221)>.5f&&v(222)>.5f;
+ // Combine sample-peak lookahead and true-peak detection under one final ON state.
+ // Final-stage drive belongs to TruePeak; do not multiply it twice.
+ engine.limiterParameters(finalOn?0.f:v(52),finalOn?v(224):v(53));
+ engine.parameters(v(0),v(1),v(2),finalOn?v(223):v(3),
+                   v(4)>.5f&&v(86)>.5f,
+                   finalOn||(v(5)>.5f&&v(87)>.5f));
  for(size_t k=1;k<16;++k){size_t i=7+(k-1)*3;engine.setBand(k,v(i),v(i+1),v(i+2));}
  for(size_t k=0;k<16;++k)engine.setBandMode(k,static_cast<FilterType>(static_cast<int>(v(54+k*2))),v(55+k*2)>.5f);
 }
