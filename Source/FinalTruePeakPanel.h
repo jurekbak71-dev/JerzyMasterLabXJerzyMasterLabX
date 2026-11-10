@@ -53,8 +53,9 @@ public:
   int width=std::min(138,(getWidth()-318)/5);
   for(size_t i=0;i<knobs_.size();++i){
    const int x=24+static_cast<int>(i)*(width+12);
-   knobs_[i]->name.setBounds(x,108,width,24);
-   knobs_[i]->slider.setBounds(x,132,width,118);
+   const bool compact=getHeight()<440;
+   knobs_[i]->name.setBounds(x,compact?92:108,width,22);
+   knobs_[i]->slider.setBounds(x,compact?115:132,width,compact?91:118);
   }
  }
  void paint(juce::Graphics& g)override{
@@ -107,7 +108,8 @@ public:
               juce::Justification::centred);
   }
   g.setColour(juce::Colour(0xffd4dee6));g.setFont(14.f);
-  const float scopeY=juce::jmax(270.f,static_cast<float>(getHeight()-245)),scopeX=32.f,scopeW=static_cast<float>(getWidth()-64),scopeH=95.f;
+  const bool compact=getHeight()<440;
+  const float scopeY=compact?216.f:juce::jmax(270.f,static_cast<float>(getHeight()-245)),scopeX=32.f,scopeW=static_cast<float>(getWidth()-64),scopeH=compact?78.f:95.f;
   g.setColour(juce::Colour(0xff101d27));g.fillRoundedRectangle(scopeX,scopeY,scopeW,scopeH,10.f);
   for(int i=1;i<4;++i){g.setColour(juce::Colour(0xff536c79).withAlpha(.23f));g.drawHorizontalLine(static_cast<int>(scopeY+scopeH*i/4),scopeX,scopeX+scopeW);}
   for(int lane=0;lane<3;++lane){
@@ -124,18 +126,18 @@ public:
   }
   g.setColour(juce::Colour(0xffd4dee6));g.setFont(11.f);
   g.drawText("REAL DSP  /  INPUT CYAN   OUTPUT AMBER   GAIN REDUCTION RED",34,static_cast<int>(scopeY)-18,getWidth()-68,18,juce::Justification::left);
-  const int y=std::max(375,getHeight()-117);
+  const int y=compact?299:std::max(375,getHeight()-117);
   auto db=[](float x){return juce::String(20.f*std::log10(std::max(1e-9f,x)),2);};
   g.drawText("INPUT TP ESTIMATE  "+db(reading_.detectedTruePeak)+" dBFS"
              "     OUTPUT SAMPLE PEAK  "+db(reading_.outputSamplePeak)+" dBFS"
              "     GAIN REDUCTION  "+juce::String(reading_.gainReductionDb,2)+" dB",
              24,y,getWidth()-48,32,juce::Justification::left);
-  g.setColour(juce::Colour(0xff29393a));
+  if(!compact){g.setColour(juce::Colour(0xff29393a));
   g.fillRoundedRectangle(24.f,static_cast<float>(y+45),static_cast<float>(getWidth()-48),15.f,5.f);
   g.setColour(juce::Colour(0xffb3e2ce));
   g.fillRoundedRectangle(24.f,static_cast<float>(y+45),static_cast<float>(getWidth()-48)*juce::jlimit(0.f,1.f,reading_.gainReductionDb/18.f),15.f,5.f);
   g.setColour(juce::Colour(0xff9dacad));g.setFont(12.f);
   g.drawText("4x true-peak input detector, 128 samples fixed PDC. Output inter-sample certification still pending.",
-             24,y+83,getWidth()-48,30,juce::Justification::left);
+             24,y+83,getWidth()-48,30,juce::Justification::left);}
  }
 };
