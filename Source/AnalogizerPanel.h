@@ -86,9 +86,12 @@ public:
  ~AnalogizerPanel()override{setLookAndFeel(nullptr);}
  void update(const Processor::ResponseFrame& frame){reading_=frame.analogizer;harmonicReading_=frame.exciter;repaint();}
  void resized()override{
-  present_.setBounds(24,12,130,30);enabled_.setBounds(162,12,110,30);
-  harmonicsPresent_.setBounds(282,12,145,30);harmonicsEnabled_.setBounds(438,12,145,30);
-  mode_.setBounds(596,12,170,30);
+  const bool compactWidth=getWidth()<850;
+  present_.setBounds(24,12,compactWidth?112:130,30);
+  enabled_.setBounds(compactWidth?140:162,12,compactWidth?98:110,30);
+  harmonicsPresent_.setBounds(compactWidth?244:282,12,compactWidth?119:145,30);
+  harmonicsEnabled_.setBounds(compactWidth?367:438,12,compactWidth?110:145,30);
+  mode_.setBounds(compactWidth?481:596,12,compactWidth?170:170,30);
   const bool compact=getHeight()<440;
   const int centre=getWidth()/2;
   excite_.setBounds(centre-(compact?100:122),compact?88:101,compact?200:244,compact?205:253);
