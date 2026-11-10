@@ -109,7 +109,7 @@ public:
   }
   g.setColour(juce::Colour(0xffd4dee6));g.setFont(14.f);
   const bool compact=getHeight()<440;
-  const float scopeY=compact?216.f:juce::jmax(270.f,static_cast<float>(getHeight()-245)),scopeX=32.f,scopeW=static_cast<float>(getWidth()-64),scopeH=compact?78.f:95.f;
+  const float scopeY=compact?216.f:juce::jmax(270.f,static_cast<float>(getHeight()-245)),scopeX=32.f,scopeW=static_cast<float>(getWidth()-64-(getWidth()>=870?270:0)),scopeH=compact?78.f:95.f;
   g.setColour(juce::Colour(0xff101d27));g.fillRoundedRectangle(scopeX,scopeY,scopeW,scopeH,10.f);
   for(int i=1;i<4;++i){g.setColour(juce::Colour(0xff536c79).withAlpha(.23f));g.drawHorizontalLine(static_cast<int>(scopeY+scopeH*i/4),scopeX,scopeX+scopeW);}
   for(int lane=0;lane<3;++lane){
