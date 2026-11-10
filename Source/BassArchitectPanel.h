@@ -82,7 +82,7 @@ public:
   }
   g.setColour(juce::Colour(0xffcbd6e0));g.setFont(11.f);
   g.drawText("REAL BASS DSP   /   INPUT CYAN   OUTPUT AMBER",36,static_cast<int>(scopeY)-24,getWidth()-72,19,juce::Justification::left);
-  const int y=compact?316:std::max(365,getHeight()-97);
+  const int y=compact?311:std::max(365,getHeight()-97);
   g.drawText("DSP RMS  IN "+juce::String(reading_.inputRms,4)+"   OUT "+juce::String(reading_.outputRms,4)+
      "   DELTA "+juce::String(reading_.deltaRms,4)+"   LOW "+juce::String(reading_.lowRms,4),
      24,y,getWidth()-48,28,juce::Justification::left);
