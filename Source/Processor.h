@@ -141,7 +141,7 @@ public:
   boolean("transientPresent","Transient Sculptor post chain",false);boolean("transientOn","Transient Sculptor active",true);
   for(const char* id:{"transientAttackLow","transientAttackMid","transientAttackHigh","transientSustainLow","transientSustainMid","transientSustainHigh"})number(id,id,-1,1,0);
   number("transientMix","Transient Sculptor mix",0,1,1);number("transientOutput","Transient Sculptor output",-12,12,0);
-  boolean("truePeakPresent","Final limiter fixed slot",true);boolean("truePeakOn","Final True-Peak enabled",true);
+  boolean("truePeakPresent","Final limiter fixed slot",false);boolean("truePeakOn","Final True-Peak enabled",true);
   number("truePeakCeiling","Final True-Peak ceiling dB",-12,-.1f,-1);
   number("truePeakRelease","Final True-Peak release ms",10,1000,120);
   number("truePeakDrive","Final True-Peak drive dB",0,18,0);
