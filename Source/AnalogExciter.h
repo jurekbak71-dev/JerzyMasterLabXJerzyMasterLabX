@@ -39,12 +39,11 @@ class AnalogExciter {
    settings.outputDb=legacyColour_.outputDb;
   }
   settings.driveDb=std::clamp(settings.driveDb+9.f*excite,0.f,18.f);
-  settings.impact=std::clamp(settings.impact+.26f*excite,0.f,1.f);
   settings.bias=legacyColour_.bias;
   settings.tone=legacyColour_.tone;
   settings.dynamics=legacyColour_.dynamics;
   settings.autoGain=legacyColour_.autoGain;
-  settings.impact=legacyColour_.impact;
+  settings.impact=std::clamp(legacyColour_.impact+.26f*excite,0.f,1.f);
   colour_.settings(settings);
  }
 public:
