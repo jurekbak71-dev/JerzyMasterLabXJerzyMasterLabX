@@ -45,6 +45,31 @@ int main(){
   check(rms(collapsed,4096)<rms(off,4096)*.6,"anti-phase low bass suppressed while high survives");
   std::printf("%.0f Bass Architect tests pass\n",rate);
  }
+ // Delta must be the sample-accurate input minus normal processed audio;
+ // waveform telemetry must come from real samples, not control positions.
+ {
+  BassArchitectSettings cfg;cfg.enabled=true;cfg.sub=.5f;cfg.body=.4f;cfg.harmonics=.75f;
+  auto monitor=cfg;monitor.delta=true;
+  BassArchitect normal,delta;normal.settings(cfg);delta.settings(monitor);
+  normal.prepare(48000);delta.prepare(48000);
+  std::array<float,257> l{},r{},dl{},dr{},raw{};
+  double difference=0;
+  for(int block=0;block<100;++block){
+   for(int i=0;i<257;++i){const float x=.3f*std::sin((block*257+i)*.051f);
+    raw[i]=x;l[i]=r[i]=dl[i]=dr[i]=x;}
+   normal.process(l.data(),r.data(),257);delta.process(dl.data(),dr.data(),257);
+   for(int i=0;i<257;++i){
+    check(std::abs(dl[i]-(raw[i]-l[i]))<1.e-5f,"Bass Delta differs from input minus output");
+    difference+=std::abs(l[i]-raw[i]);
+   }
+  }
+  check(difference>1.,"Bass controls make no real change");
+  const auto reading=normal.reading();
+  check(reading.sectionsRms[0]>.001f&&reading.sectionsRms[2]>.0001f,
+        "Bass sub/harmonic energy meters are not driven by real DSP");
+  check(std::any_of(reading.inputWave.begin(),reading.inputWave.end(),[](float x){return std::abs(x)>.0001f;}),
+        "Bass waveform lacks real input samples");
+ }
  BassArchitect e;BassArchitectSettings s;s.enabled=true;s.harmonics=1;e.settings(s);e.prepare(48000);
  std::array<float,512> l{},r{};
  l[0]=std::numeric_limits<float>::quiet_NaN();
