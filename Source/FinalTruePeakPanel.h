@@ -12,6 +12,7 @@ class FinalTruePeakPanel final : public juce::Component {
  struct Knob {juce::Label name;juce::Slider slider;
   std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;};
  std::vector<std::unique_ptr<Knob>> knobs_;
+ double scopeRate_=48000.;
  masterlab::FinalTruePeakReading reading_{};
  void addKnob(const char* caption,const char* parameter){
   auto k=std::make_unique<Knob>();k->name.setText(caption,juce::dontSendNotification);
@@ -46,7 +47,7 @@ public:
   included_.setTooltip("Final limiter occupies the last slot; Active switches it OFF without changing host PDC.");
  }
  ~FinalTruePeakPanel()override{setLookAndFeel(nullptr);}
- void update(const Processor::ResponseFrame& response){reading_=response.truePeak;repaint();}
+ void update(const Processor::ResponseFrame& response){reading_=response.truePeak;scopeRate_=response.rate;repaint();}
  void resized()override{
   included_.setBounds(24,12,130,34);enabled_.setBounds(162,12,116,34);
   character_.setBounds(295,12,171,32);autoRelease_.setBounds(482,12,142,32);
@@ -55,7 +56,7 @@ public:
    const int x=24+static_cast<int>(i)*(width+12);
    const bool compact=getHeight()<440;
    knobs_[i]->name.setBounds(x,compact?92:108,width,22);
-   knobs_[i]->slider.setBounds(x,compact?115:132,width,compact?91:118);
+   knobs_[i]->slider.setBounds(x,compact?115:132,width,compact?78:118);
   }
  }
  void paint(juce::Graphics& g)override{
@@ -117,15 +118,18 @@ public:
    juce::Path line;
    for(size_t i=0;i<wave.size();++i){
     const float x=scopeX+scopeW*i/(wave.size()-1.f);
-    const float position=lane==2?1.f-wave[i]:wave[i];
-    const float y=scopeY+scopeH*(lane==2?.15f:.5f)-std::clamp(position,-1.f,1.f)*scopeH*(lane==2?.23f:.4f);
+    const float reduction=-20.f*std::log10(std::max(1.e-9f,wave[i]));
+    const float y=lane==2?scopeY+scopeH*(.1f+.8f*std::clamp(reduction/18.f,0.f,1.f)):
+       scopeY+scopeH*.5f-std::clamp(wave[i],-1.f,1.f)*scopeH*.4f;
     if(i==0)line.startNewSubPath(x,y);else line.lineTo(x,y);
    }
    g.setColour(lane==0?juce::Colour(0xff6fcde2):(lane==1?juce::Colour(0xffffb46b):juce::Colour(0xffff6b76)));
+   juce::Graphics::ScopedSaveState scopeClip(g);
+   g.reduceClipRegion(juce::Rectangle<float>(scopeX+1,scopeY+1,scopeW-2,scopeH-2).toNearestInt());
    g.strokePath(line,juce::PathStrokeType(lane==2?2.f:1.2f));
   }
   g.setColour(juce::Colour(0xffd4dee6));g.setFont(11.f);
-  g.drawText("REAL DSP  /  INPUT CYAN   OUTPUT AMBER   GAIN REDUCTION RED",34,static_cast<int>(scopeY)-18,getWidth()-68,18,juce::Justification::left);
+  g.drawText("IN cyan / OUT amber +/-1 FS | GR red 0-18 dB | 0-"+juce::String(511000./scopeRate_,2)+" ms",34,static_cast<int>(scopeY)-18,getWidth()-68,18,juce::Justification::left);
   const int y=compact?299:std::max(375,getHeight()-117);
   auto db=[](float x){return juce::String(20.f*std::log10(std::max(1e-9f,x)),2);};
   g.drawText("INPUT TP ESTIMATE  "+db(reading_.detectedTruePeak)+" dBFS"

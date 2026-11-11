@@ -94,15 +94,25 @@ public:
   mode_.setBounds(compactWidth?481:596,12,compactWidth?170:170,30);
   const bool compact=getHeight()<440;
   const int centre=getWidth()/2;
-  excite_.setBounds(centre-(compact?100:122),compact?88:101,compact?200:244,compact?205:253);
-  const int sideWidth=std::max(76,std::min(132,(getWidth()-294)/3));
+  excite_.setBounds(centre-(compact?90:122),compact?88:101,compact?180:244,compact?185:253);
+  // Two columns on each side leave room for a rotary plus its value box.
+  // Four narrow stacked rows previously left only 15 px for the rotary,
+  // below StudioTheme's 24 px draw threshold at the minimum editor size.
+  const int sideWidth=(getWidth()-(compact?240:288)-44)/4;
+  const int top=compact?86:105;
+  const int rowHeight=compact?96:112;
   for(size_t i=0;i<controls_.size();++i){
    int x=0,y=0,width=sideWidth;
-   if(i<4){x=22;y=(compact?90:102)+static_cast<int>(i)*(compact?50:75);}
-   else if(i<8){x=getWidth()-sideWidth-22;y=(compact?90:102)+static_cast<int>(i-4)*(compact?50:75);}
-   else {width=std::max(70,(getWidth()-44)/7);x=22+static_cast<int>(i-8)*width;y=compact?getHeight()-64:getHeight()-105;}
-   controls_[i]->label.setBounds(x,y,width-4,compact?15:18);
-   controls_[i]->slider.setBounds(x,y+(compact?15:18),width-4,compact?39:54);
+   if(i<8){
+    const int slot=static_cast<int>(i)%4;
+    const int origin=i<4?22:getWidth()-22-2*sideWidth;
+    x=origin+(slot%2)*sideWidth;y=top+(slot/2)*rowHeight;
+   }else{
+    width=(getWidth()-44)/7;x=22+static_cast<int>(i-8)*width;
+    y=getHeight()-(compact?82:132);
+   }
+   controls_[i]->label.setBounds(x,y,width-4,18);
+   controls_[i]->slider.setBounds(x,y+18,width-4,compact?60:76);
   }
  }
  void paint(juce::Graphics& g)override{
@@ -111,7 +121,7 @@ public:
   g.setColour(juce::Colours::lightgrey);g.setFont(juce::FontOptions(14.f));
   if(getHeight()>=440)g.drawText("Input RMS "+juce::String(reading_.inputRms,4)+"   Output RMS "+juce::String(reading_.outputRms,4)+"   Delta RMS "+juce::String(reading_.deltaRms,4),
       24,81,getWidth()-48,20,juce::Justification::left);
-  const int meterY=std::min(getHeight()-61,363);
+  const int meterY=std::min(getHeight()-160,335);
   g.setFont(11.f);
   if(getHeight()>=440)for(size_t band=0;band<4;++band){
    const float energy=harmonicReading_.generatedRms[band];
@@ -123,6 +133,6 @@ public:
    g.setColour(juce::Colour(0xffcbd6e0));g.drawText(juce::String(std::array<const char*,4>{"LOW H","MID H","HIGH H","AIR H"}[band]),static_cast<int>(x),meterY+10,static_cast<int>(width-9),18,juce::Justification::left);
   }
   if(getHeight()>=440)g.drawText("Actual harmonic DSP RMS / Tube - FET - Tape / EXCITE macro",
-      24,getHeight()-53,getWidth()-48,24,juce::Justification::left);
+      24,getHeight()-29,getWidth()-48,24,juce::Justification::left);
  }
 };

@@ -1,0 +1,3 @@
+44100 Hz, old 500.12 ns/sample, new 441.38 ns/sample, speedup 1.133x
+48000 Hz, old 525.64 ns/sample, new 439.89 ns/sample, speedup 1.195x
+96000 Hz, old 459.67 ns/sample, new 479.09 ns/sample, speedup 0.959x

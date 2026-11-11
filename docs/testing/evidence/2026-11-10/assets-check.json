@@ -1,0 +1,153 @@
+[
+  {
+    "path": "assets/analog_exciter_main_excite_knob.png",
+    "sha256_ok": true,
+    "size_ok": true,
+    "dimensions": [
+      1254,
+      1254
+    ],
+    "mode": "RGBA",
+    "alpha_extrema": [
+      0,
+      255
+    ]
+  },
+  {
+    "path": "assets/analog_exciter_secondary_knob.png",
+    "sha256_ok": true,
+    "size_ok": true,
+    "dimensions": [
+      1254,
+      1254
+    ],
+    "mode": "RGBA",
+    "alpha_extrema": [
+      0,
+      255
+    ]
+  },
+  {
+    "path": "assets/control_switch_active_reference.png",
+    "sha256_ok": true,
+    "size_ok": true,
+    "dimensions": [
+      1448,
+      1086
+    ],
+    "mode": "RGBA",
+    "alpha_extrema": [
+      0,
+      255
+    ]
+  },
+  {
+    "path": "assets/led_states_sprite_reference.png",
+    "sha256_ok": true,
+    "size_ok": true,
+    "dimensions": [
+      2172,
+      724
+    ],
+    "mode": "RGBA",
+    "alpha_extrema": [
+      0,
+      255
+    ]
+  },
+  {
+    "path": "assets/oscilloscope_appearance_reference.png",
+    "sha256_ok": true,
+    "size_ok": true,
+    "dimensions": [
+      1448,
+      1086
+    ],
+    "mode": "RGBA",
+    "alpha_extrema": [
+      0,
+      255
+    ]
+  },
+  {
+    "path": "assets/harmonic_analyzer_appearance_reference.png",
+    "sha256_ok": true,
+    "size_ok": true,
+    "dimensions": [
+      1448,
+      1086
+    ],
+    "mode": "RGBA",
+    "alpha_extrema": [
+      0,
+      255
+    ]
+  },
+  {
+    "path": "assets/gain_reduction_meter_appearance_reference.png",
+    "sha256_ok": true,
+    "size_ok": true,
+    "dimensions": [
+      1448,
+      1086
+    ],
+    "mode": "RGBA",
+    "alpha_extrema": [
+      0,
+      255
+    ]
+  },
+  {
+    "path": "references/analog_exciter_approved_layout_reference.png",
+    "sha256_ok": true,
+    "size_ok": true,
+    "dimensions": [
+      1672,
+      941
+    ],
+    "mode": "RGBA",
+    "alpha_extrema": [
+      255,
+      255
+    ]
+  },
+  {
+    "path": "references/analog_exciter_current_problem_reference.png",
+    "sha256_ok": true,
+    "size_ok": true,
+    "dimensions": [
+      1815,
+      1198
+    ],
+    "mode": "RGBA",
+    "alpha_extrema": [
+      255,
+      255
+    ]
+  },
+  {
+    "path": "references/oscilloscope_stability_reference_maximus.png",
+    "sha256_ok": true,
+    "size_ok": true,
+    "dimensions": [
+      921,
+      571
+    ],
+    "mode": "RGB",
+    "alpha_extrema": null
+  },
+  {
+    "path": "references/limiter_current_problem_reference.png",
+    "sha256_ok": true,
+    "size_ok": true,
+    "dimensions": [
+      1767,
+      870
+    ],
+    "mode": "RGBA",
+    "alpha_extrema": [
+      255,
+      255
+    ]
+  }
+]

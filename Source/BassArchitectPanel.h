@@ -13,6 +13,7 @@ class BassArchitectPanel final : public juce::Component {
   std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
  };
  std::vector<std::unique_ptr<Knob>> knobs_;
+ double scopeRate_=48000.;
  masterlab::BassArchitectReading reading_{};
  void knob(const char* title,const char* id){
   auto k=std::make_unique<Knob>();
@@ -42,15 +43,15 @@ public:
   enabled_.setTooltip("Enables the bass processing without changing the six-module routing order.");
  }
  ~BassArchitectPanel()override{setLookAndFeel(nullptr);}
- void update(const Processor::ResponseFrame& r){reading_=r.bass;repaint();}
+ void update(const Processor::ResponseFrame& r){reading_=r.bass;scopeRate_=r.rate;repaint();}
  void resized()override{
   present_.setBounds(24,12,130,34);enabled_.setBounds(162,12,116,34);delta_.setBounds(290,12,116,34);
   const int cols=std::max(3,std::min(6,getWidth()/150));
   const int width=(getWidth()-48)/cols;
   for(size_t i=0;i<knobs_.size();++i){
-   const int x=24+static_cast<int>(i%cols)*width,y=110+static_cast<int>(i/cols)*138;
+   const int x=24+static_cast<int>(i%cols)*width,y=96+static_cast<int>(i/cols)*138;
    knobs_[i]->label.setBounds(x,y,width-8,22);
-   knobs_[i]->slider.setBounds(x,y+24,width-8,110);
+   knobs_[i]->slider.setBounds(x,y+24,width-8,getHeight()<430?100:110);
   }
  }
  void paint(juce::Graphics& g)override{
@@ -78,10 +79,12 @@ public:
     if(i==0)line.startNewSubPath(x,y);else line.lineTo(x,y);
    }
    g.setColour(channel==0?juce::Colour(0xff70becd):juce::Colour(0xffffbf76));
+   juce::Graphics::ScopedSaveState scopeClip(g);
+   g.reduceClipRegion(juce::Rectangle<float>(scopeX+1,scopeY+1,scopeW-2,scopeH-2).toNearestInt());
    g.strokePath(line,juce::PathStrokeType(1.5f));
   }
   g.setColour(juce::Colour(0xffcbd6e0));g.setFont(11.f);
-  g.drawText("REAL BASS DSP   /   INPUT CYAN   OUTPUT AMBER",36,static_cast<int>(scopeY)-24,getWidth()-72,19,juce::Justification::left);
+  g.drawText("IN cyan / OUT amber | +/-1 FS | 0-"+juce::String(511000./scopeRate_,2)+" ms | rising trigger",36,static_cast<int>(scopeY)-24,getWidth()-72,19,juce::Justification::left);
   const int y=compact?311:std::max(365,getHeight()-97);
   g.drawText("DSP RMS  IN "+juce::String(reading_.inputRms,4)+"   OUT "+juce::String(reading_.outputRms,4)+
      "   DELTA "+juce::String(reading_.deltaRms,4)+"   LOW "+juce::String(reading_.lowRms,4),

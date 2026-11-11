@@ -222,7 +222,7 @@ class GuiSmoke final : private juce::Timer {
                 if(!visual.isValid())return captureError(__LINE__);
                 const auto file=juce::File::getCurrentWorkingDirectory().getChildFile(
                     "build-plugin/console-"+juce::String(dim.x)+"x"+juce::String(dim.y)+".png");
-                juce::FileOutputStream out(file);out.truncate();
+                juce::FileOutputStream out(file);out.setPosition(0);out.truncate();
                 if(!juce::PNGImageFormat{}.writeImageToStream(visual,out))return captureError(__LINE__);
             }
             editor->setSize(1000,700);
@@ -234,6 +234,35 @@ class GuiSmoke final : private juce::Timer {
                 if(overview->isVisible()){
                     std::cerr<<"Concept C OPEN failed for module "<<i<<"\n";return captureError(__LINE__);
                 }
+                // Preserve real renders of every console destination, including
+                // Analog Exciter, Bass and Transient previously absent from artifacts.
+                for(auto dim:{juce::Point<int>{750,550},juce::Point<int>{1000,700},juce::Point<int>{1400,1000}}){
+                    editor->setSize(dim.x,dim.y);
+                    if(i==4){
+                        auto* panel=editor->findChildWithID("analogizer-panel");
+                        if(!panel)return captureError(__LINE__);
+                        for(int a=0;a<panel->getNumChildComponents();++a)
+                            for(int b=a+1;b<panel->getNumChildComponents();++b){
+                                auto* first=panel->getChildComponent(a);auto* second=panel->getChildComponent(b);
+                                if(first->isVisible()&&second->isVisible()&&first->getBounds().intersects(second->getBounds())){
+                                    std::cerr<<"Analog controls overlap at "<<dim.x<<"x"<<dim.y<<'\n';return captureError(__LINE__);
+                                }
+                            }
+                        for(auto* child:panel->getChildren())if(auto* slider=dynamic_cast<juce::Slider*>(child)){
+                            const auto layout=slider->getLookAndFeel().getSliderLayout(*slider);
+                            if(layout.sliderBounds.getWidth()<24||layout.sliderBounds.getHeight()<24){
+                                std::cerr<<"Analog rotary has no drawable area: "<<slider->getComponentID()
+                                         <<" at "<<dim.x<<"x"<<dim.y<<'\n';return captureError(__LINE__);
+                            }
+                        }
+                    }
+                    auto visual=editor->createComponentSnapshot(editor->getLocalBounds());
+                    const auto file=juce::File::getCurrentWorkingDirectory().getChildFile(
+                        "build-plugin/module-"+juce::String(i)+"-"+juce::String(dim.x)+"x"+juce::String(dim.y)+"-smoke.png");
+                    juce::FileOutputStream out(file);out.setPosition(0);out.truncate();
+                    if(!visual.isValid()||!juce::PNGImageFormat{}.writeImageToStream(visual,out))return captureError(__LINE__);
+                }
+                editor->setSize(1000,700);
                 console->onClick();
                 if(!overview->isVisible())return captureError(__LINE__);
             }
@@ -243,8 +272,21 @@ class GuiSmoke final : private juce::Timer {
         for(auto size:{juce::Point<int>(750,550),juce::Point<int>(1000,700),juce::Point<int>(2000,1400)}){
             editor->setSize(size.x,size.y);auto image=editor->createComponentSnapshot(editor->getLocalBounds());
             if(!image.isValid()||image.getWidth()!=size.x||image.getHeight()!=size.y)return captureError(__LINE__);
-            int curvePixels=0;for(int y=174;y<size.y-271;++y)for(int x=48;x<size.x-252;++x){auto colour=image.getPixelAt(x,y);if(std::abs(static_cast<int>(colour.getRed())-181)<14&&std::abs(static_cast<int>(colour.getGreen())-203)<14&&std::abs(static_cast<int>(colour.getBlue())-231)<14)++curvePixels;}
-            if(curvePixels<400){std::cerr<<"EQ response missing from real GUI frame: "<<curvePixels<<'\n';return captureError(__LINE__);}
+            // Require the selected band response across half the actual plot width.
+            // A fixed pixel count was dependent on window width and antialiasing.
+            const int plotWidth=std::max(200,size.x-300);
+            int curveColumns=0;
+            for(int x=48;x<48+plotWidth;++x){
+                bool found=false;
+                for(int y=218;y<218+std::max(100,size.y-438);++y){
+                    auto colour=image.getPixelAt(x,y);
+                    if(std::abs(static_cast<int>(colour.getRed())-181)<14&&
+                       std::abs(static_cast<int>(colour.getGreen())-203)<14&&
+                       std::abs(static_cast<int>(colour.getBlue())-231)<14){found=true;break;}
+                }
+                curveColumns+=found;
+            }
+            if(curveColumns<plotWidth/2){std::cerr<<"EQ response missing from real GUI frame: "<<curveColumns<<" / "<<plotWidth<<'\n';return captureError(__LINE__);}
             if(iteration==0&&size.x==1000){auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/gui-smoke.png");output.getParentDirectory().createDirectory();juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return captureError(__LINE__);}
             if(!controlsFit())return captureError(__LINE__);
         }

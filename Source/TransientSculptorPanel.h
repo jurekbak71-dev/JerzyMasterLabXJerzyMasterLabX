@@ -9,6 +9,7 @@ class TransientSculptorPanel final : public juce::Component {
  struct Knob {juce::Label label;juce::Slider slider;
   std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;};
  std::vector<std::unique_ptr<Knob>> knobs_;
+ double scopeRate_=48000.;
  masterlab::TransientSculptorReading reading_{};
  void addKnob(const char* label,const char* parameter){
   auto k=std::make_unique<Knob>();
@@ -38,7 +39,7 @@ public:
   }})addKnob(item.first,item.second);
  }
  ~TransientSculptorPanel()override{setLookAndFeel(nullptr);}
- void update(const Processor::ResponseFrame& f){reading_=f.transient;repaint();}
+ void update(const Processor::ResponseFrame& f){reading_=f.transient;scopeRate_=f.rate;repaint();}
  void resized()override{
   present_.setBounds(24,12,130,34);enabled_.setBounds(162,12,116,34);delta_.setBounds(290,12,116,34);
   const bool compact=getHeight()<440;
@@ -75,10 +76,12 @@ public:
     if(i==0)waveform.startNewSubPath(x,y);else waveform.lineTo(x,y);
    }
    g.setColour(channel==0?juce::Colour(0xff53cedb):juce::Colour(0xffffb16f));
+   juce::Graphics::ScopedSaveState scopeClip(g);
+   g.reduceClipRegion(juce::Rectangle<float>(scopeX+1,scopeY+1,scopeW-2,scopeH-2).toNearestInt());
    g.strokePath(waveform,juce::PathStrokeType(1.5f));
   }
   g.setFont(11.f);g.setColour(juce::Colour(0xffe5d1c0));
-  g.drawText("ACTUAL TRANSIENT WAVEFORM   /   INPUT CYAN  OUTPUT AMBER",36,92,getWidth()-72,19,juce::Justification::left);
+  g.drawText("IN cyan / OUT amber | +/-1 FS | 0-"+juce::String(511000./scopeRate_,2)+" ms | rising trigger",36,92,getWidth()-72,19,juce::Justification::left);
   const int y=getHeight()<440?330:std::max(412,getHeight()-91);
   g.drawText("ACTUAL DSP  /  Input "+juce::String(reading_.inputRms,4)+
     "    Output "+juce::String(reading_.outputRms,4)+"    Delta "+juce::String(reading_.deltaRms,4),

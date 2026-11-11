@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include "ScopeCapture.h"
 namespace masterlab {
 struct FinalTruePeakSettings {
  bool enabled=false;
@@ -15,7 +16,8 @@ struct FinalTruePeakSettings {
 };
 struct FinalTruePeakReading {
  float detectedTruePeak=0.f,outputSamplePeak=0.f,gainReductionDb=0.f;
- std::array<float,64> inputWave{},outputWave{},gainEnvelope{};
+ ScopeCapture::Wave inputWave{},outputWave{};
+ ScopeCapture::Wave gainEnvelope=[] {ScopeCapture::Wave wave;wave.fill(1.f);return wave;}();
 };
 class FinalTruePeak {
 public:
@@ -37,6 +39,7 @@ private:
  double sampleRate_=48000.;
  FinalTruePeakSettings settings_{};
  FinalTruePeakReading reading_{};
+ ScopeCapture scope_;
  static float sane(float x,float a,float b)noexcept{
   return std::clamp(std::isfinite(x)?x:a,a,b);
  }
@@ -60,15 +63,19 @@ private:
  }
 public:
  FinalTruePeak()noexcept{prepareKernel();}
- void settings(FinalTruePeakSettings value)noexcept{settings_=value;}
+ void settings(FinalTruePeakSettings value)noexcept{
+  if(value.enabled!=settings_.enabled)scope_.reset();
+  settings_=value;
+ }
  void prepare(double rate)noexcept{
   sampleRate_=std::isfinite(rate)&&rate>=8000.&&rate<=384000.?rate:48000.;
+  scope_.prepare(sampleRate_);
   reset();
  }
  void reset()noexcept{
   history_={};delay_={};peakValues_={};peakStamps_={};
   histPosition_=delayPosition_=0;peakHead_=peakTail_=0;sampleClock_=0;
-  gain_=1.f;reading_={};
+  gain_=1.f;reading_={};scope_.reset();
  }
  FinalTruePeakReading reading()const noexcept{return reading_;}
  void process(float* left,float* right,int count)noexcept{
@@ -104,7 +111,6 @@ public:
    const float saturation=clipThreshold*std::tanh(x/clipThreshold);
    return x+clip*(saturation-x);
   };
-  std::array<float,64> inputWave{},outputWave{},gainEnvelope{};
   float detected=0.f,outputPeak=0.f,minGain=1.f;
   for(int i=0;i<count;++i){
    const float input[2]{
@@ -127,8 +133,6 @@ public:
     peak=std::max(peak,static_cast<float>(std::abs(value)));
    }
    detected=std::max(detected,peak);
-   const size_t scopeIndex=static_cast<size_t>(i)*64/static_cast<size_t>(count);
-   inputWave[scopeIndex]=.5f*(input[0]+input[1]);
    // Sliding maximum of the most recent 129 peak estimates.
    // Equal peaks evict older duplicates. No allocation or linear scan.
    // Evict expired indices before insertion (inclusive 129-sample window).
@@ -152,7 +156,6 @@ public:
    const float adaptive=settings_.autoRelease?std::clamp((1.f-gain_)*.48f,0.f,.48f):0.f;
    const float recovery=release+(1.f-release)*adaptive;
    gain_=desired<gain_?desired:recovery*gain_+(1.f-recovery)*desired;
-   gainEnvelope[scopeIndex]=gain_;
    minGain=std::min(minGain,gain_);
    const int outputPosition=(delayPosition_+1)%static_cast<int>(delay_[0].size());
    const float y[2]{
@@ -164,13 +167,14 @@ public:
    // detector's conservative 8x reconstructed output safety margin.
    left[i]=std::clamp(y[0],-ceiling,ceiling);
    right[i]=std::clamp(y[1],-ceiling,ceiling);
-   outputWave[scopeIndex]=.5f*(left[i]+right[i]);
+   scope_.push(.5f*(delay_[0][outputPosition]+delay_[1][outputPosition]),
+               .5f*(left[i]+right[i]),gain_);
    outputPeak=std::max(outputPeak,std::max(std::abs(left[i]),std::abs(right[i])));
   }
   reading_.detectedTruePeak=detected;
   reading_.outputSamplePeak=outputPeak;
   reading_.gainReductionDb=-20.f*std::log10(std::max(1e-9f,minGain));
-  reading_.inputWave=inputWave;reading_.outputWave=outputWave;reading_.gainEnvelope=gainEnvelope;
+  reading_.inputWave=scope_.input();reading_.outputWave=scope_.output();reading_.gainEnvelope=scope_.gain();
  }
 };
 }

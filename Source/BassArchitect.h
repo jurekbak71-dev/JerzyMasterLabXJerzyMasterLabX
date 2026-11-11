@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include "ScopeCapture.h"
 namespace masterlab {
 struct BassArchitectSettings {
  bool enabled=false;
@@ -13,7 +14,7 @@ struct BassArchitectSettings {
 struct BassArchitectReading {
  float inputRms=0.f,outputRms=0.f,deltaRms=0.f,lowRms=0.f;
  std::array<float,3> sectionsRms{};
- std::array<float,64> inputWave{},outputWave{};
+ ScopeCapture::Wave inputWave{},outputWave{};
 };
 class BassArchitect {
  struct Smoother {
@@ -30,18 +31,23 @@ class BassArchitect {
  Smoother enabled_{},sub_{},body_{},harmonics_{},mono_{},mix_{},out_{},deltaMonitor_{};
  BassArchitectSettings settings_{};
  BassArchitectReading reading_{};
+ ScopeCapture scope_;
  double sr_=48000.;
  static float finite(float value,float lo,float hi)noexcept{
   return std::clamp(std::isfinite(value)?value:lo,lo,hi);
  }
 public:
- void settings(BassArchitectSettings next)noexcept {settings_=next;}
+ void settings(BassArchitectSettings next)noexcept {
+  if(next.enabled!=settings_.enabled)scope_.reset();
+  settings_=next;
+ }
  void prepare(double sr)noexcept{
   sr_=std::isfinite(sr)&&sr>=8000.&&sr<=384000.?sr:48000.;
+  scope_.prepare(sr_);
   reset();
  }
  void reset()noexcept{
-  state_={};reading_={};
+  state_={};reading_={};scope_.reset();
   enabled_.prepare(sr_,settings_.enabled?1.f:0.f);
   sub_.prepare(sr_,finite(settings_.sub,-1.f,1.f));
   body_.prepare(sr_,finite(settings_.body,-1.f,1.f));
@@ -60,7 +66,6 @@ public:
   const float dcPole=static_cast<float>(1.-std::exp(-6.283185307179586*10./sr_));
   double input2=0.,output2=0.,difference2=0.,low2=0.;
   std::array<double,3> componentEnergy{};
-  std::array<float,64> inWave{},outWave{};
   for(int i=0;i<n;++i){
    const float on=enabled_.tick(settings_.enabled?1.f:0.f);
    const float sub= sub_.tick(finite(settings_.sub,-1.f,1.f));
@@ -100,8 +105,7 @@ public:
     componentEnergy[1]+=static_cast<double>(mid[c])*mid[c];
     componentEnergy[2]+=static_cast<double>(enhancement)*enhancement;
    }
-   const size_t scopeIndex=static_cast<size_t>(i)*64/static_cast<size_t>(n);
-   inWave[scopeIndex]=.5f*(dry[0]+dry[1]);outWave[scopeIndex]=.5f*(out[0]+out[1]);
+   scope_.push(.5f*(dry[0]+dry[1]),.5f*(out[0]+out[1]));
    const float delta=deltaMonitor_.tick(settings_.delta?1.f:0.f);
    left[i]=out[0]+delta*(dry[0]-2.f*out[0]);right[i]=out[1]+delta*(dry[1]-2.f*out[1]);
   }
@@ -111,7 +115,7 @@ public:
     static_cast<float>(std::sqrt(difference2*div)),
     static_cast<float>(std::sqrt(low2*div))};
   for(size_t i=0;i<3;++i)reading_.sectionsRms[i]=static_cast<float>(std::sqrt(componentEnergy[i]*div));
-  reading_.inputWave=inWave;reading_.outputWave=outWave;
+  reading_.inputWave=scope_.input();reading_.outputWave=scope_.output();
  }
 };
 }

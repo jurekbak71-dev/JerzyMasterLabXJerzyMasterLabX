@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include "ScopeCapture.h"
 namespace masterlab {
 struct TransientSculptorSettings {
  bool enabled=false;
@@ -14,7 +15,7 @@ struct TransientSculptorSettings {
 struct TransientSculptorReading {
  float inputRms=0.f,outputRms=0.f,deltaRms=0.f;
  std::array<float,3> modulationRms{};
- std::array<float,64> inputWave{},outputWave{};
+ ScopeCapture::Wave inputWave{},outputWave{};
 };
 class TransientSculptor {
  struct Slew {
@@ -36,18 +37,23 @@ class TransientSculptor {
  Slew active_{},mix_{},output_{},deltaMonitor_{};
  TransientSculptorSettings settings_{};
  TransientSculptorReading reading_{};
+ ScopeCapture scope_;
  double rate_=48000.;
  static float safe(float x,float lo,float hi)noexcept{
   return std::clamp(std::isfinite(x)?x:lo,lo,hi);
  }
 public:
- void settings(TransientSculptorSettings s)noexcept{settings_=s;}
+ void settings(TransientSculptorSettings s)noexcept{
+  if(s.enabled!=settings_.enabled)scope_.reset();
+  settings_=s;
+ }
  void prepare(double sr)noexcept{
   rate_=std::isfinite(sr)&&sr>=8000.&&sr<=384000.?sr:48000.;
+  scope_.prepare(rate_);
   reset();
  }
  void reset()noexcept{
-  channels_={};reading_={};
+  channels_={};reading_={};scope_.reset();
   active_.prepare(rate_,settings_.enabled?1.f:0.f);
   mix_.prepare(rate_,safe(settings_.mix,0.f,1.f));
   output_.prepare(rate_,safe(settings_.outputDb,-12.f,12.f));
@@ -68,7 +74,6 @@ public:
   const float slowStep=static_cast<float>(1.-std::exp(-1./(rate_*.055)));
   double input2=0.,out2=0.,delta2=0.;
   std::array<double,3> modulation2{};
-  std::array<float,64> inWave{},outWave{};
   for(int i=0;i<n;++i){
    const float wet=active_.tick(settings_.enabled?1.f:0.f)*mix_.tick(safe(settings_.mix,0.f,1.f));
    const float output=std::pow(10.f,output_.tick(safe(settings_.outputDb,-12.f,12.f))*.05f);
@@ -110,15 +115,14 @@ public:
     delta2+=diff*diff;
    }
    deltaMonitor_.tick(settings_.delta?1.f:0.f);
-   const size_t scopeIndex=static_cast<size_t>(i)*64/static_cast<size_t>(n);
-   inWave[scopeIndex]=inputMono;outWave[scopeIndex]=outputMono;
+   scope_.push(inputMono,outputMono);
   }
   const double inv=1./(2.*n);
   reading_.inputRms=static_cast<float>(std::sqrt(input2*inv));
   reading_.outputRms=static_cast<float>(std::sqrt(out2*inv));
   reading_.deltaRms=static_cast<float>(std::sqrt(delta2*inv));
   for(int k=0;k<3;++k)reading_.modulationRms[k]=static_cast<float>(std::sqrt(modulation2[k]*inv));
-  reading_.inputWave=inWave;reading_.outputWave=outWave;
+  reading_.inputWave=scope_.input();reading_.outputWave=scope_.output();
  }
 };
 }
