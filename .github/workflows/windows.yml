@@ -39,7 +39,15 @@ jobs:
           Get-Process cl,c1xx,c2,mspdbsrv,MSBuild -ErrorAction SilentlyContinue | Select-Object ProcessName,Id,WorkingSet64,VirtualMemorySize64 | Format-Table -AutoSize
           Get-WinEvent -FilterHashtable @{ LogName='Application'; StartTime=(Get-Date).AddMinutes(-20) } -MaxEvents 100 -ErrorAction SilentlyContinue | Where-Object { $_.ProviderName -match 'Application Error|Windows Error Reporting' -or $_.Message -match 'cl.exe|c1xx.dll|c2.dll|mspdbsrv' } | Select-Object TimeCreated,ProviderName,Id,Message | Format-List
       - name: DSP tests
-        run: ctest --test-dir build -C Release --output-on-failure
+        shell: pwsh
+        run: |
+          ctest --test-dir build -C Release --output-on-failure
+          $suiteExit = $LASTEXITCODE
+          if ($suiteExit -ne 0) {
+            Write-Output 'Full CTest failed; rerunning only failed tests with verbose output.'
+            ctest --test-dir build -C Release --rerun-failed --output-on-failure --verbose
+            exit $suiteExit
+          }
       - name: Measure adversarial true-peak and CPU on Windows x64
         shell: pwsh
         run: |
@@ -67,6 +75,8 @@ jobs:
           if (Test-Path build/Testing/Temporary/LastTest.log) {
             $report = (Get-Content build/Testing/Temporary/LastTest.log -Raw).Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
             Write-Output "::notice::CTest details: $report"
+            $tail = ((Get-Content build/Testing/Temporary/LastTest.log -Tail 250) -join "`n").Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
+            Write-Output "::error::Failed-test tail: $tail"
           }
       - name: Render Stereo Architect evidence from actual DSP
         shell: pwsh
