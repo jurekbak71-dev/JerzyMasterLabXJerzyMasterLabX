@@ -113,7 +113,11 @@ jobs:
           path: build/stabilizer-evidence/
           if-no-files-found: error
       - name: GUI reopen and resize smoke test
-        run: ./build/Release/plugin_tests.exe --gui
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force build-plugin | Out-Null
+          & ./build/Release/plugin_tests.exe --gui
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Upload Concept C real GUI screenshots
         uses: actions/upload-artifact@v4
         with:

@@ -146,10 +146,10 @@
 - Consumes: complete branch implementation.
 - Produces: exact-SHA local and Windows evidence; no merge or release.
 
-- [ ] **Step 1: Run core CTest and plugin CTest suites** with `--output-on-failure`; record exact totals, duration and failures.
-- [ ] **Step 2: Run allocation, CPU, adversarial true-peak, GUI smoke and deterministic render checks**; record measured worst case and limits.
-- [ ] **Step 3: Run `git diff --check` and inspect final screenshots** for silence, active limiting, bypass and small/large geometry.
-- [ ] **Step 4: Commit any evidence-only update**, then push only the feature branch.
+- [x] **Step 1: Run core CTest and plugin CTest suites** with `--output-on-failure`; record exact totals, duration and failures.
+- [x] **Step 2: Run allocation, CPU, adversarial true-peak, GUI smoke and deterministic render checks**; record measured worst case and limits.
+- [x] **Step 3: Run `git diff --check` and inspect final screenshots** for silence, active limiting, bypass and small/large geometry.
+- [x] **Step 4: Commit any evidence-only update**, then push only the feature branch.
 - [ ] **Step 5: Run Windows x64 VST3 CI for the exact SHA** and require compilation, CTest, GUI smoke, pluginval and package steps to pass.
 - [ ] **Step 6: Report verified, unverified and unfinished items** without merging to `main`.
 
