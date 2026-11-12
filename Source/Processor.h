@@ -116,6 +116,10 @@ public:
  p.add(std::make_unique<juce::AudioParameterFloat>("truePeakLookahead","Final Maximizer lookahead samples",0.f,128.f,128.f));
  p.add(std::make_unique<juce::AudioParameterFloat>("truePeakTransientEmphasis","Final Maximizer transient emphasis",0.f,1.f,0.f));
  p.add(std::make_unique<juce::AudioParameterChoice>("truePeakOversampling","Final Maximizer detector oversampling",juce::StringArray{"1x","2x","4x"},2));
+ p.add(std::make_unique<juce::AudioParameterFloat>("truePeakDensity","Final Maximizer density",0.f,1.f,0.f));
+ p.add(std::make_unique<juce::AudioParameterFloat>("truePeakCompressorMix","Final Maximizer compressor mix",0.f,1.f,1.f));
+ p.add(std::make_unique<juce::AudioParameterFloat>("truePeakStereoLink","Final Maximizer stereo link",0.f,1.f,1.f));
+ p.add(std::make_unique<juce::AudioParameterBool>("truePeakDelta","Final Maximizer Delta monitor",false));
  return p;}
  static void addModuleParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
   auto boolean=[&](const char* id,const char* name,bool initial){p.add(std::make_unique<juce::AudioParameterBool>(id,name,initial));};

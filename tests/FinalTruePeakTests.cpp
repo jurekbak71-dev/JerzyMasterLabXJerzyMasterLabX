@@ -177,6 +177,20 @@ int main(){
   check(dense.second<=std::pow(10.f,-.3f/20.f)+1.e-6f,
         "density compressor bypasses final ceiling");
  }
+ // Delta is the latency-aligned input minus the complete maximizer output.
+ {
+  FinalTruePeakSettings normalSettings;normalSettings.enabled=true;
+  normalSettings.ceilingDb=-6.f;normalSettings.driveDb=9.f;normalSettings.density=.7f;
+  auto deltaSettings=normalSettings;deltaSettings.delta=true;
+  FinalTruePeak normal,delta;normal.settings(normalSettings);delta.settings(deltaSettings);
+  normal.prepare(48000);delta.prepare(48000);
+  constexpr int count=8192;std::vector<float> a(count),b(count),c(count),d(count),input(count);
+  for(int i=0;i<count;++i)input[i]=a[i]=b[i]=c[i]=d[i]=.7f*std::sin(i*.17f);
+  for(int i=0;i<count;i+=127){const int n=std::min(127,count-i);normal.process(a.data()+i,b.data()+i,n);delta.process(c.data()+i,d.data()+i,n);}
+  for(int i=512;i<count;++i)
+   check(std::abs(a[i]+c[i]-input[i-FinalTruePeak::latencySamples])<2.e-5f,
+         "Delta is not aligned input minus maximizer output");
+ }
  FinalTruePeak dsp;FinalTruePeakSettings s;s.enabled=true;
  dsp.settings(s);dsp.prepare(48000);
  std::array<float,512> a{},b{};a[0]=std::numeric_limits<float>::quiet_NaN();

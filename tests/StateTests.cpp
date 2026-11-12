@@ -8,6 +8,10 @@
 extern juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter();
 int main(){
  std::unique_ptr<juce::AudioProcessor> source(createPluginFilter()),target(createPluginFilter());
+ for(const char* id:{"truePeakDensity","truePeakCompressorMix","truePeakStereoLink","truePeakDelta"}){
+  bool found=false;for(auto* base:source->getParameters())if(auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(base);parameter&&parameter->paramID==id){found=true;break;}
+  if(!found){std::cerr<<"missing maximizer host parameter "<<id;return 1;}
+ }
  for(int i=0;i<source->getParameters().size();++i){auto* parameter=source->getParameters()[i];float value=static_cast<float>((i*17)%101)/100.f;parameter->setValueNotifyingHost(parameter->isBoolean()?(value>=.5f?1.f:0.f):value);}
  juce::MemoryBlock saved;source->getStateInformation(saved);
  auto xml=juce::AudioProcessor::getXmlFromBinary(saved.getData(),static_cast<int>(saved.getSize()));
@@ -18,7 +22,7 @@ int main(){
  // Old FL Studio projects used schema 24 with exactly 304 parameters.
  // New host parameters must migrate to their factory defaults, while the
  // original parameter values and their IDs are preserved byte-for-byte.
- for(int legacyCount:{304,316}){
+ for(int legacyCount:{304,316,318,326,330}){
   auto legacy=original.createCopy();
   if(legacy.getNumChildren()!=static_cast<int>(masterlab::parameterCount)){std::cerr<<"unexpected expanded state count";return 1;}
   // APVTS stores PARAM children in a map/key order, not necessarily in

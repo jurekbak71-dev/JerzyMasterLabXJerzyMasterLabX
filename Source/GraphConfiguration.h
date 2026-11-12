@@ -35,6 +35,7 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
   tp.driveDb=v(225);
   tp.character=static_cast<int>(v(312));tp.autoRelease=v(313)>.5f;tp.softClip=v(314);tp.outputDb=v(315);
   tp.attackMs=v(326);tp.lookaheadSamples=v(327);tp.transientEmphasis=v(328);tp.oversamplingMode=static_cast<int>(v(329));
+  tp.density=v(330);tp.compressorMix=v(331);tp.stereoLink=v(332);tp.delta=v(333)>.5f;
   engine.finalTruePeakSettings(tp);
   engine.analogExciterMonitor(v(316),v(317)>.5f);
  // Shared by host rendering and Brain offline verification.

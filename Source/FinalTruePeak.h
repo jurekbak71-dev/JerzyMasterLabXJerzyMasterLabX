@@ -21,6 +21,8 @@ struct FinalTruePeakSettings {
 };
 struct FinalTruePeakReading {
  float detectedTruePeak=0.f,outputSamplePeak=0.f,gainReductionDb=0.f;
+ std::array<float,2> inputPeak{},outputPeak{};
+ float densityGainDb=0.f,transientActivity=0.f;
  ScopeCapture::Wave inputWave{},outputWave{};
  ScopeCapture::Wave gainEnvelope=[] {ScopeCapture::Wave wave;wave.fill(1.f);return wave;}();
 };
@@ -46,7 +48,7 @@ private:
  int histPosition_=0,softClipDryPosition_=0,activeDelayPosition_=0,bypassDelayPosition_=0;
  float gain_=1.f;
  float programGain_=1.f,transientEnvelope_=0.f;
- float densityEnvelope_=0.f,densityGain_=1.f;
+ std::array<float,2> densityEnvelope_{},densityGain_{1.f,1.f};
  float softClipMix_=0.f,softClipStep_=1.f/960.f;
  std::array<float,latencySamples+1> peakHistory_{};
  double sampleRate_=48000.;
@@ -91,7 +93,7 @@ public:
   history_={};softClipDryDelay_={};activeDelay_={};bypassDelay_={};peakValues_={};peakStamps_={};
   for(auto& oversampler:softClipOversampler_)oversampler.reset();
   histPosition_=softClipDryPosition_=activeDelayPosition_=bypassDelayPosition_=0;peakHead_=peakTail_=0;sampleClock_=0;
-  gain_=programGain_=densityGain_=1.f;transientEnvelope_=densityEnvelope_=0.f;softClipMix_=0.f;peakHistory_={};reading_={};scope_.reset();
+  gain_=programGain_=1.f;densityGain_={1.f,1.f};transientEnvelope_=0.f;densityEnvelope_={};softClipMix_=0.f;peakHistory_={};reading_={};scope_.reset();
  }
  FinalTruePeakReading reading()const noexcept{return reading_;}
  void process(float* left,float* right,int count,float* gainTrace=nullptr)noexcept{
@@ -128,6 +130,7 @@ public:
   const float clip=std::clamp(settings_.softClip,0.f,1.f);
   const float density=sane(settings_.density,0.f,1.f);
   const float compressorMix=sane(settings_.compressorMix,0.f,1.f);
+  const float stereoLink=sane(settings_.stereoLink,0.f,1.f);
   const float densityAttack=std::exp(-1.f/(static_cast<float>(sampleRate_)*.010f));
   const float densityRelease=std::exp(-1.f/(static_cast<float>(sampleRate_)*
       (settings_.character==1?.090f:(settings_.character==2?.055f:.160f))));
@@ -140,22 +143,30 @@ public:
   auto saturate=[&](float x)noexcept {
    return clipThreshold*std::tanh(x/clipThreshold);
   };
-  float detected=0.f,outputPeak=0.f,minGain=1.f;
+  float detected=0.f,outputPeak=0.f,minGain=1.f,maxTransient=0.f;
+  std::array<float,2> inputPeak{},channelOutputPeak{};
   for(int i=0;i<count;++i){
    const float raw[2]{sane(left[i],-16.f,16.f),sane(right[i],-16.f,16.f)};
    const float linkedPeak=std::max(std::abs(raw[0]),std::abs(raw[1]));
-   const float envelopeCoefficient=linkedPeak>densityEnvelope_?densityAttack:densityRelease;
-   densityEnvelope_=envelopeCoefficient*densityEnvelope_+(1.f-envelopeCoefficient)*linkedPeak;
-   const float overDb=std::max(0.f,20.f*std::log10(std::max(1.e-9f,densityEnvelope_/densityThreshold)));
-   const float reductionDb=overDb*(1.f-1.f/densityRatio);
-   const float densityTarget=std::pow(10.f,(densityMakeupDb-reductionDb)*.05f);
-   const float gainCoefficient=densityTarget<densityGain_?densityAttack:densityRelease;
-   densityGain_=gainCoefficient*densityGain_+(1.f-gainCoefficient)*densityTarget;
    const float densityBlend=density*compressorMix;
-   const float compressed[2]{
-    raw[0]+densityBlend*(raw[0]*densityGain_-raw[0]),
-    raw[1]+densityBlend*(raw[1]*densityGain_-raw[1])
-   };
+   float compressed[2]{};
+   for(int c=0;c<2;++c){
+    inputPeak[c]=std::max(inputPeak[c],std::abs(raw[c]));
+    const float detector=std::abs(raw[c])+stereoLink*(linkedPeak-std::abs(raw[c]));
+    const float envelopeCoefficient=detector>densityEnvelope_[c]?densityAttack:densityRelease;
+    densityEnvelope_[c]=envelopeCoefficient*densityEnvelope_[c]+(1.f-envelopeCoefficient)*detector;
+    const float overDb=std::max(0.f,20.f*std::log10(std::max(1.e-9f,densityEnvelope_[c]/densityThreshold)));
+    const float reductionDb=overDb*(1.f-1.f/densityRatio);
+    const float densityTarget=std::pow(10.f,(densityMakeupDb-reductionDb)*.05f);
+    const float gainCoefficient=densityTarget<densityGain_[c]?densityAttack:densityRelease;
+    densityGain_[c]=gainCoefficient*densityGain_[c]+(1.f-gainCoefficient)*densityTarget;
+    compressed[c]=raw[c]+densityBlend*(raw[c]*densityGain_[c]-raw[c]);
+   }
+   bypassDelay_[0][bypassDelayPosition_]=raw[0];
+   bypassDelay_[1][bypassDelayPosition_]=raw[1];
+   const int dryRead=(bypassDelayPosition_+1)%static_cast<int>(bypassDelay_[0].size());
+   const float alignedDry[2]{bypassDelay_[0][dryRead],bypassDelay_[1][dryRead]};
+   bypassDelayPosition_=dryRead;
    const float driven[2]{compressed[0]*drive,compressed[1]*drive};
    const int softClipRead=(softClipDryPosition_+1)%static_cast<int>(softClipDryDelay_[0].size());
    float input[2]{};
@@ -186,6 +197,7 @@ public:
    }
    transientEnvelope_=std::max(peak,transientEnvelope_*.995f);
    const float transient=std::max(0.f,peak-transientEnvelope_*.92f);
+   maxTransient=std::max(maxTransient,transient);
    peak*=1.f+emphasis*transient/std::max(peak,1.e-6f);
    detected=std::max(detected,peak);
    peakHistory_[sampleClock_%peakHistory_.size()]=peak;
@@ -232,16 +244,21 @@ public:
    activeDelayPosition_=outputPosition;
    // This stage is now linear after the detector, preserving the
    // detector's conservative 8x reconstructed output safety margin.
-   left[i]=std::clamp(y[0],-ceiling,ceiling);
-   right[i]=std::clamp(y[1],-ceiling,ceiling);
+   const float limited[2]{std::clamp(y[0],-ceiling,ceiling),std::clamp(y[1],-ceiling,ceiling)};
+   left[i]=settings_.delta?alignedDry[0]-limited[0]:limited[0];
+   right[i]=settings_.delta?alignedDry[1]-limited[1]:limited[1];
    if(gainTrace)gainTrace[i]*=gain_;
    scope_.push(.5f*(activeDelay_[0][outputPosition]+activeDelay_[1][outputPosition]),
                .5f*(left[i]+right[i]),gain_);
+   for(int c=0;c<2;++c)channelOutputPeak[c]=std::max(channelOutputPeak[c],std::abs(c==0?left[i]:right[i]));
    outputPeak=std::max(outputPeak,std::max(std::abs(left[i]),std::abs(right[i])));
   }
   reading_.detectedTruePeak=detected;
   reading_.outputSamplePeak=outputPeak;
   reading_.gainReductionDb=-20.f*std::log10(std::max(1e-9f,minGain));
+  reading_.inputPeak=inputPeak;reading_.outputPeak=channelOutputPeak;
+  reading_.densityGainDb=20.f*std::log10(std::max(1.e-9f,std::min(densityGain_[0],densityGain_[1])));
+  reading_.transientActivity=maxTransient;
   reading_.inputWave=scope_.input();reading_.outputWave=scope_.output();reading_.gainEnvelope=scope_.gain();
  }
 };

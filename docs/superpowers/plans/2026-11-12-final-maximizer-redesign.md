@@ -105,12 +105,12 @@
 - Produces APVTS IDs: `truePeakDensity`, `truePeakCompressorMix`, `truePeakStereoLink`, `truePeakDelta`; preserves existing IDs for ceiling, release, drive, output, soft clip, attack, lookahead, transient emphasis and quality.
 - Produces telemetry: per-frame input L/R peak, output L/R peak, limiter GR, density contribution, short loudness and transient markers.
 
-- [ ] **Step 1: Add failing parameter/state tests** for defaults, automation, round-trip and accepted current-state migration, plus scope partition invariance for every new telemetry lane.
-- [ ] **Step 2: Run state and scope tests**; expected: missing parameter/telemetry assertions fail.
-- [ ] **Step 3: Append parameters and wire configuration** without reordering existing host parameter IDs; increment current schema only after round-trip tests define the new state.
-- [ ] **Step 4: Extend fixed-size telemetry** with no audio-thread allocation and reset it on activation generation changes.
-- [ ] **Step 5: Re-run state, scope, allocation and module integration tests**; expected: PASS.
-- [ ] **Step 6: Commit** as `Expose maximizer controls and telemetry`.
+- [x] **Step 1: Add failing parameter/state tests** for defaults, automation, round-trip and accepted current-state migration, plus scope partition invariance for every new telemetry lane.
+- [x] **Step 2: Run state and scope tests**; expected: missing parameter/telemetry assertions fail.
+- [x] **Step 3: Append parameters and wire configuration** without reordering existing host parameter IDs; increment current schema only after round-trip tests define the new state.
+- [x] **Step 4: Extend fixed-size telemetry** with no audio-thread allocation and reset it on activation generation changes.
+- [x] **Step 5: Re-run state, scope, allocation and module integration tests**; expected: PASS.
+- [x] **Step 6: Commit** as `Expose maximizer controls and telemetry`.
 
 ### Task 5: Modern Metering Console GUI and assets
 
