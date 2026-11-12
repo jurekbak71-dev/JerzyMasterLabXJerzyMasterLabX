@@ -39,6 +39,8 @@ Files: AnalogizerPanel.h, StudioTheme.h, AnalogExciter.h, Analogizer.h, tests/An
 - [ ] Implement measured harmonic analysis outside callback with explicit invalid/unpitched state; validate on known tones and broadband signals.
 - [ ] Select and validate anti-aliasing based on measured failures, including latency/gain alignment and parameter interaction tests; GUI exposes only implemented quality modes.
 
+2026-11-12 Task 2 RED audit: routed H2-H5 and Tube/FET/Tape signatures are distinct; EXCITE mean absolute authority is 0.24437071 in the deterministic 1 kHz fixture. The 10 kHz audit FAILS the explicit 0.05 alias/fundamental gate: Tube 0.16266517, FET 0.22050812, Tape 0.14815984. Isolating the blocks attributes 0.00023708 to the ADAA harmonic generator and 0.06065963-0.11182596 to the colour stage before combined interaction. Ruling: do not expose a fictitious oversampling control or retain a partial transfer rewrite; the attempted zero-latency first-order rewrite reduced isolated alias but the combined path still failed. Correct work requires an aligned oversampled colour path and verified PDC.
+
 ### Task 3: Final limiter and MASTER/INSERT latency
 Files: FinalTruePeak.h, Engine.h, SerialGraph.h, Processor.h, FinalTruePeakPanel.h, ProcessingModePanel.h and related tests.
 - [ ] Audit combined-stage GR, bypass transitions and independent reconstructed peak tests.
