@@ -141,7 +141,7 @@ public:
   g.setColour(juce::Colour(0xffb3e2ce));
   g.fillRoundedRectangle(24.f,static_cast<float>(y+45),static_cast<float>(getWidth()-48)*juce::jlimit(0.f,1.f,reading_.gainReductionDb/18.f),15.f,5.f);
   g.setColour(juce::Colour(0xff9dacad));g.setFont(12.f);
-  g.drawText("4x true-peak input detector, 128 samples fixed PDC. Output inter-sample certification still pending.",
+  g.drawText("4x detector / 128 samples PDC. Independent 8x stress audit active; formal certification remains external.",
              24,y+83,getWidth()-48,30,juce::Justification::left);}
  }
 };

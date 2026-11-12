@@ -67,6 +67,8 @@ class SerialGraph {
   std::array<std::array<float,128>,2> branch{},dry{},sum{},originalInput{};
   std::array<std::array<float,AnalogExciter::latencySamples()>,2> profileDryDelay{};
   size_t profileDryPosition=0;
+  std::array<std::vector<float>,2> serialFinalDelay;
+  size_t serialFinalPosition=0;
   Slew profileSlew;float profileTarget=1.f;std::array<float,128> branchTrace{},weightSum{},limiterDelta{};
   void prepareParallel(double rate)noexcept{profileSlew.prepare(rate,profileTarget);meterCoefficient=static_cast<float>(std::exp(-1/(rate*.4)));branchEnergy={};compensationSlew.prepare(rate,compensated?1.f:0.f);for(size_t i=0;i<6;++i){trimSlew[i].prepare(rate,dbGain(targetTrimDb[i]));mixSlew[i].prepare(rate,targetMix[i]);}}
   void parallelSettings(bool normalize,std::array<float,6> trims,std::array<float,6> mixes)noexcept{compensated=normalize;targetTrimDb=trims;targetMix=mixes;}
@@ -103,13 +105,20 @@ class SerialGraph {
        l[i]=originalInput[0][i]+blend*(l[i]-originalInput[0][i]);
        r[i]=originalInput[1][i]+blend*(r[i]-originalInput[1][i]);
       }
-      if(extended)engine.process(l,r,n,false,trace,2);
-      finalTruePeak.process(l,r,n);break;
+      if(extended)for(int i=0;i<n;++i){
+       for(int c=0;c<2;++c){
+        float& sample=(c==0?l:r)[i];const float delayed=serialFinalDelay[c][serialFinalPosition];
+        serialFinalDelay[c][serialFinalPosition]=sample;sample=delayed;
+       }
+       serialFinalPosition=(serialFinalPosition+1)%serialFinalDelay[0].size();
+      }
+      finalTruePeak.process(l,r,n,trace);break;
     case 11:restoration.process(l,r,n);break;
    }
   }
   void process(float* l,float* r,int n,float* trace) noexcept {
    if(extended&&!parallel){
+    std::fill_n(trace,n,1.f);
     for(int i=0;i<n;++i){
      originalInput[0][i]=profileDryDelay[0][profileDryPosition];
      originalInput[1][i]=profileDryDelay[1][profileDryPosition];
@@ -139,8 +148,8 @@ class SerialGraph {
  bool requestedParallel=false;std::array<bool,6> requestedPresent{},requestedEnabled{true,true,true,true,true,true};
  std::array<std::array<float,128>,2> scratch{};std::array<float,128> trace{};
 public:
- void prepare(double rate,bool legacy=false,int code=0){rate=std::isfinite(rate)&&rate>=8000&&rate<=384000?rate:48000;requested=decodeOrder(code,legacy);active=0;progress=1;step=static_cast<float>(1/(rate*.02));for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.order=requested;b.extended=requestedExtended;b.fullOrder=requestedFull;b.engine.prepare(rate);b.stereo.prepare(rate);b.dynamics.prepare(rate);b.dynamicEq.prepare(rate);b.stabilizer.prepare(rate);b.analogExciter.prepare(rate);b.bassArchitect.prepare(rate);b.transientSculptor.prepare(rate);b.restoration.prepare(rate);b.finalTruePeak.prepare(rate);b.parallel=requestedParallel;b.present=requestedPresent;b.enabled=requestedEnabled;b.prepareParallel(rate);b.alignPosition=0;b.profileDryDelay={};b.profileDryPosition=0;for(auto& module:b.alignment)for(auto& channel:module)channel.assign(static_cast<size_t>(b.engine.latency()+1),0);}}
- void reset()noexcept{progress=1;for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.engine.reset();b.stereo.reset();b.dynamics.reset();b.dynamicEq.reset();b.stabilizer.reset();b.analogExciter.reset();b.bassArchitect.reset();b.transientSculptor.reset();b.restoration.reset();b.finalTruePeak.reset();b.parallel=requestedParallel;b.extended=requestedExtended;b.fullOrder=requestedFull;b.present=requestedPresent;b.branchEnergy={};b.compensationSlew.value=b.compensated?1.f:0.f;b.alignPosition=0;b.profileDryDelay={};b.profileDryPosition=0;for(size_t i=0;i<6;++i){b.trimSlew[i].value=dbGain(b.targetTrimDb[i]);b.mixSlew[i].value=b.targetMix[i];}for(auto& module:b.alignment)for(auto& channel:module)std::fill(channel.begin(),channel.end(),0);}}
+ void prepare(double rate,bool legacy=false,int code=0){rate=std::isfinite(rate)&&rate>=8000&&rate<=384000?rate:48000;requested=decodeOrder(code,legacy);active=0;progress=1;step=static_cast<float>(1/(rate*.02));for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.order=requested;b.extended=requestedExtended;b.fullOrder=requestedFull;b.engine.prepare(rate);b.stereo.prepare(rate);b.dynamics.prepare(rate);b.dynamicEq.prepare(rate);b.stabilizer.prepare(rate);b.analogExciter.prepare(rate);b.bassArchitect.prepare(rate);b.transientSculptor.prepare(rate);b.restoration.prepare(rate);b.finalTruePeak.prepare(rate);b.parallel=requestedParallel;b.present=requestedPresent;b.enabled=requestedEnabled;b.prepareParallel(rate);b.alignPosition=0;b.profileDryDelay={};b.profileDryPosition=0;b.serialFinalPosition=0;for(auto& channel:b.serialFinalDelay)channel.assign(static_cast<size_t>(b.engine.latency()),0.f);for(auto& module:b.alignment)for(auto& channel:module)channel.assign(static_cast<size_t>(b.engine.latency()+1),0);}}
+ void reset()noexcept{progress=1;for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.engine.reset();b.stereo.reset();b.dynamics.reset();b.dynamicEq.reset();b.stabilizer.reset();b.analogExciter.reset();b.bassArchitect.reset();b.transientSculptor.reset();b.restoration.reset();b.finalTruePeak.reset();b.parallel=requestedParallel;b.extended=requestedExtended;b.fullOrder=requestedFull;b.present=requestedPresent;b.branchEnergy={};b.compensationSlew.value=b.compensated?1.f:0.f;b.alignPosition=0;b.profileDryDelay={};b.profileDryPosition=0;b.serialFinalPosition=0;for(auto& channel:b.serialFinalDelay)std::fill(channel.begin(),channel.end(),0.f);for(size_t i=0;i<6;++i){b.trimSlew[i].value=dbGain(b.targetTrimDb[i]);b.mixSlew[i].value=b.targetMix[i];}for(auto& module:b.alignment)for(auto& channel:module)std::fill(channel.begin(),channel.end(),0);}}
  int latency()const noexcept{return banks[active].engine.latency()+AnalogExciter::latencySamples()+FinalTruePeak::latencySamples;}
  void parameters(float hz,float db,float q,float ceiling,bool eq,bool lim)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.engine.parameters(hz,db,q,ceiling,eq,lim);}}
  void limiterParameters(float drive,float release)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.engine.limiterParameters(drive,release);}}

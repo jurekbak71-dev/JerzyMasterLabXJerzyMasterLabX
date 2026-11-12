@@ -78,7 +78,7 @@ public:
   gain_=1.f;reading_={};scope_.reset();
  }
  FinalTruePeakReading reading()const noexcept{return reading_;}
- void process(float* left,float* right,int count)noexcept{
+ void process(float* left,float* right,int count,float* gainTrace=nullptr)noexcept{
   if(!left||!right||count<=0)return;
   // Inactive stage keeps only its fixed PDC delay. Skip all 4x polyphase
   // convolution, peak queue updates and gain control to avoid DSP CPU waste.
@@ -89,6 +89,7 @@ public:
     delay_[1][delayPosition_]=sane(right[i],-16.f,16.f);
     const int read=(delayPosition_+1)%static_cast<int>(delay_[0].size());
     left[i]=delay_[0][read];right[i]=delay_[1][read];
+    if(gainTrace)gainTrace[i]*=1.f;
     delayPosition_=read;
    }
    history_={};histPosition_=0;peakHead_=peakTail_=0;
@@ -167,6 +168,7 @@ public:
    // detector's conservative 8x reconstructed output safety margin.
    left[i]=std::clamp(y[0],-ceiling,ceiling);
    right[i]=std::clamp(y[1],-ceiling,ceiling);
+   if(gainTrace)gainTrace[i]*=gain_;
    scope_.push(.5f*(delay_[0][outputPosition]+delay_[1][outputPosition]),
                .5f*(left[i]+right[i]),gain_);
    outputPeak=std::max(outputPeak,std::max(std::abs(left[i]),std::abs(right[i])));
