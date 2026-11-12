@@ -65,6 +65,7 @@ class SerialGraph {
   AnalogExciter analogExciter;BassArchitect bassArchitect;
   TransientSculptor transientSculptor;AudioRestoration restoration;FinalTruePeak finalTruePeak;
   bool extended=false;FullModuleOrder fullOrder=defaultFullOrder;
+  bool lowLatencyProfile=false;
   ModuleOrder order{5,0,1,2,3,4};
   bool parallel=false,compensated=false;std::array<bool,6> present{},enabled{true,true,true,true,true,true};
   std::array<float,6> targetTrimDb{},targetMix{1,1,1,1,1,1},branchEnergy{};
@@ -129,7 +130,7 @@ class SerialGraph {
        l[i]=originalInput[0][i]+blend*(l[i]-originalInput[0][i]);
        r[i]=originalInput[1][i]+blend*(r[i]-originalInput[1][i]);
       }
-      if(extended||fullParallel)for(int i=0;i<n;++i){
+      if((extended||fullParallel)&&!lowLatencyProfile)for(int i=0;i<n;++i){
        for(int c=0;c<2;++c){
         float& sample=(c==0?l:r)[i];const float delayed=serialFinalDelay[c][serialFinalPosition];
         serialFinalDelay[c][serialFinalPosition]=sample;sample=delayed;
@@ -172,11 +173,12 @@ class SerialGraph {
  FullModuleOrder requestedFull=defaultFullOrder;bool requestedExtended=false;
  bool requestedParallel=false;std::array<bool,6> requestedPresent{},requestedEnabled{true,true,true,true,true,true};
  bool requestedFullParallel=false;std::array<bool,fullParallelBranchCount> requestedFullPresent{},requestedFullEnabled{true,true,true,true,true,true,true,true,true};
+ bool requestedLowLatency=false;float requestedProfileTarget=1.f;
  std::array<std::array<float,128>,2> scratch{};std::array<float,128> trace{};
 public:
- void prepare(double rate,bool legacy=false,int code=0){rate=std::isfinite(rate)&&rate>=8000&&rate<=384000?rate:48000;requested=decodeOrder(code,legacy);active=0;progress=1;step=static_cast<float>(1/(rate*.02));for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.order=requested;b.extended=requestedExtended;b.fullOrder=requestedFull;b.engine.prepare(rate);b.stereo.prepare(rate);b.dynamics.prepare(rate);b.dynamicEq.prepare(rate);b.stabilizer.prepare(rate);b.analogExciter.prepare(rate);b.bassArchitect.prepare(rate);b.transientSculptor.prepare(rate);b.restoration.prepare(rate);b.finalTruePeak.prepare(rate);b.parallel=requestedParallel;b.fullParallel=requestedFullParallel;b.present=requestedPresent;b.enabled=requestedEnabled;b.fullPresent=requestedFullPresent;b.fullEnabled=requestedFullEnabled;b.prepareParallel(rate);b.alignPosition=0;b.fullAlignPosition=0;b.fullAlignment={};b.profileDryDelay={};b.profileDryPosition=0;b.serialFinalPosition=0;for(auto& channel:b.serialFinalDelay)channel.assign(static_cast<size_t>(b.engine.latency()),0.f);for(auto& module:b.alignment)for(auto& channel:module)channel.assign(static_cast<size_t>(b.engine.latency()+1),0);}}
+ void prepare(double rate,bool legacy=false,int code=0,bool lowLatency=false){rate=std::isfinite(rate)&&rate>=8000&&rate<=384000?rate:48000;requested=decodeOrder(code,legacy);requestedLowLatency=lowLatency;active=0;progress=1;step=static_cast<float>(1/(rate*.02));for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.order=requested;b.extended=requestedExtended;b.fullOrder=requestedFull;b.lowLatencyProfile=requestedLowLatency;b.profileTarget=requestedLowLatency?requestedProfileTarget:1.f;b.engine.prepare(rate);b.stereo.prepare(rate);b.dynamics.prepare(rate);b.dynamicEq.prepare(rate);b.stabilizer.prepare(rate);b.analogExciter.prepare(rate);b.bassArchitect.prepare(rate);b.transientSculptor.prepare(rate);b.restoration.prepare(rate);b.finalTruePeak.prepare(rate);b.parallel=requestedParallel;b.fullParallel=requestedFullParallel;b.present=requestedPresent;b.enabled=requestedEnabled;b.fullPresent=requestedFullPresent;b.fullEnabled=requestedFullEnabled;b.prepareParallel(rate);b.alignPosition=0;b.fullAlignPosition=0;b.fullAlignment={};b.profileDryDelay={};b.profileDryPosition=0;b.serialFinalPosition=0;for(auto& channel:b.serialFinalDelay)channel.assign(static_cast<size_t>(b.engine.latency()),0.f);for(auto& module:b.alignment)for(auto& channel:module)channel.assign(static_cast<size_t>(b.engine.latency()+1),0);}}
  void reset()noexcept{progress=1;for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.engine.reset();b.stereo.reset();b.dynamics.reset();b.dynamicEq.reset();b.stabilizer.reset();b.analogExciter.reset();b.bassArchitect.reset();b.transientSculptor.reset();b.restoration.reset();b.finalTruePeak.reset();b.parallel=requestedParallel;b.fullParallel=requestedFullParallel;b.extended=requestedExtended;b.fullOrder=requestedFull;b.present=requestedPresent;b.fullPresent=requestedFullPresent;b.branchEnergy={};b.fullBranchEnergy={};b.compensationSlew.value=b.compensated?1.f:0.f;b.alignPosition=0;b.fullAlignPosition=0;b.fullAlignment={};b.profileDryDelay={};b.profileDryPosition=0;b.serialFinalPosition=0;for(auto& channel:b.serialFinalDelay)std::fill(channel.begin(),channel.end(),0.f);for(size_t i=0;i<6;++i){b.trimSlew[i].value=dbGain(b.targetTrimDb[i]);b.mixSlew[i].value=b.targetMix[i];}for(size_t i=0;i<fullParallelBranchCount;++i){b.fullTrimSlew[i].value=dbGain(b.fullTargetTrimDb[i]);b.fullMixSlew[i].value=b.fullTargetMix[i];}for(auto& module:b.alignment)for(auto& channel:module)std::fill(channel.begin(),channel.end(),0);}}
- int latency()const noexcept{return banks[active].engine.latency()+AnalogExciter::latencySamples()+FinalTruePeak::latencySamples;}
+ int latency()const noexcept{return (banks[active].lowLatencyProfile?0:banks[active].engine.latency())+AnalogExciter::latencySamples()+FinalTruePeak::latencySamples;}
  void parameters(float hz,float db,float q,float ceiling,bool eq,bool lim)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.engine.parameters(hz,db,q,ceiling,eq,lim);}}
  void limiterParameters(float drive,float release)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.engine.limiterParameters(drive,release);}}
  void setBand(size_t i,float hz,float db,float q)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.engine.setBand(i,hz,db,q);}}
@@ -207,7 +209,8 @@ public:
  void fullParallelTopology(bool parallel,std::array<bool,fullParallelBranchCount> present,std::array<bool,fullParallelBranchCount> enabled)noexcept{requestedParallel=parallel;requestedFullParallel=true;requestedFullPresent=present;requestedFullEnabled=enabled;for(int bank=0;bank<2;++bank){banks[bank].fullEnabled=enabled;}}
  void profileSettings(float target)noexcept{
   const float safe=std::isfinite(target)?std::clamp(target,0.f,1.f):1.f;
-  for(int bank=0;bank<2;++bank)banks[bank].profileTarget=safe;
+  requestedProfileTarget=safe;
+  for(int bank=0;bank<2;++bank)banks[bank].profileTarget=banks[bank].lowLatencyProfile?safe:1.f;
  }
  void parallelSettings(bool compensated,std::array<float,6> trims,std::array<float,6> mixes)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.parallelSettings(compensated,trims,mixes);}}
  void fullParallelSettings(bool compensated,std::array<float,fullParallelBranchCount> trims,std::array<float,fullParallelBranchCount> mixes)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.compensated=compensated;b.fullTargetTrimDb=trims;b.fullTargetMix=mixes;}}

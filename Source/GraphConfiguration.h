@@ -52,7 +52,7 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
  rs.reductionDb=v(298);rs.quality=v(299);
  rs.protect=v(300);rs.mix=v(301);
  engine.restorationSettings(rs);
- engine.profileSettings(v(161)<.5f&&v(302)>.5f?std::clamp(v(303),0.f,1.f):1.f);
+ engine.profileSettings(v(161)<.5f?std::clamp(v(303),0.f,1.f):1.f);
 
   engine.routing(static_cast<int>(v(138)),v(6)>.5f);
   FullModuleOrder full{};

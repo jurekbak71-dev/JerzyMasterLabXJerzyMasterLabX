@@ -88,10 +88,12 @@ int main(){
   if(ranged->paramID.startsWithIgnoreCase("stem")){std::cerr<<"STEMS parameter retained";return 1;}
  }
  juce::MidiBuffer midi;
+ bool restoredInsert=false;for(auto* base:source->getParameters())if(auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(base);parameter&&parameter->paramID=="workMode")restoredInsert=parameter->convertFrom0to1(parameter->getValue())>.5f;
  for(double rate:{44100.,48000.,96000.,192000.}){
   source->setNonRealtime(false);target->setNonRealtime(true);
   for(auto* processor:{source.get(),target.get()}){processor->setRateAndBufferSizeDetails(rate,32);processor->prepareToPlay(rate,32);}
-  if(source->getLatencySamples()!=static_cast<int>(std::ceil(rate*.005))+masterlab::AnalogExciter::latencySamples()+masterlab::FinalTruePeak::latencySamples||source->getLatencySamples()!=target->getLatencySamples()){std::cerr<<"restored PDC mismatch";return 1;}
+  const int expectedLatency=(restoredInsert?0:static_cast<int>(std::ceil(rate*.005)))+masterlab::AnalogExciter::latencySamples()+masterlab::FinalTruePeak::latencySamples;
+  if(source->getLatencySamples()!=expectedLatency||source->getLatencySamples()!=target->getLatencySamples()){std::cerr<<"restored PDC mismatch";return 1;}
   for(int size:{1,257,4097}){
    juce::AudioBuffer<float> live(2,size),offline(2,size);
    for(int i=0;i<size;++i){live.setSample(0,i,.02f*std::sin(i*.17f));live.setSample(1,i,.017f*std::cos(i*.11f));}offline.makeCopyOf(live);

@@ -32,7 +32,13 @@ public:
   g.setColour(juce::Colour(0xffaab9c9));g.setFont(juce::FontOptions(14.f));
   g.drawText("MASTER: fully processed chain. INSERT: smooth time-aligned mix with original input, preserving transient character.",
     32,265,getWidth()-64,54,juce::Justification::topLeft);
-  g.drawText("No DSP parameters are silently overwritten. Host latency is unchanged in this iteration; a lower-latency graph is not implemented.",
-    32,335,getWidth()-64,60,juce::Justification::topLeft);
+  const bool activeInsert=processor_.preparedInsertProfile.load(std::memory_order_acquire);
+  const bool requestedInsert=processor_.state.getRawParameterValue("workMode")->load()>.5f;
+  g.setColour(activeInsert?juce::Colour(0xff82dfcd):juce::Colour(0xffe7bb6a));
+  g.drawText(juce::String("ACTIVE PROFILE: ")+(activeInsert?"INSERT / 176 samples at 48 kHz":"MASTER / 416 samples at 48 kHz")+(activeInsert==requestedInsert?"":"  |  requested change applies on audio restart"),
+    32,322,getWidth()-64,28,juce::Justification::topLeft);
+  g.setColour(juce::Colour(0xffaab9c9));
+  g.drawText("The profile is latched only in prepareToPlay. Automation during audio cannot resize delay buffers or change host PDC.",
+    32,360,getWidth()-64,60,juce::Justification::topLeft);
  }
 };

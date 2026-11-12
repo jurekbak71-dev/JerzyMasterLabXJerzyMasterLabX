@@ -43,14 +43,14 @@ Files: AnalogizerPanel.h, StudioTheme.h, AnalogExciter.h, Analogizer.h, tests/An
 
 ### Task 3: Final limiter and MASTER/INSERT latency
 Files: FinalTruePeak.h, Engine.h, SerialGraph.h, Processor.h, FinalTruePeakPanel.h, ProcessingModePanel.h and related tests.
-- [ ] Audit combined-stage GR, bypass transitions and independent reconstructed peak tests.
-- [ ] Implement actual attack/lookahead/transient controls and oversampling with fixed aligned paths; measure ceiling error and aliasing for each mode.
-- [ ] Implement explicit lower-latency INSERT preparation/profile and host PDC reporting without callback latency notifications or implicit parameter overwrites.
+- [x] Audit combined-stage GR, bypass transitions and independent reconstructed peak tests.
+- [x] Implement actual attack/lookahead/transient controls and oversampling with fixed aligned paths; measure ceiling error and aliasing for each mode.
+- [x] Implement explicit lower-latency INSERT preparation/profile and host PDC reporting without callback latency notifications or implicit parameter overwrites.
 
 ### Task 4: Stereo and routing
 Files: Stereo.h, SerialGraph.h, ModulePanel.h, ParallelPanel.h, related tests.
-- [ ] Read detailed Stereo requirements; implement distinct channel Haas/ping-pong and correctly described phase operation; measure final-output correlation and mono null behavior.
-- [ ] Extend supported parallel routes to the full actual node set with latency alignment, explicit final-slot rules and smoothing; test order/state/automation transitions.
+- [x] Read detailed Stereo requirements; implement distinct channel Haas/ping-pong and correctly described phase operation; measure final-output correlation and mono null behavior.
+- [x] Extend supported parallel routes to the full actual node set with latency alignment, explicit final-slot rules and smoothing; test order/state/automation transitions.
 
 ### Task 5: Restoration and Brain
 Files: AudioRestoration.h, RestorationPanel.h, Brain.h/BrainRules.h/ProcessorBrain.h as actually present, related tests.
@@ -60,8 +60,8 @@ Files: AudioRestoration.h, RestorationPanel.h, Brain.h/BrainRules.h/ProcessorBra
 
 ### Task 6: Remaining instruments and GUI acceptance
 Files: Editor.h, ConceptCOverviewPanel.h, ModulePanel.h, TransientSculptor.h/Panel.h, BassArchitectPanel.h, GuiSmoke.h.
-- [ ] Add actual transient envelopes/events and band modulation histories, Dynamic EQ energy/action heatmap, Dynamics before/after energy and full-band GR.
-- [ ] Fix Brain/Inspector/EQ compact geometry and label collisions; capture all screens in signal/silence/bypass and HiDPI conditions.
+- [x] Add actual transient envelopes/events and band modulation histories, Dynamic EQ energy/action heatmap, Dynamics before/after energy and full-band GR.
+- [ ] Fix Brain/Inspector/EQ compact geometry and label collisions; capture all screens in signal/silence/bypass and HiDPI conditions. (Brain compact correction and three-size captures complete; explicit silence/bypass/HiDPI visual matrix remains.)
 - [ ] Verify meters against independent reference signals and document tolerances.
 
 ### Task 7: Final integration and delivery
@@ -92,3 +92,5 @@ Ruling: pull forward shared Brain graph configuration from Task 5 after a regres
 2026-11-12 visualization audit: Dynamic EQ already renders an eight-band measured action heatmap and Dynamics already renders measured pre/post full-band energy plus down/up/punch histories. The missing Transient evidence was implemented: DSP now reports per-band fast/slow envelopes and per-callback rising-event counts; the panel stores 240 snapshots and renders Low/Mid/High histories with event ticks. The targeted DSP test passes at 44.1/48/96/192 kHz and GUI smoke passes at three sizes; inspected `module-6-1000x700-smoke.png` after correcting label/legend geometry. Final plugin CTest after this telemetry/GUI change passed 51/51 (120.13 s).
 
 2026-11-12 compact GUI inspection: the 750x550 Brain report had only 124 px at the desktop 14 px font. Compact mode now uses 12 px and extends the report to the Apply boundary; the read-only editor's scrollbar remains visible for additional evidence. Rebuilt plugin GUI smoke passed all three sizes and inspected `module-8-750x550-smoke.png`. Inspector was readable in the available capture; EQ remains dense at 750x550 but controls fit and no component-bound collision was reproduced.
+
+2026-11-12 MASTER/INSERT final stage: the automatable `workMode` is now a pending request while audio is prepared. `prepareToPlay` latches the active profile; callback automation cannot resize buffers or change host PDC. MASTER retains the 5 ms compatibility FIFO (416 samples total at 48 kHz); INSERT omits only that FIFO and retains 48-sample Analog Exciter alignment plus 128-sample FinalTruePeak PDC (176 samples total). A bypass impulse appears exactly at sample 176 in prepared INSERT. A MASTER/INSERT request takes effect only on the next prepare, and the panel displays active versus pending state. Brain preview-host parity remains exact for serial/parallel and both profiles at 44.1/48/96/192 kHz. Final Linux plugin CTest passed 51/51 (124.24 s) and GUI smoke passed three sizes. Host-specific restart/reprepare behavior remains an external DAW acceptance gate.

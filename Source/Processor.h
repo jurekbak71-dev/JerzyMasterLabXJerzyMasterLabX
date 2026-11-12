@@ -25,6 +25,7 @@ public:
  masterlab::WindowMeter inputMeter,outputMeter;
  masterlab::LoudnessMeter inputLoudness,outputLoudness;
  std::atomic<bool> resetMeterRequest{false};
+ std::atomic<bool> preparedInsertProfile{false};
  std::array<std::array<float,128>,2> inputScratch{};
  juce::AbstractFifo limiterFifo{2048};std::array<masterlab::LimiterFrame,2048> limiterFrames{};
  std::array<float,128> limiterGainTrace{};
@@ -187,7 +188,9 @@ public:
  bool isBusesLayoutSupported(const BusesLayout& l)const override{return l.getMainInputChannelSet()==juce::AudioChannelSet::stereo()&&l.getMainOutputChannelSet()==juce::AudioChannelSet::stereo();}
  void prepareToPlay(double sr,int)override{
   masterlab::configureGraph(engine,[&](size_t i){return parameters[i]->load();});
-  engine.prepare(sr,parameters[6]->load()>.5f,static_cast<int>(parameters[138]->load()));
+  const bool insertProfile=parameters[302]->load()>.5f;
+  engine.prepare(sr,parameters[6]->load()>.5f,static_cast<int>(parameters[138]->load()),insertProfile);
+  preparedInsertProfile.store(insertProfile,std::memory_order_release);
   displayRate.store(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000);
   limiterMeter.prepare(displayRate.load());inputMeter.prepare(displayRate.load());
   outputMeter.prepare(displayRate.load());inputLoudness.prepare(displayRate.load());
@@ -197,13 +200,13 @@ public:
   setLatencySamples(totalLatency);
   for(auto& channel:hostDryDelay)channel.assign(static_cast<size_t>(engine.latency()+1),0);
   hostDryPosition=0;hostBypassMix=0;hostBypassTarget=false;
-  profileBlend=parameters[302]->load()>.5f?parameters[303]->load():1.f;
+  profileBlend=insertProfile?parameters[303]->load():1.f;
   profileStep=static_cast<float>(1.-std::exp(-1./(displayRate.load()*.02)));
   hostBypassStep=static_cast<float>(1/(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr*.02:960.));
  }
  void releaseResources()override{
  }void reset()override{
- brain.cancelRT();engine.reset();updateModules();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;profileBlend=parameters[302]->load()>.5f?parameters[303]->load():1.f;}
+ brain.cancelRT();engine.reset();updateModules();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;profileBlend=preparedInsertProfile.load(std::memory_order_acquire)?parameters[303]->load():1.f;}
  void processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,false);}
  void processBlockBypassed(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,true);}
  void renderAudio(juce::AudioBuffer<float>& b,bool hostBypassed){
@@ -212,7 +215,7 @@ public:
  auto value=[&](size_t index){return parameters[index]->load();};
  masterlab::configureGraph(engine,value);
  const bool serialRouter=value(161)<.5f;
- const float requestedBlend=value(302)>.5f?std::clamp(value(303),0.f,1.f):1.f;
+ const float requestedBlend=preparedInsertProfile.load(std::memory_order_acquire)?std::clamp(value(303),0.f,1.f):1.f;
  hostBypassTarget=hostBypassed;
  if(hostDryDelay[0].empty()){b.clear();return;}
  for(int offset=0;offset<b.getNumSamples();){int length=std::min(128,b.getNumSamples()-offset);
