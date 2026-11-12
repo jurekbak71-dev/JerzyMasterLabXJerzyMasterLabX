@@ -29,13 +29,13 @@ class StereoImager {
  // Two high-pass poles protect bass; first-order all-pass rotates generated Side.
  // Added Side cancels algebraically in mono; the dry Mid is never delayed.
  float bassLow1=0,bassLow2=0,allpassState=0,hpCoefficient=0,apCoefficient=0;
- std::vector<float> sideDelay;size_t sideWrite=0;float phaseMemory=0,motionPhase=0;
+ std::array<std::vector<float>,2> channelDelay;size_t delayWrite=0;float phaseMemory=0,motionPhase=0;
  Slew stereoize,delayAmount,phaseAmount,motionRateSlew,motionDepthSlew;
  Slew mix,low,mid,high,air,splitA,splitB,splitC,balance,mono,amount,delta;std::array<Slew,4> bandBlend{},audition{};
  std::array<double,4> ll{},rr{},lr{};StereoSettings config;
 public:
- void prepare(double sr){rate=std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000;hpCoefficient=static_cast<float>(1-std::exp(-6.283185307179586*300/rate));sideDelay.assign(static_cast<size_t>(rate*.031)+4,0.f);const float t=static_cast<float>(std::tan(3.141592653589793*700/rate));apCoefficient=(t-1)/(t+1);reset();}
- void reset()noexcept {splitMid={};splitSide={};splitGenerated={};bassLow1=bassLow2=allpassState=phaseMemory=motionPhase=0;sideWrite=0;std::fill(sideDelay.begin(),sideDelay.end(),0.f);stereoize.prepare(rate,config.stereoize);delayAmount.prepare(rate,config.delayMs);phaseAmount.prepare(rate,config.phaseRotate);motionRateSlew.prepare(rate,config.motionRate);motionDepthSlew.prepare(rate,config.motionDepth);ll={};rr={};lr={};mix.prepare(rate,config.enabled?1.f:0.f);low.prepare(rate,config.monoBass?0.f:config.low);mid.prepare(rate,config.mid);high.prepare(rate,config.high);air.prepare(rate,config.air);splitC.prepare(rate,config.topSplit);splitA.prepare(rate,config.lowSplit);splitB.prepare(rate,config.highSplit);balance.prepare(rate,config.balance);mono.prepare(rate,config.mono?1.f:0.f);amount.prepare(rate,config.amount);delta.prepare(rate,config.delta?1.f:0.f);const bool soloing=std::any_of(config.solo.begin(),config.solo.end(),[](bool s){return s;});for(size_t i=0;i<4;++i){bandBlend[i].prepare(rate,config.bandEnabled[i]?1.f:0.f);audition[i].prepare(rate,!soloing||config.solo[i]?1.f:0.f);}}
+ void prepare(double sr){rate=std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000;hpCoefficient=static_cast<float>(1-std::exp(-6.283185307179586*300/rate));for(auto& delay:channelDelay)delay.assign(static_cast<size_t>(rate*.031)+4,0.f);const float t=static_cast<float>(std::tan(3.141592653589793*700/rate));apCoefficient=(t-1)/(t+1);reset();}
+ void reset()noexcept {splitMid={};splitSide={};splitGenerated={};bassLow1=bassLow2=allpassState=phaseMemory=motionPhase=0;delayWrite=0;for(auto& delay:channelDelay)std::fill(delay.begin(),delay.end(),0.f);stereoize.prepare(rate,config.stereoize);delayAmount.prepare(rate,config.delayMs);phaseAmount.prepare(rate,config.phaseRotate);motionRateSlew.prepare(rate,config.motionRate);motionDepthSlew.prepare(rate,config.motionDepth);ll={};rr={};lr={};mix.prepare(rate,config.enabled?1.f:0.f);low.prepare(rate,config.monoBass?0.f:config.low);mid.prepare(rate,config.mid);high.prepare(rate,config.high);air.prepare(rate,config.air);splitC.prepare(rate,config.topSplit);splitA.prepare(rate,config.lowSplit);splitB.prepare(rate,config.highSplit);balance.prepare(rate,config.balance);mono.prepare(rate,config.mono?1.f:0.f);amount.prepare(rate,config.amount);delta.prepare(rate,config.delta?1.f:0.f);const bool soloing=std::any_of(config.solo.begin(),config.solo.end(),[](bool s){return s;});for(size_t i=0;i<4;++i){bandBlend[i].prepare(rate,config.bandEnabled[i]?1.f:0.f);audition[i].prepare(rate,!soloing||config.solo[i]?1.f:0.f);}}
  void settings(StereoSettings c)noexcept {config=c;}
  void process(float* left,float* right,int n)noexcept {
   if(!config.enabled&&mix.value<1e-6f){mix.value=0;ll={};rr={};lr={};return;}
@@ -55,27 +55,33 @@ public:
    const float monoMix=mono.tick(config.mono?1.f:0.f);float outSide=0,outMid=0;const float intensity=amount.tick(config.amount);
    for(size_t band=0;band<4;++band){const float width=1+intensity*bandBlend[band].tick(config.bandEnabled[band]?1.f:0.f)*(widths[band]-1),listen=audition[band].tick(!soloing||config.solo[band]?1.f:0.f);float side=(sides[band]*width+(band==0?0.f:generated[band]*creation*intensity*bandBlend[band].value*width))*(1-monoMix);outSide+=side*listen;outMid+=mids[band]*listen;
     const double bl=mids[band]+side,br=mids[band]-side;ll[band]=meter*ll[band]+(1-meter)*bl*bl;rr[band]=meter*rr[band]+(1-meter)*br*br;lr[band]=meter*lr[band]+(1-meter)*bl*br;}
-   // Haas and all-pass processing affect only Side; dry Mid remains aligned.
-   // This preserves L+R of a centered image, though stereo peaks can rise.
-   if(!sideDelay.empty()){
-    sideDelay[sideWrite]=outSide;
-    const float ms=std::clamp(delayAmount.tick(config.delayMs),0.f,30.f);
-    const float sampleOffset=ms*.001f*static_cast<float>(rate);
-    const float read=static_cast<float>(sideWrite)+static_cast<float>(sideDelay.size())-sampleOffset;
-    const int i0=static_cast<int>(std::floor(read))%static_cast<int>(sideDelay.size());
-    const int i1=(i0+1)%static_cast<int>(sideDelay.size());
-    const float fraction=read-std::floor(read);
-    const float delayed=sideDelay[static_cast<size_t>(i0)]*(1.f-fraction)+sideDelay[static_cast<size_t>(i1)]*fraction;
-    outSide+=(delayed-outSide)*std::clamp(ms/3.f,0.f,1.f);
-    sideWrite=(sideWrite+1)%sideDelay.size();
-   }
    const float phaseSignal=apCoefficient*outSide+phaseMemory;
    phaseMemory=outSide-apCoefficient*phaseSignal;
    outSide+=phaseAmount.tick(config.phaseRotate)*(phaseSignal-outSide);
    motionPhase+=6.283185307179586f*std::clamp(motionRateSlew.tick(config.motionRate),.05f,8.f)/static_cast<float>(rate);
    if(motionPhase>6.283185307179586f)motionPhase-=6.283185307179586f;
-   const float motion=std::clamp(motionDepthSlew.tick(config.motionDepth),0.f,1.f)*.75f*std::sin(motionPhase);
-   const float pan=std::clamp(balance.tick(config.balance)+motion,-1.f,1.f),blend=mix.tick(config.enabled?1.f:0.f);float wetL=(outMid+outSide)*(1-std::max(0.f,pan)),wetR=(outMid-outSide)*(1+std::min(0.f,pan));const float monoSignal=(wetL+wetR)*.5f;wetL+=monoMix*(monoSignal-wetL);wetR+=monoMix*(monoSignal-wetR);
+   const float motion=std::clamp(motionDepthSlew.tick(config.motionDepth),0.f,1.f)*std::sin(motionPhase);
+   const float pan=std::clamp(balance.tick(config.balance),-1.f,1.f),blend=mix.tick(config.enabled?1.f:0.f);float wetL=(outMid+outSide)*(1-std::max(0.f,pan)),wetR=(outMid-outSide)*(1+std::min(0.f,pan));
+   // Interpolated channel Haas: at rest L carries the selected delay and R
+   // remains direct. Motion continuously trades that delay between channels,
+   // producing ping-pong timing rather than a level-only pan animation.
+   if(!channelDelay[0].empty()){
+    channelDelay[0][delayWrite]=wetL;channelDelay[1][delayWrite]=wetR;
+    const float baseMs=std::clamp(delayAmount.tick(config.delayMs),0.f,30.f);
+    const float delayMs[2]{baseMs*std::clamp(1.f+motion,0.f,1.f),baseMs*std::clamp(-motion,0.f,1.f)};
+    float delayed[2]{};
+    for(int channel=0;channel<2;++channel){
+     const float sampleOffset=delayMs[channel]*.001f*static_cast<float>(rate);
+     const float read=static_cast<float>(delayWrite)+static_cast<float>(channelDelay[channel].size())-sampleOffset;
+     const int i0=static_cast<int>(std::floor(read))%static_cast<int>(channelDelay[channel].size());
+     const int i1=(i0+1)%static_cast<int>(channelDelay[channel].size());
+     const float fraction=read-std::floor(read);
+     delayed[channel]=channelDelay[channel][static_cast<size_t>(i0)]*(1.f-fraction)+channelDelay[channel][static_cast<size_t>(i1)]*fraction;
+    }
+    if(baseMs>1.e-6f){wetL=delayed[0];wetR=delayed[1];}
+    delayWrite=(delayWrite+1)%channelDelay[0].size();
+   }
+   const float monoSignal=(wetL+wetR)*.5f;wetL+=monoMix*(monoSignal-wetL);wetR+=monoMix*(monoSignal-wetR);
    const float difference=delta.tick(config.delta?1.f:0.f);wetL+=difference*(l-2*wetL);wetR+=difference*(r-2*wetR);left[i]=clean(l+blend*(wetL-l));right[i]=clean(r+blend*(wetR-r));
   }
  }

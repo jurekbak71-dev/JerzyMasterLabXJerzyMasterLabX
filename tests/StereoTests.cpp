@@ -87,13 +87,14 @@ int main(int argc,char** argv){
   masterlab::StereoSettings c;c.enabled=true;c.delayMs=11.f;c.phaseRotate=.8f;c.stereoize=.2f;
   const auto shifted=render(dry,rate,c,257),single=render(dry,rate,c,1);
   check(shifted==single,"Haas and phase rotation depend on DAW block size");
-  double changed=0;
+  double changed=0,monoDry=0,monoWet=0;
   for(size_t i=rate;i<dry[0].size();++i){
-   const double sum=shifted[0][i]+shifted[1][i]-dry[0][i]-dry[1][i];
-   check(std::abs(sum)<2.e-6,"side-only stereo delay changed centered mono sum");
    changed+=std::abs(shifted[0][i]-dry[0][i]);
+   const double drySum=dry[0][i]+dry[1][i],wetSum=shifted[0][i]+shifted[1][i];
+   monoDry+=drySum*drySum;monoWet+=wetSum*wetSum;
   }
   check(changed/(dry[0].size()-rate)>.01,"Haas/phase DSP has negligible effect");
+  check(monoWet/monoDry>.25&&monoWet/monoDry<2.5,"channel Haas causes unsafe mono energy loss or gain");
   c.motionRate=.8f;c.motionDepth=.6f;
   const auto moving=render(dry,rate,c,257),movingSingle=render(dry,rate,c,1);
   check(moving==movingSingle,"Stereo Motion LFO depends on DAW buffer size");
@@ -104,6 +105,30 @@ int main(int argc,char** argv){
    motion+=std::abs(moving[0][i]-shifted[0][i]);
   }
   check(motion/(dry[0].size()-rate)>.005,"Stereo Motion control has no actual action");
+ }
+
+ // Approved Haas/Motion contract: channel delay must create stereo from a
+ // centered transient, and Motion must move the delayed side between L/R.
+ {
+  constexpr int rate=48000,count=rate*2;
+  Audio impulses;for(auto& channel:impulses)channel.assign(count,0.f);
+  for(int i=2400;i<count;i+=4800)impulses[0][i]=impulses[1][i]=.5f;
+  masterlab::StereoSettings fixed;fixed.enabled=true;fixed.delayMs=10.f;
+  const auto haas=render(impulses,rate,fixed,257);
+  double sideEnergy=0.;for(int i=0;i<count;++i){const double side=haas[0][i]-haas[1][i];sideEnergy+=side*side;}
+  check(sideEnergy>.1,"Haas does not delay one real channel on centered transients");
+
+  auto moving=fixed;moving.motionRate=2.f;moving.motionDepth=1.f;
+  const auto pingPong=render(impulses,rate,moving,257);
+  bool leftDelayed=false,rightDelayed=false;
+  for(int impulse=2400;impulse<count;impulse+=4800){
+   double earlyL=0,earlyR=0,lateL=0,lateR=0;
+   for(int i=impulse;i<impulse+240;++i){earlyL+=std::abs(pingPong[0][i]);earlyR+=std::abs(pingPong[1][i]);}
+   for(int i=impulse+240;i<impulse+720;++i){lateL+=std::abs(pingPong[0][i]);lateR+=std::abs(pingPong[1][i]);}
+   leftDelayed|=lateL>lateR*1.2&&earlyR>earlyL*1.2;
+   rightDelayed|=lateR>lateL*1.2&&earlyL>earlyR*1.2;
+  }
+  check(leftDelayed&&rightDelayed,"Stereo Motion is not a channel-delay ping-pong");
  }
 
 }
