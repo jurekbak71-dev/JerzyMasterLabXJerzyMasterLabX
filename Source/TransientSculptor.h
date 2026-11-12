@@ -15,6 +15,8 @@ struct TransientSculptorSettings {
 struct TransientSculptorReading {
  float inputRms=0.f,outputRms=0.f,deltaRms=0.f;
  std::array<float,3> modulationRms{};
+ std::array<float,3> fastEnvelope{},slowEnvelope{};
+ std::array<unsigned,3> risingEvents{};
  ScopeCapture::Wave inputWave{},outputWave{};
 };
 class TransientSculptor {
@@ -27,6 +29,7 @@ class TransientSculptor {
  };
  struct Band {
   float fast=0.f,slow=0.f;
+  bool rising=false;
  };
  struct Channel {
   float low=0.f,midLow=0.f;
@@ -74,6 +77,7 @@ public:
   const float slowStep=static_cast<float>(1.-std::exp(-1./(rate_*.055)));
   double input2=0.,out2=0.,delta2=0.;
   std::array<double,3> modulation2{};
+  std::array<unsigned,3> risingEvents{};
   for(int i=0;i<n;++i){
    const float wet=active_.tick(settings_.enabled?1.f:0.f)*mix_.tick(safe(settings_.mix,0.f,1.f));
    const float output=std::pow(10.f,output_.tick(safe(settings_.outputDb,-12.f,12.f))*.05f);
@@ -99,6 +103,9 @@ public:
      e.slow+=slowStep*(level-e.slow);
      const float difference=e.fast-e.slow;
      const float normal=std::min(1.f,std::abs(difference)/(e.slow+.04f));
+     const bool rising=difference>0.f&&normal>.15f;
+     if(rising&&!e.rising)++risingEvents[k];
+     e.rising=rising;
      const float attackShape=std::max(0.f,difference)*normal/(std::abs(difference)+1e-12f);
      const float sustainShape=std::max(0.f,-difference)*normal/(std::abs(difference)+1e-12f);
      const float gain=std::clamp(1.f+3.2f*attack[k]*attackShape+2.3f*sustain[k]*sustainShape,.12f,4.5f);
@@ -122,6 +129,7 @@ public:
   reading_.outputRms=static_cast<float>(std::sqrt(out2*inv));
   reading_.deltaRms=static_cast<float>(std::sqrt(delta2*inv));
   for(int k=0;k<3;++k)reading_.modulationRms[k]=static_cast<float>(std::sqrt(modulation2[k]*inv));
+  for(int k=0;k<3;++k){reading_.fastEnvelope[k]=.5f*(channels_[0].envelope[k].fast+channels_[1].envelope[k].fast);reading_.slowEnvelope[k]=.5f*(channels_[0].envelope[k].slow+channels_[1].envelope[k].slow);reading_.risingEvents[k]=risingEvents[k];}
   reading_.inputWave=scope_.input();reading_.outputWave=scope_.output();
  }
 };

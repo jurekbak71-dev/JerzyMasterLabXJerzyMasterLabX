@@ -11,6 +11,9 @@ class TransientSculptorPanel final : public juce::Component {
  std::vector<std::unique_ptr<Knob>> knobs_;
  double scopeRate_=48000.;
  masterlab::TransientSculptorReading reading_{};
+ std::array<std::array<float,3>,240> fastHistory_{},slowHistory_{};
+ std::array<std::array<unsigned,3>,240> eventHistory_{};
+ size_t historyHead_=0,historyCount_=0;
  void addKnob(const char* label,const char* parameter){
   auto k=std::make_unique<Knob>();
   k->label.setText(label,juce::dontSendNotification);
@@ -39,7 +42,7 @@ public:
   }})addKnob(item.first,item.second);
  }
  ~TransientSculptorPanel()override{setLookAndFeel(nullptr);}
- void update(const Processor::ResponseFrame& f){reading_=f.transient;scopeRate_=f.rate;repaint();}
+ void update(const Processor::ResponseFrame& f){reading_=f.transient;scopeRate_=f.rate;fastHistory_[historyHead_]=reading_.fastEnvelope;slowHistory_[historyHead_]=reading_.slowEnvelope;eventHistory_[historyHead_]=reading_.risingEvents;historyHead_=(historyHead_+1)%fastHistory_.size();historyCount_=std::min(historyCount_+1,fastHistory_.size());repaint();}
  void resized()override{
   present_.setBounds(24,12,130,34);enabled_.setBounds(162,12,116,34);delta_.setBounds(290,12,116,34);
   const bool compact=getHeight()<440;
@@ -82,22 +85,16 @@ public:
   }
   g.setFont(11.f);g.setColour(juce::Colour(0xffe5d1c0));
   g.drawText("IN cyan / OUT amber | +/-1 FS | 0-"+juce::String(511000./scopeRate_,2)+" ms | rising trigger",36,92,getWidth()-72,19,juce::Justification::left);
-  const int y=getHeight()<440?330:std::max(412,getHeight()-91);
+  const int y=getHeight()<440?330:std::max(412,getHeight()-130);
   g.drawText("ACTUAL DSP  /  Input "+juce::String(reading_.inputRms,4)+
     "    Output "+juce::String(reading_.outputRms,4)+"    Delta "+juce::String(reading_.deltaRms,4),
     24,y,getWidth()-48,28,juce::Justification::left);
-  if(getHeight()>=440)for(int k=0;k<3;++k){
-   const int colWidth=(getWidth()-60)/3,x=24+k*colWidth;
-   const float strength=juce::jlimit(0.f,1.f,reading_.modulationRms[k]*6.f);
-   g.setColour(juce::Colour(0xff4c342d));
-   g.fillRoundedRectangle(static_cast<float>(x),static_cast<float>(y+37),static_cast<float>(colWidth-12),10.f,4.f);
-   g.setColour(juce::Colour(0xffffae6e));
-   g.fillRoundedRectangle(static_cast<float>(x),static_cast<float>(y+37),static_cast<float>(colWidth-12)*strength,10.f,4.f);
-   g.drawText(juce::String(std::array<const char*,3>{"LOW","MID","HIGH"}[k]),
-       x,y+51,colWidth-12,20,juce::Justification::left);
+  if(getHeight()>=440){const float hx=64.f,hy=static_cast<float>(y+24),hw=getWidth()-88.f,hh=40.f,laneH=hh/3.f;g.setColour(juce::Colour(0xff131e27));g.fillRoundedRectangle(24.f,hy,getWidth()-48.f,hh,7.f);
+   for(int k=0;k<3;++k){juce::Path fast,slow;for(size_t i=0;i<historyCount_;++i){const auto row=(historyHead_+fastHistory_.size()-historyCount_+i)%fastHistory_.size();const float xx=hx+hw*i/std::max<size_t>(1,historyCount_-1);const float scale=laneH*.42f/.25f;const float centre=hy+laneH*(k+.5f);const float fy=centre-std::clamp(fastHistory_[row][k],0.f,.25f)*scale,sy=centre-std::clamp(slowHistory_[row][k],0.f,.25f)*scale;if(i==0){fast.startNewSubPath(xx,fy);slow.startNewSubPath(xx,sy);}else{fast.lineTo(xx,fy);slow.lineTo(xx,sy);}if(eventHistory_[row][k]){g.setColour(juce::Colour(0xffffd166).withAlpha(std::min(1.f,.3f+.2f*eventHistory_[row][k])));g.drawVerticalLine(static_cast<int>(xx),centre-laneH*.45f,centre+laneH*.45f);}}
+    g.setColour(juce::Colour(0xffffae6e));g.strokePath(fast,juce::PathStrokeType(1.3f));g.setColour(juce::Colour(0xff53cedb));g.strokePath(slow,juce::PathStrokeType(1.f));g.setColour(juce::Colour(0xffe5d1c0));g.setFont(9.f);g.drawText(std::array<const char*,3>{"LOW","MID","HIGH"}[k],28,static_cast<int>(hy+k*laneH),34,static_cast<int>(laneH),juce::Justification::left);}
   }
   g.setColour(juce::Colour(0xffb5a39b));g.setFont(12.f);
-  if(getHeight()>=440)g.drawText("Measured transient activity per Low / Mid / High band",
-    24,y+77,getWidth()-48,19,juce::Justification::left);
+  if(getHeight()>=440)g.drawText("Fast amber / slow cyan envelopes; yellow ticks are measured rising events",
+    24,y+68,getWidth()-48,19,juce::Justification::left);
  }
 };

@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
+#include <numeric>
 #include <vector>
 using namespace masterlab;
 constexpr double pi=3.14159265358979323846;
@@ -51,7 +52,7 @@ int main(){
   TransientSculptor normal,delta;normal.settings(cfg);delta.settings(monitoring);
   normal.prepare(48000);delta.prepare(48000);
   std::array<float,257> a{},b{},c{},d{},raw{};
-  double totalDifference=0;
+  double totalDifference=0;unsigned totalEvents=0;
   for(int block=0;block<120;++block){
    for(int i=0;i<257;++i){
     const int time=block*257+i;
@@ -59,6 +60,7 @@ int main(){
     a[i]=b[i]=c[i]=d[i]=raw[i]=v;
    }
    normal.process(a.data(),b.data(),257);delta.process(c.data(),d.data(),257);
+   const auto blockReading=normal.reading();totalEvents+=std::accumulate(blockReading.risingEvents.begin(),blockReading.risingEvents.end(),0u);
    for(int i=0;i<257;++i){
     check(std::abs(c[i]-(raw[i]-a[i]))<1.e-5f,"Transient Delta differs from processed-minus-input");
     totalDifference+=std::abs(a[i]-raw[i]);
@@ -68,6 +70,11 @@ int main(){
   const auto reading=normal.reading();
   check(std::any_of(reading.outputWave.begin(),reading.outputWave.end(),[](float x){return std::abs(x)>.001f;}),
         "Transient output waveform is not actual DSP telemetry");
+  check(std::any_of(reading.fastEnvelope.begin(),reading.fastEnvelope.end(),[](float x){return x>.001f;})&&
+        std::any_of(reading.slowEnvelope.begin(),reading.slowEnvelope.end(),[](float x){return x>.001f;}),
+        "Transient fast/slow envelopes are not reported from DSP state");
+  check(totalEvents>0,
+        "Transient rising events are not measured");
  }
  TransientSculptor d;TransientSculptorSettings p;p.enabled=true;p.attack={1,1,1};
  d.settings(p);d.prepare(48000);
