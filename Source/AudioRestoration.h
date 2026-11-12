@@ -1,6 +1,6 @@
 #pragma once
 // Experimental zero-latency music restoration. Four genuine independent
-// processes: trained four-region noise print, harmonic hum notches, causal
+// processes: trained 16-band noise print, harmonic hum notches, causal
 // impulse repair, and approximate saturated-plateau reconstruction.
 // No claim of perfect source reconstruction or full FFT spectral repair.
 #include <algorithm>
@@ -20,6 +20,7 @@ struct RestorationReading {
  bool learned=false;
 };
 class AudioRestoration {
+ static constexpr size_t noiseBands=16;
  struct Notch {
   float b0=1,b1=0,b2=0,a1=0,a2=0,z1=0,z2=0;
   void prepare(double sr,double frequency,double q)noexcept{
@@ -34,8 +35,9 @@ class AudioRestoration {
   }
  };
  struct Channel {
-  float old=0.f,old2=0.f,low1=0.f,low2=0.f,low3=0.f;
-  std::array<float,4> noise{},envelope{},gain{1,1,1,1};
+  float old=0.f,old2=0.f;
+  std::array<float,noiseBands-1> noiseLow{};
+  std::array<float,noiseBands> noise{},envelope{},gain{};
   int plateau=0;
   std::array<Notch,4> hum50{},hum60{};
  };
@@ -53,7 +55,7 @@ public:
   reset();
  }
  void reset()noexcept {
-  channels_={};reading_={};mix_=settings_.enabled&&!settings_.abDry?settings_.mix:0.f;
+  channels_={};for(auto& channel:channels_)channel.gain.fill(1.f);reading_={};mix_=settings_.enabled&&!settings_.abDry?settings_.mix:0.f;
   for(auto& c:channels_)for(int i=0;i<4;++i){
    c.hum50[i].prepare(rate_,50.*(i+1),25.);
    c.hum60[i].prepare(rate_,60.*(i+1),25.);
@@ -68,16 +70,19 @@ public:
   const float envStep=static_cast<float>(1.-std::exp(-1./(rate_*.012)));
   const float noiseStep=static_cast<float>(1.-std::exp(-1./(rate_*.14)));
   const float gainStep=static_cast<float>(1.-std::exp(-1./(rate_*(.012+.08*std::clamp(settings_.quality,0.f,1.f)))));
-  const std::array<float,3> poles{
-   static_cast<float>(1.-std::exp(-6.283185307179586*1600./rate_)),
-   static_cast<float>(1.-std::exp(-6.283185307179586*4700./rate_)),
-   static_cast<float>(1.-std::exp(-6.283185307179586*9600./rate_))
-  };
+  std::array<float,noiseBands-1> poles{};
+  for(size_t band=0;band<poles.size();++band){
+   const double fraction=static_cast<double>(band)/(poles.size()-1);
+   const double frequency=80.*std::pow(std::min(16000.,rate_*.4)/80.,fraction);
+   poles[band]=static_cast<float>(1.-std::exp(-6.283185307179586*frequency/rate_));
+  }
   double energyIn=0.,energyOut=0.,energyRemoved=0.,print=0.;
   int impulses=0,plateaus=0;bool hasPrint=false;
   const float reduction=std::clamp(settings_.reductionDb,0.f,24.f);
   const float floorGain=gainDb(-reduction);
-  const float trigger=gainDb(std::clamp(settings_.thresholdDb,-90.f,-6.f));
+  // Threshold is a broadband amplitude control; distribute its equivalent
+  // energy across the analysis bands before comparing per-band envelopes.
+  const float trigger=gainDb(std::clamp(settings_.thresholdDb,-90.f,-6.f))/std::sqrt(static_cast<float>(noiseBands));
   const float protect=std::clamp(settings_.protect,0.f,1.f);
   for(int i=0;i<n;++i){
    const float desired=settings_.enabled&&!settings_.abDry?
@@ -107,11 +112,13 @@ public:
      }else st.plateau=0;
     }
     if(settings_.hiss || settings_.learn){
-     st.low1+=poles[0]*(current-st.low1);
-     st.low2+=poles[1]*(current-st.low2);
-     st.low3+=poles[2]*(current-st.low3);
-     std::array<float,4> band{st.low1,st.low2-st.low1,st.low3-st.low2,current-st.low3};
-     for(size_t k=0;k<4;++k){
+     std::array<float,noiseBands> band{};float previousLow=0.f;
+     for(size_t k=0;k<noiseBands-1;++k){
+      st.noiseLow[k]+=poles[k]*(current-st.noiseLow[k]);
+      band[k]=st.noiseLow[k]-previousLow;previousLow=st.noiseLow[k];
+     }
+     band.back()=current-previousLow;
+     for(size_t k=0;k<noiseBands;++k){
       st.envelope[k]+=envStep*(std::abs(band[k])-st.envelope[k]);
       if(settings_.learn&&!settings_.freeze)
        st.noise[k]+=noiseStep*(st.envelope[k]-st.noise[k]);
@@ -119,14 +126,14 @@ public:
       if(estimate>1.e-6f){hasPrint=true;print+=estimate;}
       // Preserves transients: noise floor is attenuated only when level is
       // close to the learned floor. Smoothing avoids rapid musical-noise gating.
-      const float threshold=std::max(trigger,estimate*(1.15f+2.f*(1.f-protect)));
+      const float threshold=std::max(trigger,estimate*(1.05f+1.f*(1.f-protect)));
       const float ratio=std::clamp((st.envelope[k]-threshold)/(threshold+.00001f),0.f,1.f);
       const float target=settings_.hiss&&estimate>1.e-6f?
           floorGain+(1.f-floorGain)*ratio:1.f;
       st.gain[k]+=gainStep*(target-st.gain[k]);
       band[k]*=st.gain[k];
      }
-     current=band[0]+band[1]+band[2]+band[3];
+     current=0.f;for(float value:band)current+=value;
     }
     st.old2=st.old;st.old=x;
     const float result=finite(x+mix_*(current-x));

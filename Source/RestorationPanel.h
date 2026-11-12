@@ -64,7 +64,7 @@ public:
      (reading_.learned?"   Noise print learned":"   No noise print"),
     24,getHeight()-96,getWidth()-48,25,juce::Justification::left);
   g.setColour(juce::Colour(0xffaab9c9));
-  g.drawText("Experimental: four-region noise print, harmonic notches, causal click correction and approximate de-clip. Inspect DELTA for artefacts.",
+  g.drawText("Experimental: 16-band frozen noise print, harmonic notches, causal click correction and approximate de-clip. Inspect DELTA for artefacts.",
     24,getHeight()-64,getWidth()-48,30,juce::Justification::left);
  }
 };
