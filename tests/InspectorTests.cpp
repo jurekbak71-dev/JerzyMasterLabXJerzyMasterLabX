@@ -26,14 +26,14 @@ int main(){
  auto original=audio;audit=true;p.processBlock(audio,midi);audit=false;
  check(allocations==0&&!p.resetMeterRequest.load()&&!p.inputMeter.read().ready&&p.inputLoudness.read().integrated==-120,"meter reset allocates or retains history");
  // Meter reset must not alter the dry audio, but the fixed final-stage FIFO
- // necessarily delivers the input from 368 samples ago.
+ // necessarily delivers the input from the declared 416 samples ago.
  for(int i=0;i<256;++i){
   const double sampleTime=static_cast<double>(sample-256+i-p.getLatencySamples());
   const float expected=.1f*std::sin(juce::MathConstants<double>::twoPi*1000*sampleTime/48000.);
   check(std::abs(audio.getSample(0,i)-expected)<1e-5f,
         "meter reset modified latency-aligned dry DSP");
  }
- check(p.getLatencySamples()==368,"meter reset changed PDC");p.reset();check(p.outputLoudness.read().integrated==-120&&p.outputMeter.read().peak==0,"host reset did not clear meters");
- p.prepareToPlay(96000,128);check(p.getLatencySamples()==608&&!p.inputMeter.read().ready,"sample rate change did not reprepare meters");p.releaseResources();
+ check(p.getLatencySamples()==416,"meter reset changed PDC");p.reset();check(p.outputLoudness.read().integrated==-120&&p.outputMeter.read().peak==0,"host reset did not clear meters");
+ p.prepareToPlay(96000,128);check(p.getLatencySamples()==656&&!p.inputMeter.read().ready,"sample rate change did not reprepare meters");p.releaseResources();
  std::cout<<"Passed: real callback I/O calibration without editor, loudness, C++ allocation guard, audio-safe meter reset, host reset and sample-rate change\n";
 }

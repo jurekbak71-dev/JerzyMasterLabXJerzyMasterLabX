@@ -1,6 +1,6 @@
 #pragma once
-// Experimental two-stage 4x oversampling. Do not expose to the VST host
-// before fixed worst-case PDC and dry-path latency compensation are designed.
+// Two-stage 4x oversampling used by fixed-latency nonlinear paths. Callers
+// must include the declared worst-case latency in dry alignment and host PDC.
 #include "HarmonicOversampler.h"
 namespace masterlab {
 class HarmonicOversampler4x {

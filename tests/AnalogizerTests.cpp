@@ -30,15 +30,16 @@ int main(){
    for(int i=0;i<n;++i){
     require(std::isfinite(l[i])&&l[i]==r[i],"finite dual mono");
     require(std::abs(l[i]-reference[i])<1e-6f,"buffer boundary invariant");
-    delta+=std::abs(l[i]-.3f*std::sin(2*pi*997*i/sr));
+    const float dry=i>=masterlab::Analogizer::latencySamples()? .3f*std::sin(2*pi*997*(i-masterlab::Analogizer::latencySamples())/sr):0.f;
+    delta+=std::abs(l[i]-dry);
    }
    require(delta/n>1.e-4,"processor has real audible nonlinear effect");
-   require(a.latencySamples()==0,"no added PDC");
+   require(a.latencySamples()==48,"fixed 4x PDC");
   }
   masterlab::Analogizer off;off.prepare(sr);
   float l[2]{.19f,-.37f},r[2]{-.19f,.37f};
   off.process(l,r,2);
-  require(l[0]==.19f&&l[1]==-.37f&&r[0]==-.19f&&r[1]==.37f,"disabled exact bypass");
+  require(l[0]==0.f&&l[1]==0.f&&r[0]==0.f&&r[1]==0.f,"disabled bypass is latency aligned");
  }
  // Warmth must add a measurable harmonic component, not merely a label.
  {
@@ -68,5 +69,5 @@ int main(){
   require(std::abs(h2warm-h2zero)>.002,"Warmth does not change second harmonic content");
  }
  require(allocations==0,"callback allocated memory");
- std::puts("Analogizer: three distinct modes, full bypass, block invariance and 0 extra latency PASS");
+ std::puts("Analogizer: three distinct modes, aligned bypass, block invariance and fixed 4x latency PASS");
 }

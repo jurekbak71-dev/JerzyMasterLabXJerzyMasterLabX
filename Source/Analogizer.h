@@ -1,10 +1,11 @@
 #pragma once
-// Independent zero-latency tonal colour processor. Not a copy of JerzyTapeDriveVST3.
+// Independent fixed-latency tonal colour processor. Not a copy of JerzyTapeDriveVST3.
 // Tube/transistor/tape transfer, bounded drive compensation and transient-aware
 // de-fizz. No wow, flutter, hiss, noise, dropouts or callback allocations.
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include "HarmonicOversampler4x.h"
 namespace masterlab {
 enum class AnalogizerMode : int { Tube=0, FET=1, Transistor=1, Tape=2 };
 struct AnalogizerSettings {
@@ -18,6 +19,9 @@ struct AnalogizerReading {float inputRms=0.f,outputRms=0.f,deltaRms=0.f;};
 class Analogizer {
  struct State {float warmthLow=0.f,highLow=0.f,highEnv=0.f,tapeMemory=0.f,dc=0.f,toneLow=0.f,envelope=0.f;};
  std::array<State,2> channels_{};
+ std::array<HarmonicOversampler4x,2> oversamplers_{};
+ std::array<std::array<float,HarmonicOversampler4x::latencySamples>,2> dryDelay_{};
+ size_t delayPosition_=0;
  AnalogizerSettings settings_{};
  AnalogizerReading reading_{};
  double rate_=48000.;
@@ -41,19 +45,19 @@ public:
  void prepare(double rate)noexcept {
   rate_=std::isfinite(rate)&&rate>=8000.&&rate<=384000.?rate:48000.;
   smooth_=static_cast<float>(1.-std::exp(-1./(rate_*.02)));
-  reset();
+  for(auto& oversampler:oversamplers_)oversampler.prepare();reset();
  }
  void reset()noexcept {
-  channels_={};reading_={};bypass_=settings_.enabled?1.f:0.f;
+  channels_={};dryDelay_={};delayPosition_=0;for(auto& oversampler:oversamplers_)oversampler.reset();
+  reading_={};bypass_=settings_.enabled?1.f:0.f;
   driveDb_=settings_.driveDb;warmth_=settings_.warmth;deFizz_=settings_.deFizz;
   mix_=settings_.mix;outputDb_=settings_.outputDb;
   bias_=settings_.bias;tone_=settings_.tone;dynamics_=settings_.dynamics;impact_=settings_.impact;
  }
  AnalogizerReading reading()const noexcept{return reading_;}
- int latencySamples()const noexcept{return 0;}
+ static constexpr int latencySamples()noexcept{return HarmonicOversampler4x::latencySamples;}
  void process(float* left,float* right,int count)noexcept {
   if(!left||!right||count<=0)return;
-  if(!settings_.enabled && bypass_<1.e-6f){reading_={};return;}
   const float warmPole=static_cast<float>(1.-std::exp(-6.283185307179586*1850./rate_));
   const float highPole=static_cast<float>(1.-std::exp(-6.283185307179586*5400./rate_));
   const float magneticPole=static_cast<float>(1.-std::exp(-1./(rate_*.003)));
@@ -78,6 +82,7 @@ public:
    const float output=std::pow(10.f,.05f*slew(outputDb_,std::clamp(settings_.outputDb,-12.f,12.f)));
    for(int ch=0;ch<2;++ch){
     float& out=(ch==0?left[i]:right[i]);const float input=safe(out);
+    const float delayedInput=dryDelay_[ch][delayPosition_];dryDelay_[ch][delayPosition_]=input;
     auto& st=channels_[ch];
     st.envelope+=dynamicsPole*(std::abs(input)-st.envelope);
     const float compression=1.f/(1.f+2.5f*dynamics*st.envelope);
@@ -85,7 +90,12 @@ public:
     st.tapeMemory+=magneticPole*(x-st.tapeMemory);
     // Tube (asymmetric), FET (stiff asymmetric), Tape (magnetic memory).
     const float offset=bias*(settings_.mode==AnalogizerMode::Tube?.65f:.25f);
-    const float coloured=sat(x+offset,settings_.mode,st.tapeMemory)-sat(offset,settings_.mode,0.f);
+    const float coloured=oversamplers_[ch].tick(x,[&](float highRateX)noexcept {
+     const float saturation=sat(highRateX+offset,settings_.mode,st.tapeMemory)-sat(offset,settings_.mode,0.f);
+     const float warmHarmonic=warmth*.32f*std::tanh(3.f*highRateX)*
+         std::tanh(3.f*highRateX)*(highRateX>=0.f?1.f:-.22f);
+     return saturation+warmHarmonic;
+    });
     // Compensation: moderate output growth, not hard clipping of peaks.
     const float compensated=settings_.autoGain?
         coloured/(1.f+.30f*(drive-1.f)):coloured;
@@ -94,9 +104,7 @@ public:
     // a level-dependent asymmetric second-order contribution adds H2,
     // while a gentle low-frequency tilt retains perceived body.
     // Zero retains the original transfer exactly for old projects.
-    const float warmHarmonic=warmth*.32f*std::tanh(3.f*x)*
-        std::tanh(3.f*x)*(x>=0.f?1.f:-.22f);
-    float shape=compensated+warmth*.36f*(st.warmthLow-compensated)+warmHarmonic;
+    float shape=compensated+warmth*.36f*(st.warmthLow-compensated);
     st.toneLow+=tonePole*(shape-st.toneLow);
     shape+=tone*.65f*(shape-2.f*st.toneLow);
     st.highLow+=highPole*(shape-st.highLow);
@@ -107,10 +115,11 @@ public:
     shape-=high*(fizz*.75f*above);
     st.dc+=dcPole*(shape-st.dc);
     const float processed=(shape-st.dc)*output*(1.f+1.5f*impact);
-    out=safe(input+wet*(processed-input));
-    in2+=input*input;out2+=out*out;
-    const double delta=out-input;delta2+=delta*delta;
+    out=safe(delayedInput+wet*(processed-delayedInput));
+    in2+=delayedInput*delayedInput;out2+=out*out;
+    const double delta=out-delayedInput;delta2+=delta*delta;
    }
+   delayPosition_=(delayPosition_+1)%latencySamples();
   }
   const float scale=1.f/static_cast<float>(2*count);
   reading_={std::sqrt(static_cast<float>(in2)*scale),

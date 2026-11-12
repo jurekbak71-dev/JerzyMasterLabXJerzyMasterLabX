@@ -19,6 +19,8 @@ class AnalogExciter {
  bool deltaTarget_=false;
  HarmonicExciter harmonic_;
  Analogizer colour_;
+ std::array<std::array<float,Analogizer::latencySamples()>,2> dryDelay_{};
+ size_t dryPosition_=0;
  HarmonicExciterSettings harmonics_{};
  AnalogColorSettings legacyColour_{};
  AnalogizerSettings modernColour_{};
@@ -59,10 +61,10 @@ public:
  void prepare(double rate)noexcept {
   rate=std::isfinite(rate)?std::clamp(rate,8000.,384000.):48000.;
   slew_=static_cast<float>(1.-std::exp(-1./(rate*.02)));
-  update();harmonic_.prepare(rate);colour_.prepare(rate);scope_.prepare(rate);
+  update();harmonic_.prepare(rate);colour_.prepare(rate);scope_.prepare(rate);dryDelay_={};dryPosition_=0;
   mix_=mixTarget_;delta_=deltaTarget_?1.f:0.f;reading_={};
  }
- void reset()noexcept {harmonic_.reset();colour_.reset();scope_.reset();reading_={};mix_=mixTarget_;delta_=deltaTarget_?1.f:0.f;}
+ void reset()noexcept {harmonic_.reset();colour_.reset();scope_.reset();dryDelay_={};dryPosition_=0;reading_={};mix_=mixTarget_;delta_=deltaTarget_?1.f:0.f;}
  void monitor(float mix,bool delta)noexcept {
   mixTarget_=std::isfinite(mix)?std::clamp(mix,0.f,1.f):1.f;deltaTarget_=delta;
  }
@@ -77,9 +79,12 @@ public:
   double in2=0.,out2=0.,difference2=0.;
   for(int base=0;base<count;base+=128){
    const int n=std::min(128,count-base);
-   for(int c=0;c<2;++c)for(int i=0;i<n;++i){
-    auto& input=(c==0?left:right)[base+i];if(!std::isfinite(input))input=0.f;
-    dry[c][i]=input;
+   for(int i=0;i<n;++i){
+    for(int c=0;c<2;++c){
+     auto& input=(c==0?left:right)[base+i];if(!std::isfinite(input))input=0.f;
+     dry[c][i]=dryDelay_[c][dryPosition_];dryDelay_[c][dryPosition_]=input;
+    }
+    dryPosition_=(dryPosition_+1)%latencySamples();
    }
    harmonic_.process(left+base,right+base,n);
    colour_.process(left+base,right+base,n);
@@ -108,6 +113,6 @@ public:
   const auto r=colour_.reading();
   return {r.inputRms,r.outputRms,r.deltaRms,0.f};
  }
- int latencySamples()const noexcept{return 0;}
+ static constexpr int latencySamples()noexcept{return Analogizer::latencySamples();}
 };
 }

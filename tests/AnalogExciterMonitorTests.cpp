@@ -30,7 +30,7 @@ int main(){
   const auto dry=render(0,false,257,rate),wet=render(1,false,257,rate),delta=render(1,true,257,rate),half=render(.5f,false,257,rate),off=render(1,true,257,rate,false);
   double nullError=0,mixError=0,authority=0;
   for(size_t i=0;i<dry.l.size();++i){
-   const float input=.18f*std::sin(6.283185307179586*997*i/rate);
+   const float input=i>=AnalogExciter::latencySamples()? .18f*std::sin(6.283185307179586*997*(i-AnalogExciter::latencySamples())/rate):0.f;
    if(dry.l[i]!=input||dry.r[i]!=-.7f*input||off.l[i]!=0||off.r[i]!=0)return 1;
    nullError=std::max(nullError,static_cast<double>(std::abs(delta.l[i]+wet.l[i]-input)));
    nullError=std::max(nullError,static_cast<double>(std::abs(delta.r[i]+wet.r[i]+.7f*input)));
@@ -64,7 +64,7 @@ int main(){
  {
   AnalogExciter smooth;smooth.prepare(48000);smooth.monitor(1,true);
   float a=.2f,b=-.2f;smooth.process(&a,&b,1);
-  if(a<.199f||a>=.2f||b>-.199f)return 9;
+  if(a!=0.f||b!=0.f)return 9;
   std::vector<float> l(24000,.2f),r(24000,-.2f);smooth.process(l.data(),r.data(),24000);
   if(std::abs(l.back())>1.e-5f||std::abs(r.back())>1.e-5f)return 10;
  }

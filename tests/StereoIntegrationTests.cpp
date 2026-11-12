@@ -5,7 +5,7 @@ void check(bool ok,const char* m){if(!ok){std::cerr<<m<<'\n';std::exit(1);}}
 void set(Processor& p,const char* id,float v){auto* parameter=p.state.getParameter(id);check(parameter,"missing APVTS id");parameter->setValueNotifyingHost(parameter->convertTo0to1(v));}
 std::vector<float> run(int rate,bool present,bool enabled,bool parallel,bool extra){
  Processor p;set(p,"eqPresent",extra);set(p,"eq",0);set(p,"limPresent",0);set(p,"stereoPresent",present);set(p,"stereoOn",enabled);set(p,"stereoizeAmount",.7f);set(p,"routingMode",parallel);
- p.prepareToPlay(rate,257);check(p.getLatencySamples()==int(std::ceil(rate*.005))+masterlab::FinalTruePeak::latencySamples,"Stereoize changed PDC");
+ p.prepareToPlay(rate,257);check(p.getLatencySamples()==int(std::ceil(rate*.005))+masterlab::AnalogExciter::latencySamples()+masterlab::FinalTruePeak::latencySamples,"Stereoize changed PDC");
  std::vector<float> side;juce::AudioBuffer<float> audio(2,257);juce::MidiBuffer midi;
  for(int block=0;block<int(rate*2/257);++block){for(int i=0;i<257;++i){float x=.1f*std::sin(6.283185307*713*(block*257+i)/rate);audio.setSample(0,i,x);audio.setSample(1,i,x);}p.processBlock(audio,midi);if(block*257>rate)for(int i=0;i<257;++i)side.push_back((audio.getSample(0,i)-audio.getSample(1,i))*.5f);}
  return side;
