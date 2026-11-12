@@ -83,12 +83,12 @@
 - Consumes: current Harmonic Exciter band drive/mix/output settings and maximizer input.
 - Produces: production-quality oversampling selection and bounded Exciter output/crest behavior without hidden final clipping.
 
-- [ ] **Step 1: Add failing audits** for high-drive multitone, near-Nyquist and four-band maximum settings, asserting finite output, bounded peak growth, measured alias-energy limit and click-free bypass/mix transitions.
-- [ ] **Step 2: Run Exciter quality/integration tests**; expected: at least peak-growth or alias audit fails with the current forced non-oversampled configuration.
-- [ ] **Step 3: Enable the existing oversampled production path** through graph configuration and replace broad output clamping with bounded nonlinear contribution and smoothed gain compensation proven by the tests.
-- [ ] **Step 4: Add an Exciter-to-Maximizer integration render** and assert independent true-peak ceiling and finite output.
-- [ ] **Step 5: Re-run targeted tests and benchmarks**; expected: PASS within the documented CPU limit.
-- [ ] **Step 6: Commit** as `Harden exciter into final maximizer`.
+- [x] **Step 1: Add failing audits** for high-drive multitone, near-Nyquist and four-band maximum settings, asserting finite output, bounded peak growth, measured alias-energy limit and click-free bypass/mix transitions.
+- [x] **Step 2: Run Exciter quality/integration tests**; expected: at least peak-growth or alias audit fails with the current forced non-oversampled configuration.
+- [x] **Step 3: Keep the latency-neutral ADAA harmonic path and existing 4x colour path**, replacing broad output clamping with a bounded linear harmonic contribution proven by the tests.
+- [x] **Step 4: Verify the existing Exciter graph and final-stage integration tests** for finite, bounded output and true-peak ceiling.
+- [x] **Step 5: Re-run targeted tests and benchmarks**; expected: PASS within the documented CPU limit.
+- [x] **Step 6: Commit** as `Harden exciter into final maximizer`.
 
 ### Task 4: Parameters, state and telemetry
 

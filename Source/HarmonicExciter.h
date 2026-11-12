@@ -104,7 +104,7 @@ public:
             const float even=evenSmoother_.tick(finiteClamp(settings_.even,0.f,1.f));
             const float odd=oddSmoother_.tick(finiteClamp(settings_.odd,0.f,1.f));
             const float wet=mixSmoother_.tick(finiteClamp(settings_.mix,0.f,1.f));
-            const float authority=1.f+5.f*impactSmoother_.tick(finiteClamp(settings_.impact,0.f,1.f));
+            const float authority=1.f+1.5f*impactSmoother_.tick(finiteClamp(settings_.impact,0.f,1.f));
             const float output=std::pow(10.f,outputSmoother_.tick(finiteClamp(settings_.outputDb,-18.f,6.f))/20.f);
             std::array<float,4> intensities{};
             for(size_t k=0;k<4;++k)intensities[k]=bandSmoothers_[k].tick(finiteClamp(settings_.amount[k],0.f,1.f));
@@ -156,7 +156,11 @@ public:
                     dry=dryDelay4x_[channel][dryPosition4x_];
                     dryDelay4x_[channel][dryPosition4x_]=input;
                 }
-                const float processed=std::clamp((dry+wet*authority*addition)*output,-16.f,16.f);
+                // Bound authority with a linear contribution scale. Adding a
+                // second base-rate nonlinear clamp here would regenerate the
+                // aliases already removed by ADAA/oversampling in each band.
+                const float boundedAddition=.25f*addition;
+                const float processed=(dry+wet*authority*boundedAddition)*output;
                 const float normal=dry+bypass*(processed-dry);
                 const float result=delta?normal-dry:normal;
                 io=std::isfinite(result)?result:0.f;

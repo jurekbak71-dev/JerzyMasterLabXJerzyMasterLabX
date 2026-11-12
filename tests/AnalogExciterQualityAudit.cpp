@@ -39,4 +39,24 @@ int main(){
   }
  }
  if(!aliasGate){std::puts("FAIL combined Analog Exciter alias ratio exceeds 0.05 audit gate");return 4;}
+ // Maximum harmonic controls must remain a bounded colour contribution rather
+ // than creating a second clipper before the Final Maximizer.
+ {
+  constexpr int n=48000;std::vector<float> left(n),right(n);
+  masterlab::AnalogExciter dsp;
+  masterlab::HarmonicExciterSettings harmonic;harmonic.enabled=true;
+  harmonic.amount={1.f,1.f,1.f,1.f};harmonic.even=1.f;harmonic.odd=1.f;
+  harmonic.driveDb=24.f;harmonic.impact=1.f;harmonic.mix=1.f;harmonic.outputDb=0.f;
+  harmonic.adaa=true;
+  dsp.harmonicSettings(harmonic);dsp.prepare(48000.);
+  for(int i=0;i<n;++i){
+   const float x=.48f*std::sin(2*pi*997*i/48000.)+.32f*std::sin(2*pi*7013*i/48000.);
+   left[i]=right[i]=x;
+  }
+  for(int i=0;i<n;i+=127)dsp.process(left.data()+i,right.data()+i,std::min(127,n-i));
+  float peak=0.f;int plateaus=0;
+  for(int i=4096;i<n;++i){peak=std::max(peak,std::abs(left[i]));if(std::abs(left[i])>15.999f)++plateaus;}
+  std::printf("maximum harmonic stress peak %.6f, clamp plateaus %d\n",peak,plateaus);
+  if(peak>2.f||plateaus!=0){std::puts("FAIL Harmonic Exciter creates uncontrolled pre-maximizer peaks");return 5;}
+ }
 }
