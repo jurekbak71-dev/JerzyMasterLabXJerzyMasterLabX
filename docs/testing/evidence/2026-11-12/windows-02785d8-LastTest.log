@@ -1,0 +1,837 @@
+Start testing: Nov 11 10:43 Coordinated Universal Time
+----------------------------------------------------------
+1/46 Testing: final_limiter_off
+1/46 Test: final_limiter_off
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/final_limiter_off_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"final_limiter_off" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+block=1 OFF legacy-toggle delta=0.000000000 OFF peak=0.800000 ON peak=0.226058
+block=257 OFF legacy-toggle delta=0.000000000 OFF peak=0.800000 ON peak=0.226058
+block=4097 OFF legacy-toggle delta=0.000000000 OFF peak=0.800000 ON peak=0.226058
+<end of output>
+Test time =   0.03 sec
+----------------------------------------------------------
+Test Passed.
+"final_limiter_off" end time: Nov 11 10:43 Coordinated Universal Time
+"final_limiter_off" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/46 Testing: scope_partition
+2/46 Test: scope_partition
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/scope_partition_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"scope_partition" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Bass rate=44100 scope partition error=0.000000000 energy=10.181662
+Transient rate=44100 scope partition error=0.000000000 energy=10.181662
+Limiter rate=44100 scope partition error=0.000000000 energy=10.181662
+Bass rate=48000 scope partition error=0.000000000 energy=10.166828
+Transient rate=48000 scope partition error=0.000000000 energy=10.166828
+Limiter rate=48000 scope partition error=0.000000000 energy=10.166828
+Bass rate=96000 scope partition error=0.000000000 energy=10.340312
+Transient rate=96000 scope partition error=0.000000000 energy=10.340312
+Limiter rate=96000 scope partition error=0.000000000 energy=10.340312
+Bass rate=192000 scope partition error=0.000000000 energy=9.948433
+Transient rate=192000 scope partition error=0.000000000 energy=9.948433
+Limiter rate=192000 scope partition error=0.000000000 energy=9.948433
+Bass reset/silence clears capture PASS
+Transient reset/silence clears capture PASS
+Limiter reset/silence clears capture PASS
+<end of output>
+Test time =   0.10 sec
+----------------------------------------------------------
+Test Passed.
+"scope_partition" end time: Nov 11 10:43 Coordinated Universal Time
+"scope_partition" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/46 Testing: dsp
+3/46 Test: dsp
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/dsp_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"dsp" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: ceiling, latency, variable blocks, NaN/Inf at four sample rates; EQ center gain, cascaded bands and C++ allocation guard
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"dsp" end time: Nov 11 10:43 Coordinated Universal Time
+"dsp" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/46 Testing: routing
+4/46 Test: routing
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/routing_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"routing" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: warm-path crossfade, fixed PDC, reset, variable blocks at four sample rates
+<end of output>
+Test time =   0.19 sec
+----------------------------------------------------------
+Test Passed.
+"routing" end time: Nov 11 10:43 Coordinated Universal Time
+"routing" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/46 Testing: response
+5/46 Test: response
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/response_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"response" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: analytical response matches measured sine gain at 20 rate/frequency combinations; coefficient snapshots follow actual smoothing
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"response" end time: Nov 11 10:43 Coordinated Universal Time
+"response" time elapsed: 00:00:00
+----------------------------------------------------------
+
+6/46 Testing: limiter_meter
+6/46 Test: limiter_meter
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/limiter_meter_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"limiter_meter" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: 10 ms sample clock, variable host blocks, stereo peak, reset, silence, actual limiter envelope, both routes and bypass
+<end of output>
+Test time =   0.09 sec
+----------------------------------------------------------
+Test Passed.
+"limiter_meter" end time: Nov 11 10:43 Coordinated Universal Time
+"limiter_meter" time elapsed: 00:00:00
+----------------------------------------------------------
+
+7/46 Testing: filters
+7/46 Test: filters
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/filter_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"filters" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: 96 measured response comparisons, shelf asymptotes, 12 dB/oct cutoffs, notch, extreme Q/gain/rate transitions and band bypass
+<end of output>
+Test time =   0.97 sec
+----------------------------------------------------------
+Test Passed.
+"filters" end time: Nov 11 10:43 Coordinated Universal Time
+"filters" time elapsed: 00:00:00
+----------------------------------------------------------
+
+8/46 Testing: meters
+8/46 Test: meters
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/meter_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"meters" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: four sample rates, calibrated RMS/peak, mono and antiphase M/S, balance, exact sliding peak/clip expiration, reset and variable blocks
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"meters" end time: Nov 11 10:43 Coordinated Universal Time
+"meters" time elapsed: 00:00:00
+----------------------------------------------------------
+
+9/46 Testing: loudness
+9/46 Test: loudness
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/loudness_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"loudness" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: 16 FFmpeg ebur128 reference cases, M/S/I, four sample rates, dual gating, silence, reset and variable blocks (0.11 LU tolerance)
+<end of output>
+Test time =   0.77 sec
+----------------------------------------------------------
+Test Passed.
+"loudness" end time: Nov 11 10:43 Coordinated Universal Time
+"loudness" time elapsed: 00:00:00
+----------------------------------------------------------
+
+10/46 Testing: realtime_allocations
+10/46 Test: realtime_allocations
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/allocation_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"realtime_allocations" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: no C++ heap allocation in prepared DSP, routing, EQ switching, window/loudness metering or meter reset
+<end of output>
+Test time =   0.16 sec
+----------------------------------------------------------
+Test Passed.
+"realtime_allocations" end time: Nov 11 10:43 Coordinated Universal Time
+"realtime_allocations" time elapsed: 00:00:00
+----------------------------------------------------------
+
+11/46 Testing: brain_rules
+11/46 Test: brain_rules
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/brain_rules_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"brain_rules" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: 108 profile/style/intensity cases, finite unique settings, caps, excluded modules, silence/short/NaN rejection, existing EQ, clipping and phase warnings
+<end of output>
+Test time =   0.63 sec
+----------------------------------------------------------
+Test Passed.
+"brain_rules" end time: Nov 11 10:43 Coordinated Universal Time
+"brain_rules" time elapsed: 00:00:00
+----------------------------------------------------------
+
+12/46 Testing: modules
+12/46 Test: modules
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/modules_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"modules" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: stereo unity/mono sum/mono preview, downward and upward compression, silence protection, dynamic EQ reduction/bypass and no callback allocation at four sample rates
+<end of output>
+Test time =   0.41 sec
+----------------------------------------------------------
+Test Passed.
+"modules" end time: Nov 11 10:43 Coordinated Universal Time
+"modules" time elapsed: 00:00:00
+----------------------------------------------------------
+
+13/46 Testing: dynamics_phase2
+13/46 Test: dynamics_phase2
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/dynamics_phase2_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"dynamics_phase2" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+rate,legacy_gr,strong_gr,legacy_rms,strong_rms,punch_db
+44100,18.1459,25.4043,8.90403,3.86007,12
+48000,18.1446,25.4025,8.90389,3.86001,12
+96000,18.1458,25.4042,8.90373,3.85998,12
+192000,18.1474,25.4064,8.90359,3.85992,12
+<end of output>
+Test time =   0.29 sec
+----------------------------------------------------------
+Test Passed.
+"dynamics_phase2" end time: Nov 11 10:43 Coordinated Universal Time
+"dynamics_phase2" time elapsed: 00:00:00
+----------------------------------------------------------
+
+14/46 Testing: stabilizer
+14/46 Test: stabilizer
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/stabilizer_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"stabilizer" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: real tonal correction, Cut-only gain bounds, amount zero, silence, block invariance, exact Delta, stereo linking, bypass and no allocation at four rates
+<end of output>
+Test time =   0.16 sec
+----------------------------------------------------------
+Test Passed.
+"stabilizer" end time: Nov 11 10:43 Coordinated Universal Time
+"stabilizer" time elapsed: 00:00:00
+----------------------------------------------------------
+
+15/46 Testing: stabilizer_phase2
+15/46 Test: stabilizer_phase2
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/stabilizer_phase2_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"stabilizer_phase2" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+rate,clean_db,strong_db,extreme_db,single_extreme_db,tame_db,untamed_db
+44100,3.04162,6.70831,8.94442,6.49354,6.36803,8.85634
+48000,3.04225,6.25036,8.33381,6.50787,5.69948,8.02875
+96000,2.50527,4.50949,6.01266,6.5686,4.22272,5.93903
+192000,2.35237,4.23427,5.6457,6.58431,3.99741,5.62441
+<end of output>
+Test time =   1.07 sec
+----------------------------------------------------------
+Test Passed.
+"stabilizer_phase2" end time: Nov 11 10:43 Coordinated Universal Time
+"stabilizer_phase2" time elapsed: 00:00:01
+----------------------------------------------------------
+
+16/46 Testing: serial_graph
+16/46 Test: serial_graph
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/serial_graph_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"serial_graph" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: 720 complete permutations, legacy sound, allocation-free live changes, finite output, stable PDC and audible topology at four rates
+<end of output>
+Test time =   3.86 sec
+----------------------------------------------------------
+Test Passed.
+"serial_graph" end time: Nov 11 10:43 Coordinated Universal Time
+"serial_graph" time elapsed: 00:00:03
+----------------------------------------------------------
+
+17/46 Testing: parallel_routing
+17/46 Test: parallel_routing
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/parallel_routing_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"parallel_routing" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+rate,legacy_delta_rms,controlled_delta_rms,correlation,peak
+44100,0,0,0.812893,0.270922
+48000,0,0,0.81284,0.270387
+96000,0,0,0.812722,0.270975
+192000,0,0,0.812674,0.270988
+<end of output>
+Test time =   1.29 sec
+----------------------------------------------------------
+Test Passed.
+"parallel_routing" end time: Nov 11 10:43 Coordinated Universal Time
+"parallel_routing" time elapsed: 00:00:01
+----------------------------------------------------------
+
+18/46 Testing: stereo_architect
+18/46 Test: stereo_architect
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/stereo_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"stereo_architect" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+rate,input,legacy_width,new_width,correlation,LUFS_in,LUFS_out,peak_out,matched_delta_ratio
+44100,0,0,0.180165,0.93831,-17.149,-16.931,0.283493,0.177439
+44100,1,0.0994211,0.181499,0.937741,-17.132,-16.9363,0.280064,0.177461
+44100,2,0.994211,0.509592,0.590437,-15.7062,-15.7086,0.371383,0.161363
+44100,3,1.54318e+17,7.71589e+16,-1,-21.8197,-21.8197,0.15,2.19706e-07
+48000,0,0,0.181089,0.937673,-17.1415,-16.9211,0.281077,0.17832
+48000,1,0.0990896,0.182223,0.937244,-17.1245,-16.927,0.283352,0.17835
+48000,2,0.990896,0.507774,0.592859,-15.7032,-15.7081,0.366089,0.162329
+48000,3,1.60997e+17,8.04985e+16,-1,-21.8235,-21.8235,0.15,5.41895e-09
+96000,0,0,0.185465,0.934654,-17.1612,-16.9296,0.283989,0.182493
+96000,1,0.0992879,0.186046,0.934588,-17.144,-16.9374,0.283243,0.182545
+96000,2,0.992879,0.508291,0.592148,-15.7129,-15.7242,0.369618,0.166272
+96000,3,2.27684e+17,1.13842e+17,-1,-21.8451,-21.8451,0.15,5.18887e-09
+<end of output>
+Test time =   4.01 sec
+----------------------------------------------------------
+Test Passed.
+"stereo_architect" end time: Nov 11 10:43 Coordinated Universal Time
+"stereo_architect" time elapsed: 00:00:04
+----------------------------------------------------------
+
+19/46 Testing: analog_graph_integration
+19/46 Test: analog_graph_integration
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/analog_graph_integration_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"analog_graph_integration" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+44100 Hz serial: analog delta 0.344198 PASS
+44100 Hz parallel: analog delta 0.344198 PASS
+48000 Hz serial: analog delta 0.344499 PASS
+48000 Hz parallel: analog delta 0.344499 PASS
+96000 Hz serial: analog delta 0.350320 PASS
+96000 Hz parallel: analog delta 0.350320 PASS
+192000 Hz serial: analog delta 0.365478 PASS
+192000 Hz parallel: analog delta 0.365478 PASS
+<end of output>
+Test time =   0.53 sec
+----------------------------------------------------------
+Test Passed.
+"analog_graph_integration" end time: Nov 11 10:43 Coordinated Universal Time
+"analog_graph_integration" time elapsed: 00:00:00
+----------------------------------------------------------
+
+20/46 Testing: final_true_peak_graph
+20/46 Test: final_true_peak_graph
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/final_true_peak_graph_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"final_true_peak_graph" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+rate 44100 mode serial final stage passed
+rate 44100 mode parallel final stage passed
+rate 48000 mode serial final stage passed
+rate 48000 mode parallel final stage passed
+rate 96000 mode serial final stage passed
+rate 96000 mode parallel final stage passed
+rate 192000 mode serial final stage passed
+rate 192000 mode parallel final stage passed
+<end of output>
+Test time =   0.51 sec
+----------------------------------------------------------
+Test Passed.
+"final_true_peak_graph" end time: Nov 11 10:43 Coordinated Universal Time
+"final_true_peak_graph" time elapsed: 00:00:00
+----------------------------------------------------------
+
+21/46 Testing: final_true_peak_adversarial
+21/46 Test: final_true_peak_adversarial
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/final_true_peak_adversarial_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"final_true_peak_adversarial" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Independent 8x 49-tap true-peak stress cases: 96, worst excess -0.2110 dB, rate 48000, signal 7, mode 2
+<end of output>
+Test time =   0.26 sec
+----------------------------------------------------------
+Test Passed.
+"final_true_peak_adversarial" end time: Nov 11 10:43 Coordinated Universal Time
+"final_true_peak_adversarial" time elapsed: 00:00:00
+----------------------------------------------------------
+
+22/46 Testing: final_true_peak_differential
+22/46 Test: final_true_peak_differential
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/final_true_peak_differential_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"final_true_peak_differential" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+44100: bypass bit-exact; active stage obeys conservative ceiling and stereo bounds
+48000: bypass bit-exact; active stage obeys conservative ceiling and stereo bounds
+96000: bypass bit-exact; active stage obeys conservative ceiling and stereo bounds
+192000: bypass bit-exact; active stage obeys conservative ceiling and stereo bounds
+<end of output>
+Test time =   0.13 sec
+----------------------------------------------------------
+Test Passed.
+"final_true_peak_differential" end time: Nov 11 10:43 Coordinated Universal Time
+"final_true_peak_differential" time elapsed: 00:00:00
+----------------------------------------------------------
+
+23/46 Testing: final_true_peak_dsp
+23/46 Test: final_true_peak_dsp
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/final_true_peak_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"final_true_peak_dsp" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+44100 measured 8x output TP 0.635779 (sample ceiling 0.707946)\n44100 true-peak prototype: fixed latency, finite, peak bound, partition tests pass
+48000 measured 8x output TP 0.636274 (sample ceiling 0.707946)\n48000 true-peak prototype: fixed latency, finite, peak bound, partition tests pass
+96000 measured 8x output TP 0.636933 (sample ceiling 0.707946)\n96000 true-peak prototype: fixed latency, finite, peak bound, partition tests pass
+192000 measured 8x output TP 0.636801 (sample ceiling 0.707946)\n192000 true-peak prototype: fixed latency, finite, peak bound, partition tests pass
+<end of output>
+Test time =   0.16 sec
+----------------------------------------------------------
+Test Passed.
+"final_true_peak_dsp" end time: Nov 11 10:43 Coordinated Universal Time
+"final_true_peak_dsp" time elapsed: 00:00:00
+----------------------------------------------------------
+
+24/46 Testing: transient_sculptor_dsp
+24/46 Test: transient_sculptor_dsp
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/transient_sculptor_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"transient_sculptor_dsp" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+44100 Hz transient sculptor passed
+48000 Hz transient sculptor passed
+96000 Hz transient sculptor passed
+192000 Hz transient sculptor passed
+<end of output>
+Test time =   0.12 sec
+----------------------------------------------------------
+Test Passed.
+"transient_sculptor_dsp" end time: Nov 11 10:43 Coordinated Universal Time
+"transient_sculptor_dsp" time elapsed: 00:00:00
+----------------------------------------------------------
+
+25/46 Testing: bass_architect_dsp
+25/46 Test: bass_architect_dsp
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/bass_architect_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"bass_architect_dsp" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+44100 Bass Architect tests pass
+48000 Bass Architect tests pass
+96000 Bass Architect tests pass
+192000 Bass Architect tests pass
+<end of output>
+Test time =   0.10 sec
+----------------------------------------------------------
+Test Passed.
+"bass_architect_dsp" end time: Nov 11 10:43 Coordinated Universal Time
+"bass_architect_dsp" time elapsed: 00:00:00
+----------------------------------------------------------
+
+26/46 Testing: impact_authority
+26/46 Test: impact_authority
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/impact_authority_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"impact_authority" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+44100 analog impact 0=0.0756236 impact 1=0.8969078 ratio 11.860
+44100 exciter impact 0=0.1091280 impact 1=0.6547678 ratio 6.000
+48000 analog impact 0=0.0758135 impact 1=0.8976742 ratio 11.841
+48000 exciter impact 0=0.1090741 impact 1=0.6544445 ratio 6.000
+96000 analog impact 0=0.0769619 impact 1=0.9023053 ratio 11.724
+96000 exciter impact 0=0.1088100 impact 1=0.6528600 ratio 6.000
+192000 analog impact 0=0.0775868 impact 1=0.9048267 ratio 11.662
+192000 exciter impact 0=0.1087028 impact 1=0.6522165 ratio 6.000
+<end of output>
+Test time =   0.47 sec
+----------------------------------------------------------
+Test Passed.
+"impact_authority" end time: Nov 11 10:43 Coordinated Universal Time
+"impact_authority" time elapsed: 00:00:00
+----------------------------------------------------------
+
+27/46 Testing: audio_restoration
+27/46 Test: audio_restoration
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/restoration_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"audio_restoration" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Audio Restoration: hum, learned hiss, impulse repair, de-clip, bypass, no allocation PASS
+<end of output>
+Test time =   0.03 sec
+----------------------------------------------------------
+Test Passed.
+"audio_restoration" end time: Nov 11 10:43 Coordinated Universal Time
+"audio_restoration" time elapsed: 00:00:00
+----------------------------------------------------------
+
+28/46 Testing: analogizer_dsp
+28/46 Test: analogizer_dsp
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/analogizer_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"analogizer_dsp" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Analogizer: three distinct modes, full bypass, block invariance and 0 extra latency PASS
+<end of output>
+Test time =   0.09 sec
+----------------------------------------------------------
+Test Passed.
+"analogizer_dsp" end time: Nov 11 10:43 Coordinated Universal Time
+"analogizer_dsp" time elapsed: 00:00:00
+----------------------------------------------------------
+
+29/46 Testing: analog_color_dsp
+29/46 Test: analog_color_dsp
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/analog_color_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"analog_color_dsp" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+44100 Hz: four models distinct, bypass and block tests PASS
+48000 Hz: four models distinct, bypass and block tests PASS
+96000 Hz: four models distinct, bypass and block tests PASS
+192000 Hz: four models distinct, bypass and block tests PASS
+AnalogColor DSP tests PASS
+<end of output>
+Test time =   0.33 sec
+----------------------------------------------------------
+Test Passed.
+"analog_color_dsp" end time: Nov 11 10:43 Coordinated Universal Time
+"analog_color_dsp" time elapsed: 00:00:00
+----------------------------------------------------------
+
+30/46 Testing: harmonic_graph_integration
+30/46 Test: harmonic_graph_integration
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/harmonic_graph_integration_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"harmonic_graph_integration" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+44100 Hz serial: delta/RMS 0.555120; block test pass
+44100 Hz parallel: delta/RMS 0.555120; block test pass
+48000 Hz serial: delta/RMS 0.553840; block test pass
+48000 Hz parallel: delta/RMS 0.553840; block test pass
+96000 Hz serial: delta/RMS 0.534060; block test pass
+96000 Hz parallel: delta/RMS 0.534060; block test pass
+192000 Hz serial: delta/RMS 0.477261; block test pass
+192000 Hz parallel: delta/RMS 0.477261; block test pass
+<end of output>
+Test time =   0.50 sec
+----------------------------------------------------------
+Test Passed.
+"harmonic_graph_integration" end time: Nov 11 10:43 Coordinated Universal Time
+"harmonic_graph_integration" time elapsed: 00:00:00
+----------------------------------------------------------
+
+31/46 Testing: harmonic_oversampling_4x
+31/46 Test: harmonic_oversampling_4x
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/harmonic_oversampling_4x_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"harmonic_oversampling_4x" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+rate 44100: 2x identity 0.25000580 4x identity 0.25000796
+rate 48000: 2x identity 0.25000533 4x identity 0.25000719
+rate 96000: 2x identity 0.25000185 4x identity 0.25000235
+rate 192000: 2x identity 0.25000050 4x identity 0.25000063
+cubic alias 18kHz: direct 0.03125 2x 2.0243882e-06 4x 2.3061545e-06
+<end of output>
+Test time =   0.27 sec
+----------------------------------------------------------
+Test Passed.
+"harmonic_oversampling_4x" end time: Nov 11 10:43 Coordinated Universal Time
+"harmonic_oversampling_4x" time elapsed: 00:00:00
+----------------------------------------------------------
+
+32/46 Testing: harmonic_oversampling_dsp
+32/46 Test: harmonic_oversampling_dsp
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/harmonic_oversampling_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"harmonic_oversampling_dsp" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+sr 44100 identity amplitude 0.200005
+sr 48000 identity amplitude 0.200004
+sr 96000 identity amplitude 0.200001
+sr 192000 identity amplitude 0.200000
+alias 18k: raw 0.03125000 oversampled 0.00000202 ratio 0.00006
+<end of output>
+Test time =   0.07 sec
+----------------------------------------------------------
+Test Passed.
+"harmonic_oversampling_dsp" end time: Nov 11 10:43 Coordinated Universal Time
+"harmonic_oversampling_dsp" time elapsed: 00:00:00
+----------------------------------------------------------
+
+33/46 Testing: harmonic_exciter_prototype
+33/46 Test: harmonic_exciter_prototype
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/harmonic_exciter_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"harmonic_exciter_prototype" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+44100 Hz: H2 0.0725509 H3 0.0209323 blocks null OK
+48000 Hz: H2 0.0723680 H3 0.0209247 blocks null OK
+96000 Hz: H2 0.0713222 H3 0.0208996 blocks null OK
+192000 Hz: H2 0.0707768 H3 0.0209007 blocks null OK
+Full exciter 10k -> 18k fold: raw=0.025318 2x=0.000002\nFull 4x exciter 18k alias: raw 0.02531838, 4x 0.00000186
+Exciter 1x ADAA: 18k fold before 0.025318380 after 0.007598936\nHarmonic Exciter prototype: PASS
+<end of output>
+Test time =   1.12 sec
+----------------------------------------------------------
+Test Passed.
+"harmonic_exciter_prototype" end time: Nov 11 10:43 Coordinated Universal Time
+"harmonic_exciter_prototype" time elapsed: 00:00:01
+----------------------------------------------------------
+
+34/46 Testing: concept_c_asset_pack
+34/46 Test: concept_c_asset_pack
+Command: "C:/hostedtoolcache/windows/Python/3.12.10/x64/python.exe" "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/tools/gui_assets/validate_concept_c.py" "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/concept_c_gui"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"concept_c_asset_pack" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+OK: 225 assets, 2x101 knob frames, 6 LED sprites, 1 powdercoat tile; dimensions/RGBA verified.
+<end of output>
+Test time =   0.17 sec
+----------------------------------------------------------
+Test Passed.
+"concept_c_asset_pack" end time: Nov 11 10:43 Coordinated Universal Time
+"concept_c_asset_pack" time elapsed: 00:00:00
+----------------------------------------------------------
+
+35/46 Testing: plugin_state
+35/46 Test: plugin_state
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/plugin_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"plugin_state" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: parameter state roundtrip, fixed PDC, automated routing, oversized buffers, host bypass, deterministic render without editor
+<end of output>
+Test time =   0.07 sec
+----------------------------------------------------------
+Test Passed.
+"plugin_state" end time: Nov 11 10:43 Coordinated Universal Time
+"plugin_state" time elapsed: 00:00:00
+----------------------------------------------------------
+
+36/46 Testing: stereo_integration
+36/46 Test: stereo_integration
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/stereo_integration_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"stereo_integration" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: Stereoize APVTS reaches audio, presence/on flags, Parallel 1/N diagnosis and unchanged PDC at three rates
+<end of output>
+Test time =   0.31 sec
+----------------------------------------------------------
+Test Passed.
+"stereo_integration" end time: Nov 11 10:43 Coordinated Universal Time
+"stereo_integration" time elapsed: 00:00:00
+----------------------------------------------------------
+
+37/46 Testing: module_integration
+37/46 Test: module_integration
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/module_integration_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"module_integration" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: add/remove transparency and stable PDC, stereo mono sum, Analog/upward/Dynamic EQ state and deterministic audio, no callback allocation at four sample rates
+<end of output>
+Test time =   0.38 sec
+----------------------------------------------------------
+Test Passed.
+"module_integration" end time: Nov 11 10:43 Coordinated Universal Time
+"module_integration" time elapsed: 00:00:00
+----------------------------------------------------------
+
+38/46 Testing: parallel_integration
+38/46 Test: parallel_integration
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/parallel_integration_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"parallel_integration" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: APVTS -> graph branch trim/mix/compensation, schema state and stable PDC at four rates
+<end of output>
+Test time =   0.63 sec
+----------------------------------------------------------
+Test Passed.
+"parallel_integration" end time: Nov 11 10:43 Coordinated Universal Time
+"parallel_integration" time elapsed: 00:00:00
+----------------------------------------------------------
+
+39/46 Testing: dynamics_phase2_integration
+39/46 Test: dynamics_phase2_integration
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/dynamics_phase2_integration_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"dynamics_phase2_integration" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: Phase 2B APVTS, output, state and PDC at four rates
+<end of output>
+Test time =   0.24 sec
+----------------------------------------------------------
+Test Passed.
+"dynamics_phase2_integration" end time: Nov 11 10:43 Coordinated Universal Time
+"dynamics_phase2_integration" time elapsed: 00:00:00
+----------------------------------------------------------
+
+40/46 Testing: stabilizer_phase2_integration
+40/46 Test: stabilizer_phase2_integration
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/stabilizer_phase2_integration_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"stabilizer_phase2_integration" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: Phase 2C APVTS, output, state and PDC at four rates
+<end of output>
+Test time =   0.62 sec
+----------------------------------------------------------
+Test Passed.
+"stabilizer_phase2_integration" end time: Nov 11 10:43 Coordinated Universal Time
+"stabilizer_phase2_integration" time elapsed: 00:00:00
+----------------------------------------------------------
+
+41/46 Testing: chain_functional
+41/46 Test: chain_functional
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/chain_functional_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"chain_functional" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: all six modules react after re-add from bypass/all-bands-off, both topologies, four sample rates, bypass transparency, independent parallel sum and routing state
+<end of output>
+Test time =   4.40 sec
+----------------------------------------------------------
+Test Passed.
+"chain_functional" end time: Nov 11 10:43 Coordinated Universal Time
+"chain_functional" time elapsed: 00:00:04
+----------------------------------------------------------
+
+42/46 Testing: brain_analysis
+42/46 Test: brain_analysis
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/brain_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"brain_analysis" start time: Nov 11 10:43 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: real audio capture, exact duration, no callback C++ allocations, independent worker measurements, no automatic changes, revision, stale protection, single Undo, silence, cancel and overflow
+<end of output>
+Test time =  13.22 sec
+----------------------------------------------------------
+Test Passed.
+"brain_analysis" end time: Nov 11 10:44 Coordinated Universal Time
+"brain_analysis" time elapsed: 00:00:13
+----------------------------------------------------------
+
+43/46 Testing: inspector
+43/46 Test: inspector
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/inspector_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"inspector" start time: Nov 11 10:44 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: real callback I/O calibration without editor, loudness, C++ allocation guard, audio-safe meter reset, host reset and sample-rate change
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"inspector" end time: Nov 11 10:44 Coordinated Universal Time
+"inspector" time elapsed: 00:00:00
+----------------------------------------------------------
+
+44/46 Testing: presets
+44/46 Test: presets
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/preset_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"presets" start time: Nov 11 10:44 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: preset file roundtrip, atomic rejection, missing/oversized files, grouped undo/redo, redo invalidation and host restore history reset
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"presets" end time: Nov 11 10:44 Coordinated Universal Time
+"presets" time elapsed: 00:00:00
+----------------------------------------------------------
+
+45/46 Testing: state_validation
+45/46 Test: state_validation
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/state_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"state_validation" start time: Nov 11 10:44 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: restored realtime/offline renders match at four sample rates and variable block sizes; settings preserved
+Passed: all parameters roundtrip, 26 invalid trees rejected, invalid/truncated binary leaves settings unchanged
+<end of output>
+Test time =   0.10 sec
+----------------------------------------------------------
+Test Passed.
+"state_validation" end time: Nov 11 10:44 Coordinated Universal Time
+"state_validation" time elapsed: 00:00:00
+----------------------------------------------------------
+
+46/46 Testing: analysis
+46/46 Test: analysis
+Command: "D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build/Release/analysis_tests.exe"
+Directory: D:/a/JerzyMasterLabXJerzyMasterLabX/JerzyMasterLabXJerzyMasterLabX/build
+"analysis" start time: Nov 11 10:44 Coordinated Universal Time
+Output:
+----------------------------------------------------------
+Passed: stereo-energy FFT preserves anti-phase audio, coherent amplitude and single-channel calibration at all four FFT sizes
+<end of output>
+Test time =   0.02 sec
+----------------------------------------------------------
+Test Passed.
+"analysis" end time: Nov 11 10:44 Coordinated Universal Time
+"analysis" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Nov 11 10:44 Coordinated Universal Time

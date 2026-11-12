@@ -1,0 +1,17 @@
+{
+  "commit": "02785d881fb354a753b4af450098bf6806924fb0",
+  "windows_run": 43005212781,
+  "windows_ctest_passed": 46,
+  "windows_ctest_failed": 0,
+  "windows_gui": "CI success",
+  "windows_pluginval": "CI success, strictness 5",
+  "artifact_id": 13847878207,
+  "artifact_sha256": "24d995098e1433c17399a6b0a4f267a62bd7e985c5057640859f9b4cfbf40473",
+  "package_sha256": "482b64b21fff589a555353cc98805dc31cf3e8ced1baab3737cf63a7964ccba2",
+  "binary_sha256": "b6e96b00e4996fdc0e2f7cf4c04c273ebe8b7efefc8f1268ed7b3995ca8be648",
+  "pe_machine": "0x8664 (AMD64)",
+  "zip_crc": "both archives PASS",
+  "installer_execution": "NOT VERIFIED",
+  "FL_Studio": "NOT VERIFIED",
+  "full_specification": "NOT COMPLETE"
+}

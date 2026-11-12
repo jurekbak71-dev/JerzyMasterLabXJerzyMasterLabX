@@ -67,3 +67,13 @@ The complete specification is **not fulfilled**. A repair artifact must be label
 - [Approved operating guide](https://app.notion.com/p/4085fed1901b817db779c41c0375f6bc)
 - Repo AGENTS.md, CMakeLists.txt, docs/MASTERLABX_EXECUTION_DIRECTIVE.md, docs/stereo-architect, docs/phase5/FINAL_TRUE_PEAK_RESEARCH.md, active Source headers and tests named above.
 - Local JUCE 8.0.6 source, especially extras/Build/juceaide/CMakeLists.txt and extras/Build/CMake/JUCEUtils.cmake for the build diagnosis.
+
+## Verified on 2026-11-12: repair candidate 02785d8
+
+Windows [run 43005212781](https://github.com/jurekbak71-dev/JerzyMasterLabXJerzyMasterLabX/actions/runs/43005212781) completed successfully. Downloaded LastTest.log contains 46 Test Passed / 0 Test Failed. CI also passed real GUI reopen/resize, pluginval strictness 5 and packaging. Exact artifact head is 02785d881fb354a753b4af450098bf6806924fb0.
+
+Downloaded artifact hash matches GitHub metadata; both outer and inner ZIP CRC checks passed. The VST3 has PE signature and AMD64 machine 0x8664, plus moduleinfo.json. Package contains CMD/PowerShell installer, installation instructions and font license. Installer source was read; it requests elevation and replaces the existing VST3 bundle in CommonProgramFiles. **Installer execution and FL Studio remain unverified.** Checksums are in evidence/2026-11-12/windows-package-verification.json.
+
+Final Linux run for 02785d8: 46/46 PASS, 42.02 s; GUI PASS. Independent 8x/49-tap stress fixture: 96 cases, worst excess -0.2110 dB relative to ceiling. This is fixture evidence, not universal true-peak conformance. Full-chain benchmark fixture and baseline/current CSVs are attached; they exclude restoration, host/GUI overhead and deadline-jitter testing.
+
+This is an installable test candidate with bounded regression repairs. The open requirement matrix above still applies; the full task is not complete and no main merge occurred.

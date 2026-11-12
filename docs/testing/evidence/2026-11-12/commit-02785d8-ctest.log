@@ -1,0 +1,97 @@
+Test project /workspace/work/masterlabx/build-plugin
+      Start  1: final_limiter_off
+ 1/46 Test  #1: final_limiter_off ................   Passed    0.03 sec
+      Start  2: scope_partition
+ 2/46 Test  #2: scope_partition ..................   Passed    0.19 sec
+      Start  3: dsp
+ 3/46 Test  #3: dsp ..............................   Passed    0.12 sec
+      Start  4: routing
+ 4/46 Test  #4: routing ..........................   Passed    0.23 sec
+      Start  5: response
+ 5/46 Test  #5: response .........................   Passed    0.04 sec
+      Start  6: limiter_meter
+ 6/46 Test  #6: limiter_meter ....................   Passed    0.09 sec
+      Start  7: filters
+ 7/46 Test  #7: filters ..........................   Passed    1.09 sec
+      Start  8: meters
+ 8/46 Test  #8: meters ...........................   Passed    0.05 sec
+      Start  9: loudness
+ 9/46 Test  #9: loudness .........................   Passed    1.09 sec
+      Start 10: realtime_allocations
+10/46 Test #10: realtime_allocations .............   Passed    0.18 sec
+      Start 11: brain_rules
+11/46 Test #11: brain_rules ......................   Passed    0.60 sec
+      Start 12: modules
+12/46 Test #12: modules ..........................   Passed    0.46 sec
+      Start 13: dynamics_phase2
+13/46 Test #13: dynamics_phase2 ..................   Passed    0.26 sec
+      Start 14: stabilizer
+14/46 Test #14: stabilizer .......................   Passed    0.22 sec
+      Start 15: stabilizer_phase2
+15/46 Test #15: stabilizer_phase2 ................   Passed    1.52 sec
+      Start 16: serial_graph
+16/46 Test #16: serial_graph .....................   Passed    4.78 sec
+      Start 17: parallel_routing
+17/46 Test #17: parallel_routing .................   Passed    1.43 sec
+      Start 18: stereo_architect
+18/46 Test #18: stereo_architect .................   Passed    4.02 sec
+      Start 19: analog_graph_integration
+19/46 Test #19: analog_graph_integration .........   Passed    0.51 sec
+      Start 20: final_true_peak_graph
+20/46 Test #20: final_true_peak_graph ............   Passed    0.98 sec
+      Start 21: final_true_peak_adversarial
+21/46 Test #21: final_true_peak_adversarial ......   Passed    0.56 sec
+      Start 22: final_true_peak_differential
+22/46 Test #22: final_true_peak_differential .....   Passed    0.36 sec
+      Start 23: final_true_peak_dsp
+23/46 Test #23: final_true_peak_dsp ..............   Passed    0.36 sec
+      Start 24: transient_sculptor_dsp
+24/46 Test #24: transient_sculptor_dsp ...........   Passed    0.18 sec
+      Start 25: bass_architect_dsp
+25/46 Test #25: bass_architect_dsp ...............   Passed    0.13 sec
+      Start 26: impact_authority
+26/46 Test #26: impact_authority .................   Passed    0.49 sec
+      Start 27: audio_restoration
+27/46 Test #27: audio_restoration ................   Passed    0.03 sec
+      Start 28: analogizer_dsp
+28/46 Test #28: analogizer_dsp ...................   Passed    0.08 sec
+      Start 29: analog_color_dsp
+29/46 Test #29: analog_color_dsp .................   Passed    0.33 sec
+      Start 30: harmonic_graph_integration
+30/46 Test #30: harmonic_graph_integration .......   Passed    0.52 sec
+      Start 31: harmonic_oversampling_4x
+31/46 Test #31: harmonic_oversampling_4x .........   Passed    0.35 sec
+      Start 32: harmonic_oversampling_dsp
+32/46 Test #32: harmonic_oversampling_dsp ........   Passed    0.15 sec
+      Start 33: harmonic_exciter_prototype
+33/46 Test #33: harmonic_exciter_prototype .......   Passed    1.45 sec
+      Start 34: concept_c_asset_pack
+34/46 Test #34: concept_c_asset_pack .............   Passed    0.19 sec
+      Start 35: plugin_state
+35/46 Test #35: plugin_state .....................   Passed    0.08 sec
+      Start 36: stereo_integration
+36/46 Test #36: stereo_integration ...............   Passed    0.30 sec
+      Start 37: module_integration
+37/46 Test #37: module_integration ...............   Passed    0.42 sec
+      Start 38: parallel_integration
+38/46 Test #38: parallel_integration .............   Passed    0.63 sec
+      Start 39: dynamics_phase2_integration
+39/46 Test #39: dynamics_phase2_integration ......   Passed    0.21 sec
+      Start 40: stabilizer_phase2_integration
+40/46 Test #40: stabilizer_phase2_integration ....   Passed    0.69 sec
+      Start 41: chain_functional
+41/46 Test #41: chain_functional .................   Passed    5.48 sec
+      Start 42: brain_analysis
+42/46 Test #42: brain_analysis ...................   Passed   10.96 sec
+      Start 43: inspector
+43/46 Test #43: inspector ........................   Passed    0.05 sec
+      Start 44: presets
+44/46 Test #44: presets ..........................   Passed    0.02 sec
+      Start 45: state_validation
+45/46 Test #45: state_validation .................   Passed    0.09 sec
+      Start 46: analysis
+46/46 Test #46: analysis .........................   Passed    0.01 sec
+
+100% tests passed out of 46
+
+Total Test time (real) =  42.02 sec
