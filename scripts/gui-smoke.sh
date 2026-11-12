@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-cd /workspace/JerzyMasterLabXJerzyMasterLabX
+script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$script_dir/.."
 source scripts/cloud-env.sh
 # Serialize desktop tests and their shared log files.
 exec 9>build-plugin/gui-tests.lock

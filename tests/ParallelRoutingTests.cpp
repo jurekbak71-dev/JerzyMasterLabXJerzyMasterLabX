@@ -24,6 +24,26 @@ Block input(int block,double rate){Block out;for(int i=0;i<257;++i){const double
 void process(masterlab::SerialGraph& graph,Block& block){std::array<float,257> trace{};audit=true;graph.process(block[0].data(),block[1].data(),257,false,trace.data());audit=false;}
 
 int main(){
+ // Full parallel mode must expose every real pre-final processor. The final
+ // limiter is intentionally not a branch: it remains the single fixed slot.
+ {
+  masterlab::SerialGraph full;
+  std::array<bool,masterlab::fullParallelBranchCount> present{};
+  std::array<bool,masterlab::fullParallelBranchCount> enabled{};
+  std::array<float,masterlab::fullParallelBranchCount> trims{},mixes{};
+  present[masterlab::parallelAnalogExciter]=true;enabled.fill(true);mixes.fill(1.f);
+  masterlab::HarmonicExciterSettings exciter;exciter.enabled=true;exciter.amount[1]=1.f;exciter.driveDb=18.f;exciter.mix=1.f;
+  full.harmonicExciterSettings(exciter);
+  full.fullParallelTopology(true,present,enabled);
+  full.fullParallelSettings(false,trims,mixes);
+  full.prepare(48000);
+  double changed=0;
+  for(int block=0;block<100;++block){auto a=input(block,48000),dry=a;process(full,a);if(block>50)for(int c=0;c<2;++c)for(int i=0;i<257;++i)changed+=std::abs(a[c][i]-dry[c][i]);}
+  const auto reading=full.parallelRead();
+  check(reading.active&&reading.branches==1&&reading.present[masterlab::parallelAnalogExciter],"full parallel topology omits Analog Exciter");
+  check(reading.rms[masterlab::parallelAnalogExciter]>0&&changed>1,"full parallel Analog Exciter branch does not process audio");
+  check(!reading.limiterBypassed,"fixed final limiter was incorrectly represented as a parallel branch");
+ }
  std::cout<<"rate,legacy_delta_rms,controlled_delta_rms,correlation,peak\n";
  for(double rate:{44100.,48000.,96000.,192000.}){
   masterlab::SerialGraph legacy,eq,dynamics,dry,controlled,compensated,reversed;

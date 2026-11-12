@@ -107,6 +107,19 @@ int main(){
   check(outputTruePeak8x(processed)<=ceiling*1.012,
         "expanded maximizer output violates independently reconstructed 8x ceiling");
  }
+ // Advanced controls are DSP controls, not GUI-only state. Every detector
+ // quality keeps the fixed latency and the independently reconstructed bound.
+ for(int oversamplingMode=0;oversamplingMode<3;++oversamplingMode){
+  FinalTruePeakSettings advanced;advanced.enabled=true;advanced.ceilingDb=-4;advanced.driveDb=12;
+  advanced.attackMs=4;advanced.lookaheadSamples=48;advanced.transientEmphasis=.8f;advanced.oversamplingMode=oversamplingMode;
+  const auto output=render(48000,advanced,113,true);
+  const float ceiling=std::pow(10.f,advanced.ceilingDb/20.f);
+  check(outputTruePeak8x(output)<=ceiling*1.012,"selectable oversampling violates reconstructed ceiling");
+  auto neutral=advanced;neutral.attackMs=0;neutral.lookaheadSamples=128;neutral.transientEmphasis=0;
+  const auto reference=render(48000,neutral,113,true);
+  double difference=0;for(size_t i=1024;i<output.size();++i)difference+=std::abs(output[i]-reference[i]);
+  check(difference>1.,"attack/lookahead/transient emphasis do not affect actual limiter audio");
+ }
  FinalTruePeak dsp;FinalTruePeakSettings s;s.enabled=true;
  dsp.settings(s);dsp.prepare(48000);
  std::array<float,512> a{},b{};a[0]=std::numeric_limits<float>::quiet_NaN();

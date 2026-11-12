@@ -8,6 +8,17 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
   engine.stabilizerSettings({v(149)>.5f&&v(150)>.5f,v(151)>.5f,v(159)>.5f,v(160)>.5f,static_cast<int>(v(152)),v(153),v(154),v(155),v(156),v(157),v(158),static_cast<int>(v(179))});
   engine.topology(v(161)>.5f,{v(110)>.5f,v(98)>.5f,v(88)>.5f,v(86)>.5f,v(87)>.5f,v(149)>.5f},{v(111)>.5f,v(99)>.5f,v(89)>.5f,v(4)>.5f,v(5)>.5f,v(150)>.5f});
   std::array<float,6> trims{},mixes{};for(size_t i=0;i<6;++i){trims[i]=v(164+i*2);mixes[i]=v(165+i*2);}engine.parallelSettings(v(163)>.5f,trims,mixes);
+  std::array<bool,fullParallelBranchCount> fullPresent{
+   v(110)>.5f,v(98)>.5f,v(88)>.5f,v(86)>.5f,v(149)>.5f,
+   v(180)>.5f||v(191)>.5f||v(285)>.5f,v(203)>.5f,v(211)>.5f,v(286)>.5f};
+  std::array<bool,fullParallelBranchCount> fullEnabled{
+   v(111)>.5f,v(99)>.5f,v(89)>.5f,v(4)>.5f,v(150)>.5f,
+   (v(180)>.5f&&v(181)>.5f)||(v(191)>.5f&&v(192)>.5f)||(v(285)>.5f&&v(278)>.5f),
+   v(204)>.5f,v(212)>.5f,v(287)>.5f};
+  std::array<float,fullParallelBranchCount> fullTrims{v(164),v(166),v(168),v(170),v(174),v(318),v(320),v(322),v(324)};
+  std::array<float,fullParallelBranchCount> fullMixes{v(165),v(167),v(169),v(171),v(175),v(319),v(321),v(323),v(325)};
+  engine.fullParallelTopology(v(161)>.5f,fullPresent,fullEnabled);
+  engine.fullParallelSettings(v(163)>.5f,fullTrims,fullMixes);
   HarmonicExciterSettings h;h.enabled=v(180)>.5f&&v(181)>.5f;for(size_t k=0;k<4;++k)h.amount[k]=v(182+k);h.even=v(186);h.odd=v(187);h.driveDb=v(188);h.mix=v(189);h.outputDb=v(190);h.impact=v(201);h.oversample2x=false;h.adaa=true;engine.harmonicExciterSettings(h);
   AnalogColorSettings a;a.enabled=v(191)>.5f&&v(192)>.5f;a.mode=static_cast<AnalogColorMode>(std::clamp(static_cast<int>(v(193)),0,3));a.driveDb=v(194);a.bias=v(195);a.tone=v(196);a.dynamics=v(197);a.mix=v(198);a.outputDb=v(199);a.autoGain=v(200)>.5f;a.impact=v(202);engine.analogColorSettings(a);
   BassArchitectSettings b;b.enabled=v(203)>.5f&&v(204)>.5f;b.sub=v(205);b.body=v(206);b.harmonics=v(207);b.monoBass=0.f; // Stereo Architect alone handles mono bass.
@@ -20,6 +31,7 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
   tp.releaseMs=dedicatedTP?v(224):v(53);
   tp.driveDb=dedicatedTP?v(225):0.f;
   tp.character=static_cast<int>(v(312));tp.autoRelease=v(313)>.5f;tp.softClip=v(314);tp.outputDb=v(315);
+  tp.attackMs=v(326);tp.lookaheadSamples=v(327);tp.transientEmphasis=v(328);tp.oversamplingMode=static_cast<int>(v(329));
   engine.finalTruePeakSettings(tp);
   engine.analogExciterMonitor(v(316),v(317)>.5f);
  // Shared by host rendering and Brain offline verification.

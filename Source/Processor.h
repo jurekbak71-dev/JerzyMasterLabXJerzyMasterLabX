@@ -105,6 +105,16 @@ public:
  p.add(std::make_unique<juce::AudioParameterFloat>("truePeakOutput","Final Maximizer output trim dB",-12.f,6.f,0.f));
  p.add(std::make_unique<juce::AudioParameterFloat>("analogGlobalMix","Analog Exciter combined mix",0.f,1.f,1.f));
  p.add(std::make_unique<juce::AudioParameterBool>("analogDelta","Analog Exciter input minus processed",false));
+ for(const auto& branch:std::array<std::pair<const char*,const char*>,4>{{
+  {"Analog","Analog Exciter / Color"},{"Bass","Bass Architect"},
+  {"Transient","Transient Sculptor"},{"Restoration","Restoration"}}}){
+  p.add(std::make_unique<juce::AudioParameterFloat>(juce::String("parallelTrim")+branch.first,juce::String(branch.second)+" parallel trim",-24.f,12.f,0.f));
+  p.add(std::make_unique<juce::AudioParameterFloat>(juce::String("parallelMix")+branch.first,juce::String(branch.second)+" parallel wet",0.f,1.f,1.f));
+ }
+ p.add(std::make_unique<juce::AudioParameterFloat>("truePeakAttack","Final Maximizer attack ms",juce::NormalisableRange<float>(0.f,20.f,.01f,.5f),0.f));
+ p.add(std::make_unique<juce::AudioParameterFloat>("truePeakLookahead","Final Maximizer lookahead samples",0.f,128.f,128.f));
+ p.add(std::make_unique<juce::AudioParameterFloat>("truePeakTransientEmphasis","Final Maximizer transient emphasis",0.f,1.f,0.f));
+ p.add(std::make_unique<juce::AudioParameterChoice>("truePeakOversampling","Final Maximizer detector oversampling",juce::StringArray{"1x","2x","4x"},2));
  return p;}
  static void addModuleParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
   auto boolean=[&](const char* id,const char* name,bool initial){p.add(std::make_unique<juce::AudioParameterBool>(id,name,initial));};

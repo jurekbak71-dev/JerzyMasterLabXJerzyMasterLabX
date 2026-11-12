@@ -11,6 +11,12 @@ using ModuleOrder=std::array<int,6>;
 // Ten movable processors including Restoration, and exactly one fixed final
 // combined limiter. Legacy routing indices 4 and 7 are retired from this path.
 using FullModuleOrder=std::array<int,10>;
+inline constexpr size_t fullParallelBranchCount=9;
+enum FullParallelBranch : size_t {
+ parallelDynamicEq,parallelDynamics,parallelStereo,parallelEq,parallelStabilizer,
+ parallelAnalogExciter,parallelBass,parallelTransient,parallelRestoration
+};
+inline constexpr std::array<int,fullParallelBranchCount> fullParallelKinds{0,1,2,3,5,6,8,9,11};
 inline constexpr FullModuleOrder defaultFullOrder{5,0,1,2,3,6,8,9,11,10};
 inline constexpr FullModuleOrder allowedFullModules{0,1,2,3,5,6,8,9,11,10};
 // Repair transient duplicate host slot automation and pin the final limiter.
@@ -48,8 +54,8 @@ inline int encodeOrder(ModuleOrder order,bool limiterFirst=false) noexcept {
  return code;
 }
 struct ParallelReading {
- std::array<float,6> rms{},trimDb{},mix{};
- std::array<bool,6> present{},enabled{};
+ std::array<float,fullParallelBranchCount> rms{},trimDb{},mix{};
+ std::array<bool,fullParallelBranchCount> present{},enabled{};
  bool active=false,compensated=false,limiterBypassed=false;
  int branches=0;
 };
@@ -65,12 +71,18 @@ class SerialGraph {
   std::array<Slew,6> trimSlew{},mixSlew{};Slew compensationSlew;float meterCoefficient=.999f;
   std::array<std::array<std::vector<float>,2>,6> alignment;size_t alignPosition=0;
   std::array<std::array<float,128>,2> branch{},dry{},sum{},originalInput{};
+  bool fullParallel=false;
+  std::array<bool,fullParallelBranchCount> fullPresent{},fullEnabled{true,true,true,true,true,true,true,true,true};
+  std::array<float,fullParallelBranchCount> fullTargetTrimDb{},fullTargetMix{1,1,1,1,1,1,1,1,1},fullBranchEnergy{};
+  std::array<Slew,fullParallelBranchCount> fullTrimSlew{},fullMixSlew{};
+  std::array<std::array<std::array<float,AnalogExciter::latencySamples()+1>,2>,fullParallelBranchCount> fullAlignment{};
+  size_t fullAlignPosition=0;
   std::array<std::array<float,AnalogExciter::latencySamples()>,2> profileDryDelay{};
   size_t profileDryPosition=0;
   std::array<std::vector<float>,2> serialFinalDelay;
   size_t serialFinalPosition=0;
   Slew profileSlew;float profileTarget=1.f;std::array<float,128> branchTrace{},weightSum{},limiterDelta{};
-  void prepareParallel(double rate)noexcept{profileSlew.prepare(rate,profileTarget);meterCoefficient=static_cast<float>(std::exp(-1/(rate*.4)));branchEnergy={};compensationSlew.prepare(rate,compensated?1.f:0.f);for(size_t i=0;i<6;++i){trimSlew[i].prepare(rate,dbGain(targetTrimDb[i]));mixSlew[i].prepare(rate,targetMix[i]);}}
+  void prepareParallel(double rate)noexcept{profileSlew.prepare(rate,profileTarget);meterCoefficient=static_cast<float>(std::exp(-1/(rate*.4)));branchEnergy={};fullBranchEnergy={};compensationSlew.prepare(rate,compensated?1.f:0.f);for(size_t i=0;i<6;++i){trimSlew[i].prepare(rate,dbGain(targetTrimDb[i]));mixSlew[i].prepare(rate,targetMix[i]);}for(size_t i=0;i<fullParallelBranchCount;++i){fullTrimSlew[i].prepare(rate,dbGain(fullTargetTrimDb[i]));fullMixSlew[i].prepare(rate,fullTargetMix[i]);}}
   void parallelSettings(bool normalize,std::array<float,6> trims,std::array<float,6> mixes)noexcept{compensated=normalize;targetTrimDb=trims;targetMix=mixes;}
   void parallelProcess(float* l,float* r,int n,float* trace)noexcept{
    for(auto& channel:sum)std::fill_n(channel.data(),n,0.f);std::fill_n(trace,n,1.f);std::fill_n(branchTrace.data(),n,1.f);std::fill_n(weightSum.data(),n,0.f);std::fill_n(limiterDelta.data(),n,0.f);int branches=0;
@@ -85,7 +97,19 @@ class SerialGraph {
    for(int i=0;i<n;++i){const float normalization=compensationSlew.tick(compensated?1.f:0.f);const float denominator=std::max(1e-6f,static_cast<float>(branches)+normalization*(weightSum[i]-branches));l[i]=clean(sum[0][i]/denominator);r[i]=clean(sum[1][i]/denominator);trace[i]=1+limiterDelta[i]/denominator;}
    alignPosition=(alignPosition+static_cast<size_t>(n))%alignment[0][0].size();
   }
-  ParallelReading parallelRead()const noexcept{ParallelReading out;out.active=parallel;out.compensated=compensated;out.present=present;out.enabled=enabled;for(size_t i=0;i<6;++i){out.rms[i]=std::sqrt(std::max(0.f,branchEnergy[i]));out.trimDb[i]=levelDb(trimSlew[i].value);out.mix[i]=mixSlew[i].value;if(present[i])++out.branches;}out.limiterBypassed=parallel&&out.branches>1&&present[4]&&enabled[4];return out;}
+  void fullParallelProcess(float* l,float* r,int n,float* trace)noexcept{
+   for(auto& channel:sum)std::fill_n(channel.data(),n,0.f);std::fill_n(trace,n,1.f);std::fill_n(weightSum.data(),n,0.f);int branches=0;
+   for(size_t slot=0;slot<fullParallelBranchCount;++slot)if(fullPresent[slot]){++branches;std::copy_n(l,n,branch[0].data());std::copy_n(r,n,branch[1].data());std::copy_n(l,n,dry[0].data());std::copy_n(r,n,dry[1].data());
+    auto* a=branch[0].data();auto* b=branch[1].data();if(fullEnabled[slot])processOne(fullParallelKinds[slot],a,b,n,trace);
+    size_t position=fullAlignPosition;for(int i=0;i<n;++i){const size_t next=(position+1)%fullAlignment[slot][0].size();const float wet=fullMixSlew[slot].tick(std::clamp(fullTargetMix[slot],0.f,1.f));const float weight=fullTrimSlew[slot].tick(dbGain(std::clamp(fullTargetTrimDb[slot],-24.f,12.f)));double energy=0;
+     for(int c=0;c<2;++c){float mixed=dry[c][i]+wet*(branch[c][i]-dry[c][i]);if(slot!=parallelAnalogExciter){const float delayed=fullAlignment[slot][c][next];fullAlignment[slot][c][position]=mixed;mixed=delayed;}const float contribution=mixed*weight;sum[c][i]+=contribution;energy+=static_cast<double>(contribution)*contribution;}
+     fullBranchEnergy[slot]=meterCoefficient*fullBranchEnergy[slot]+(1-meterCoefficient)*static_cast<float>(energy*.5);weightSum[i]+=weight;position=next;}
+   }
+   if(!branches){for(int i=0;i<n;++i){for(int c=0;c<2;++c){auto& delay=fullAlignment[0][c];const size_t next=(fullAlignPosition+1)%delay.size();const float delayed=delay[next];delay[fullAlignPosition]=(c? r:l)[i];(c? r:l)[i]=delayed;}fullAlignPosition=(fullAlignPosition+1)%fullAlignment[0][0].size();}return;}
+   for(int i=0;i<n;++i){const float normalization=compensationSlew.tick(compensated?1.f:0.f);const float denominator=std::max(1e-6f,static_cast<float>(branches)+normalization*(weightSum[i]-branches));l[i]=clean(sum[0][i]/denominator);r[i]=clean(sum[1][i]/denominator);}
+   fullAlignPosition=(fullAlignPosition+static_cast<size_t>(n))%fullAlignment[0][0].size();
+  }
+  ParallelReading parallelRead()const noexcept{ParallelReading out;out.active=parallel;out.compensated=compensated;if(fullParallel){out.present=fullPresent;out.enabled=fullEnabled;for(size_t i=0;i<fullParallelBranchCount;++i){out.rms[i]=std::sqrt(std::max(0.f,fullBranchEnergy[i]));out.trimDb[i]=levelDb(fullTrimSlew[i].value);out.mix[i]=fullMixSlew[i].value;if(fullPresent[i])++out.branches;}return out;}for(size_t i=0;i<6;++i){out.present[i]=present[i];out.enabled[i]=enabled[i];out.rms[i]=std::sqrt(std::max(0.f,branchEnergy[i]));out.trimDb[i]=levelDb(trimSlew[i].value);out.mix[i]=mixSlew[i].value;if(present[i])++out.branches;}out.limiterBypassed=parallel&&out.branches>1&&present[4]&&enabled[4];return out;}
   void processOne(int kind,float* l,float* r,int n,float* trace)noexcept {
    switch(kind){
     case 5:stabilizer.process(l,r,n);break;
@@ -105,7 +129,7 @@ class SerialGraph {
        l[i]=originalInput[0][i]+blend*(l[i]-originalInput[0][i]);
        r[i]=originalInput[1][i]+blend*(r[i]-originalInput[1][i]);
       }
-      if(extended)for(int i=0;i<n;++i){
+      if(extended||fullParallel)for(int i=0;i<n;++i){
        for(int c=0;c<2;++c){
         float& sample=(c==0?l:r)[i];const float delayed=serialFinalDelay[c][serialFinalPosition];
         serialFinalDelay[c][serialFinalPosition]=sample;sample=delayed;
@@ -128,8 +152,9 @@ class SerialGraph {
     for(int kind:fullOrder)processOne(kind,l,r,n,trace);
     return;
    }
-   if(parallel)parallelProcess(l,r,n,trace);
+   if(parallel){if(fullParallel)fullParallelProcess(l,r,n,trace);else parallelProcess(l,r,n,trace);}
    else for(int kind:order)processOne(kind,l,r,n,trace);
+   if(parallel&&fullParallel){processOne(10,l,r,n,trace);return;}
    // Legacy processing order remains byte-for-byte equivalent in topology:
    // the five optional processors always follow the old six-slot graph.
    for(int kind=6;kind<10;++kind)processOne(kind,l,r,n,trace);
@@ -146,10 +171,11 @@ class SerialGraph {
  ModuleOrder requested{5,0,1,2,3,4};
  FullModuleOrder requestedFull=defaultFullOrder;bool requestedExtended=false;
  bool requestedParallel=false;std::array<bool,6> requestedPresent{},requestedEnabled{true,true,true,true,true,true};
+ bool requestedFullParallel=false;std::array<bool,fullParallelBranchCount> requestedFullPresent{},requestedFullEnabled{true,true,true,true,true,true,true,true,true};
  std::array<std::array<float,128>,2> scratch{};std::array<float,128> trace{};
 public:
- void prepare(double rate,bool legacy=false,int code=0){rate=std::isfinite(rate)&&rate>=8000&&rate<=384000?rate:48000;requested=decodeOrder(code,legacy);active=0;progress=1;step=static_cast<float>(1/(rate*.02));for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.order=requested;b.extended=requestedExtended;b.fullOrder=requestedFull;b.engine.prepare(rate);b.stereo.prepare(rate);b.dynamics.prepare(rate);b.dynamicEq.prepare(rate);b.stabilizer.prepare(rate);b.analogExciter.prepare(rate);b.bassArchitect.prepare(rate);b.transientSculptor.prepare(rate);b.restoration.prepare(rate);b.finalTruePeak.prepare(rate);b.parallel=requestedParallel;b.present=requestedPresent;b.enabled=requestedEnabled;b.prepareParallel(rate);b.alignPosition=0;b.profileDryDelay={};b.profileDryPosition=0;b.serialFinalPosition=0;for(auto& channel:b.serialFinalDelay)channel.assign(static_cast<size_t>(b.engine.latency()),0.f);for(auto& module:b.alignment)for(auto& channel:module)channel.assign(static_cast<size_t>(b.engine.latency()+1),0);}}
- void reset()noexcept{progress=1;for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.engine.reset();b.stereo.reset();b.dynamics.reset();b.dynamicEq.reset();b.stabilizer.reset();b.analogExciter.reset();b.bassArchitect.reset();b.transientSculptor.reset();b.restoration.reset();b.finalTruePeak.reset();b.parallel=requestedParallel;b.extended=requestedExtended;b.fullOrder=requestedFull;b.present=requestedPresent;b.branchEnergy={};b.compensationSlew.value=b.compensated?1.f:0.f;b.alignPosition=0;b.profileDryDelay={};b.profileDryPosition=0;b.serialFinalPosition=0;for(auto& channel:b.serialFinalDelay)std::fill(channel.begin(),channel.end(),0.f);for(size_t i=0;i<6;++i){b.trimSlew[i].value=dbGain(b.targetTrimDb[i]);b.mixSlew[i].value=b.targetMix[i];}for(auto& module:b.alignment)for(auto& channel:module)std::fill(channel.begin(),channel.end(),0);}}
+ void prepare(double rate,bool legacy=false,int code=0){rate=std::isfinite(rate)&&rate>=8000&&rate<=384000?rate:48000;requested=decodeOrder(code,legacy);active=0;progress=1;step=static_cast<float>(1/(rate*.02));for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.order=requested;b.extended=requestedExtended;b.fullOrder=requestedFull;b.engine.prepare(rate);b.stereo.prepare(rate);b.dynamics.prepare(rate);b.dynamicEq.prepare(rate);b.stabilizer.prepare(rate);b.analogExciter.prepare(rate);b.bassArchitect.prepare(rate);b.transientSculptor.prepare(rate);b.restoration.prepare(rate);b.finalTruePeak.prepare(rate);b.parallel=requestedParallel;b.fullParallel=requestedFullParallel;b.present=requestedPresent;b.enabled=requestedEnabled;b.fullPresent=requestedFullPresent;b.fullEnabled=requestedFullEnabled;b.prepareParallel(rate);b.alignPosition=0;b.fullAlignPosition=0;b.fullAlignment={};b.profileDryDelay={};b.profileDryPosition=0;b.serialFinalPosition=0;for(auto& channel:b.serialFinalDelay)channel.assign(static_cast<size_t>(b.engine.latency()),0.f);for(auto& module:b.alignment)for(auto& channel:module)channel.assign(static_cast<size_t>(b.engine.latency()+1),0);}}
+ void reset()noexcept{progress=1;for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.engine.reset();b.stereo.reset();b.dynamics.reset();b.dynamicEq.reset();b.stabilizer.reset();b.analogExciter.reset();b.bassArchitect.reset();b.transientSculptor.reset();b.restoration.reset();b.finalTruePeak.reset();b.parallel=requestedParallel;b.fullParallel=requestedFullParallel;b.extended=requestedExtended;b.fullOrder=requestedFull;b.present=requestedPresent;b.fullPresent=requestedFullPresent;b.branchEnergy={};b.fullBranchEnergy={};b.compensationSlew.value=b.compensated?1.f:0.f;b.alignPosition=0;b.fullAlignPosition=0;b.fullAlignment={};b.profileDryDelay={};b.profileDryPosition=0;b.serialFinalPosition=0;for(auto& channel:b.serialFinalDelay)std::fill(channel.begin(),channel.end(),0.f);for(size_t i=0;i<6;++i){b.trimSlew[i].value=dbGain(b.targetTrimDb[i]);b.mixSlew[i].value=b.targetMix[i];}for(size_t i=0;i<fullParallelBranchCount;++i){b.fullTrimSlew[i].value=dbGain(b.fullTargetTrimDb[i]);b.fullMixSlew[i].value=b.fullTargetMix[i];}for(auto& module:b.alignment)for(auto& channel:module)std::fill(channel.begin(),channel.end(),0);}}
  int latency()const noexcept{return banks[active].engine.latency()+AnalogExciter::latencySamples()+FinalTruePeak::latencySamples;}
  void parameters(float hz,float db,float q,float ceiling,bool eq,bool lim)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.engine.parameters(hz,db,q,ceiling,eq,lim);}}
  void limiterParameters(float drive,float release)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.engine.limiterParameters(drive,release);}}
@@ -178,11 +204,13 @@ public:
  AnalogColorReading analogColorRead()const noexcept{return banks[active].analogExciter.legacyReading();}
  void topology(bool parallel,std::array<bool,6> present)noexcept{topology(parallel,present,{true,true,true,true,true,true});}
  void topology(bool parallel,std::array<bool,6> present,std::array<bool,6> enabled)noexcept{requestedParallel=parallel;requestedPresent=present;requestedEnabled=enabled;for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.enabled=enabled;}}
+ void fullParallelTopology(bool parallel,std::array<bool,fullParallelBranchCount> present,std::array<bool,fullParallelBranchCount> enabled)noexcept{requestedParallel=parallel;requestedFullParallel=true;requestedFullPresent=present;requestedFullEnabled=enabled;for(int bank=0;bank<2;++bank){banks[bank].fullEnabled=enabled;}}
  void profileSettings(float target)noexcept{
   const float safe=std::isfinite(target)?std::clamp(target,0.f,1.f):1.f;
   for(int bank=0;bank<2;++bank)banks[bank].profileTarget=safe;
  }
  void parallelSettings(bool compensated,std::array<float,6> trims,std::array<float,6> mixes)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.parallelSettings(compensated,trims,mixes);}}
+ void fullParallelSettings(bool compensated,std::array<float,fullParallelBranchCount> trims,std::array<float,fullParallelBranchCount> mixes)noexcept{for(int bank=0;bank<2;++bank){auto& b=banks[bank];b.compensated=compensated;b.fullTargetTrimDb=trims;b.fullTargetMix=mixes;}}
  void routing(int code,bool legacy)noexcept{requested=decodeOrder(code,legacy);}
  void extendedRouting(bool enabled,FullModuleOrder sequence)noexcept {
   requestedExtended=enabled;requestedFull=sanitizeFullOrder(sequence);
@@ -192,12 +220,15 @@ public:
  void process(float* l,float* r,int count,bool /* legacy supplied through routing */,float* gainTrace)noexcept{
   for(int offset=0;offset<count;){int n=std::min(128,count-offset);
    if(progress>=1&&(banks[active].order!=requested||banks[active].parallel!=requestedParallel||
+    banks[active].fullParallel!=requestedFullParallel||
     banks[active].extended!=requestedExtended||
     (requestedExtended&&banks[active].fullOrder!=requestedFull)||
-    (requestedParallel&&banks[active].present!=requestedPresent))){
+    (requestedParallel&&!requestedFullParallel&&banks[active].present!=requestedPresent)||
+    (requestedParallel&&requestedFullParallel&&banks[active].fullPresent!=requestedFullPresent))){
     // Both banks were prepared with equal vector capacities. Assignment reuses
     // their storage; allocation auditing covers changes while audio is running.
     const auto previousPresent=banks[active].present;banks[1-active]=banks[active];banks[1-active].order=requested;banks[1-active].parallel=requestedParallel;
+    banks[1-active].fullParallel=requestedFullParallel;banks[1-active].fullPresent=requestedFullPresent;
     banks[1-active].extended=requestedExtended;banks[1-active].fullOrder=requestedFull;
     banks[1-active].present=requestedPresent;for(size_t kind=0;kind<6;++kind)if(requestedPresent[kind]&&!previousPresent[kind])for(auto& channel:banks[1-active].alignment[kind])std::fill(channel.begin(),channel.end(),0.f);progress=0;
    }

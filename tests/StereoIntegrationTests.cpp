@@ -13,7 +13,8 @@ std::vector<float> run(int rate,bool present,bool enabled,bool parallel,bool ext
 int main(){
  for(int rate:{44100,48000,96000}){
   auto active=run(rate,true,true,false,false),removed=run(rate,false,true,false,false),bypass=run(rate,true,false,false,false),parallel=run(rate,true,true,true,true);
-  double energy=0;for(size_t i=0;i<active.size();++i){energy+=active[i]*active[i];check(removed[i]==0&&bypass[i]==0,"presence/enabled flags do not bypass Stereoize");check(std::abs(parallel[i]*2-active[i])<2e-6,"parallel no longer dilutes by branch count");}
+  double energy=0,maxParallelError=0;for(size_t i=0;i<active.size();++i){energy+=active[i]*active[i];check(removed[i]==0&&bypass[i]==0,"presence/enabled flags do not bypass Stereoize");maxParallelError=std::max(maxParallelError,std::abs(static_cast<double>(parallel[i]*2-active[i])));}
+  if(maxParallelError>=2e-6){int bestLag=0;double best=1e9;for(int lag=-64;lag<=64;++lag){double e=0;size_t n=0;for(size_t i=64;i+64<active.size();++i){const auto j=static_cast<long>(i)+lag;if(j>=0&&j<static_cast<long>(parallel.size())){const double d=parallel[static_cast<size_t>(j)]*2-active[i];e+=d*d;++n;}}e=std::sqrt(e/std::max<size_t>(1,n));if(e<best){best=e;bestLag=lag;}}std::cerr<<"parallel stereo max error="<<maxParallelError<<" rate="<<rate<<" bestLag="<<bestLag<<" rms="<<best<<'\n';}check(maxParallelError<2e-6,"parallel no longer dilutes by branch count");
   check(energy/active.size()>1e-5,"APVTS -> graph -> Stereoize is inaudible on mono");
  }
  std::cout<<"Passed: Stereoize APVTS reaches audio, presence/on flags, Parallel 1/N diagnosis and unchanged PDC at three rates\n";

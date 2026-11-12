@@ -13,6 +13,8 @@ struct FinalTruePeakSettings {
  bool enabled=false;
  float ceilingDb=-1.f,releaseMs=120.f,driveDb=0.f;
  int character=0;bool autoRelease=false;float softClip=0.f,outputDb=0.f;
+ float attackMs=0.f,lookaheadSamples=128.f,transientEmphasis=0.f;
+ int oversamplingMode=2; // 0: 1x, 1: 2x, 2: 4x detector
 };
 struct FinalTruePeakReading {
  float detectedTruePeak=0.f,outputSamplePeak=0.f,gainReductionDb=0.f;
@@ -36,6 +38,8 @@ private:
  std::uint64_t sampleClock_=0;
  int histPosition_=0,delayPosition_=0;
  float gain_=1.f;
+ float programGain_=1.f,transientEnvelope_=0.f;
+ std::array<float,latencySamples+1> peakHistory_{};
  double sampleRate_=48000.;
  FinalTruePeakSettings settings_{};
  FinalTruePeakReading reading_{};
@@ -75,7 +79,7 @@ public:
  void reset()noexcept{
   history_={};delay_={};peakValues_={};peakStamps_={};
   histPosition_=delayPosition_=0;peakHead_=peakTail_=0;sampleClock_=0;
-  gain_=1.f;reading_={};scope_.reset();
+  gain_=programGain_=1.f;transientEnvelope_=0.f;peakHistory_={};reading_={};scope_.reset();
  }
  FinalTruePeakReading reading()const noexcept{return reading_;}
  void process(float* left,float* right,int count,float* gainTrace=nullptr)noexcept{
@@ -103,6 +107,12 @@ public:
   const float characterScale=settings_.character==1?1.45f:(settings_.character==2?.52f:1.f);
   const float release=std::exp(-1.f/(static_cast<float>(sampleRate_)*.001f*
                                       sane(settings_.releaseMs*characterScale,10.f,1400.f)));
+  const float attackMs=sane(settings_.attackMs,0.f,20.f);
+  const float attack=attackMs<=.001f?0.f:std::exp(-1.f/(static_cast<float>(sampleRate_)*.001f*attackMs));
+  const int lookahead=std::clamp(static_cast<int>(std::lround(sane(settings_.lookaheadSamples,0.f,static_cast<float>(latencySamples)))),0,latencySamples);
+  const int detectorMode=std::clamp(settings_.oversamplingMode,0,2);
+  const int phaseStep=detectorMode==0?4:(detectorMode==1?2:1);
+  const float emphasis=sane(settings_.transientEmphasis,0.f,1.f);
   const float clip=std::clamp(settings_.softClip,0.f,1.f);
   // Nonlinear saturation must run *before* the lookahead true-peak detector:
   // shaping after gain control creates new, undetected intersample peaks.
@@ -124,7 +134,7 @@ public:
    }
    histPosition_=(histPosition_+1)%detectorTaps;
    float peak=0.f;
-   for(int c=0;c<2;++c)for(int p=0;p<oversampling;++p){
+   for(int c=0;c<2;++c)for(int p=0;p<oversampling;p+=phaseStep){
     double value=0.;
     int cursor=histPosition_;
     for(int tap=0;tap<detectorTaps;++tap){
@@ -133,7 +143,11 @@ public:
     }
     peak=std::max(peak,static_cast<float>(std::abs(value)));
    }
+   transientEnvelope_=std::max(peak,transientEnvelope_*.995f);
+   const float transient=std::max(0.f,peak-transientEnvelope_*.92f);
+   peak*=1.f+emphasis*transient/std::max(peak,1.e-6f);
    detected=std::max(detected,peak);
+   peakHistory_[sampleClock_%peakHistory_.size()]=peak;
    // Sliding maximum of the most recent 129 peak estimates.
    // Equal peaks evict older duplicates. No allocation or linear scan.
    // Evict expired indices before insertion (inclusive 129-sample window).
@@ -148,15 +162,26 @@ public:
    peakValues_[peakTail_]=peak;
    peakStamps_[peakTail_]=sampleClock_++;
    peakTail_=(peakTail_+1)%peakQueueCapacity;
-   const float futurePeak=peakValues_[peakHead_];
+   // During startup the delayed output is silence, but the gain computer must
+   // still accumulate the same available future window as the original fixed
+   // 128-sample implementation. Otherwise block telemetry can under-report GR.
+   const auto outputStamp=sampleClock_>static_cast<std::uint64_t>(latencySamples)?
+      sampleClock_-static_cast<std::uint64_t>(latencySamples)-1:0;
+   const auto finalStamp=std::min(sampleClock_-1,outputStamp+static_cast<std::uint64_t>(lookahead));
+   float futurePeak=0.f;
+   for(auto stamp=outputStamp;stamp<=finalStamp;++stamp)
+    futurePeak=std::max(futurePeak,peakHistory_[stamp%peakHistory_.size()]);
    // Conservative true-peak reconstruction safety margin: the 4x input
    // detector alone cannot bound the interpolated output after gain changes.
    // Measured independently against 8x / 49-tap reconstruction stress cases.
-   const float threshold=ceiling*.90f/std::max(1.e-6f,outputGain);
+   const float qualityMargin=detectorMode==0?.78f:(detectorMode==1?.84f:.90f);
+   const float threshold=ceiling*qualityMargin/std::max(1.e-6f,outputGain);
    const float desired=futurePeak>threshold?threshold/futurePeak:1.f;
    const float adaptive=settings_.autoRelease?std::clamp((1.f-gain_)*.48f,0.f,.48f):0.f;
    const float recovery=release+(1.f-release)*adaptive;
-   gain_=desired<gain_?desired:recovery*gain_+(1.f-recovery)*desired;
+   programGain_=desired<programGain_?attack*programGain_+(1.f-attack)*desired:
+                                      recovery*programGain_+(1.f-recovery)*desired;
+   gain_=std::min(desired,programGain_);
    minGain=std::min(minGain,gain_);
    const int outputPosition=(delayPosition_+1)%static_cast<int>(delay_[0].size());
    const float y[2]{

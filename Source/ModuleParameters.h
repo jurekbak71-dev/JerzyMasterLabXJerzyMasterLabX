@@ -4,7 +4,7 @@
 #include <string>
 namespace masterlab {
 // Current host parameter table without the removed LIVE/OFFLINE STEMS module.
-inline constexpr size_t parameterCount=318;
+inline constexpr size_t parameterCount=330;
 inline constexpr std::array<const char*,140> moduleParameterIds{
  "eqPresent","limPresent","stereoPresent","stereoOn","stereoLowWidth","stereoMidWidth","stereoHighWidth","stereoLowSplit","stereoHighSplit","stereoMonoBass","stereoMono","stereoBalance",
  "dynamicsPresent","dynamicsOn","dynamicsMode","dynThreshold","dynRatio","dynAttack","dynRelease","dynKnee","dynMakeup","dynMix","upwardAmount","upwardThreshold",
@@ -42,6 +42,18 @@ inline std::string parameterId(size_t i){
   if(i==315)return "truePeakOutput";
   if(i==316)return "analogGlobalMix";
   if(i==317)return "analogDelta";
+  if(i==318)return "parallelTrimAnalog";
+  if(i==319)return "parallelMixAnalog";
+  if(i==320)return "parallelTrimBass";
+  if(i==321)return "parallelMixBass";
+  if(i==322)return "parallelTrimTransient";
+  if(i==323)return "parallelMixTransient";
+  if(i==324)return "parallelTrimRestoration";
+  if(i==325)return "parallelMixRestoration";
+  if(i==326)return "truePeakAttack";
+  if(i==327)return "truePeakLookahead";
+  if(i==328)return "truePeakTransientEmphasis";
+  if(i==329)return "truePeakOversampling";
  return "unknown";
 
 }

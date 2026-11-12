@@ -10,6 +10,12 @@ void empty(Processor& p){for(const char* id:{"dynamicEqPresent","dynamicsPresent
 void fill(juce::AudioBuffer<float>& audio,int block,double rate){for(int i=0;i<audio.getNumSamples();++i){const double t=(block*audio.getNumSamples()+i)/rate;audio.setSample(0,i,.18f*std::sin(juce::MathConstants<double>::twoPi*311*t)+.06f*std::sin(juce::MathConstants<double>::twoPi*2400*t));audio.setSample(1,i,.13f*std::sin(juce::MathConstants<double>::twoPi*311*t+.31)+.05f*std::sin(juce::MathConstants<double>::twoPi*5100*t));}}
 
 int main(){
+ {
+  Processor serial,parallel;empty(serial);empty(parallel);set(parallel,"eqPresent",1);set(parallel,"eq",0);set(parallel,"routingMode",1);
+  serial.prepareToPlay(48000,512);parallel.prepareToPlay(48000,512);juce::MidiBuffer midi;juce::AudioBuffer<float> a(2,1024),b(2,1024);a.clear();b.clear();a.setSample(0,0,1);a.setSample(1,0,1);b.makeCopyOf(a);serial.processBlock(a,midi);parallel.processBlock(b,midi);
+  int serialImpulse=-1,parallelImpulse=-1;for(int i=0;i<1024;++i){if(serialImpulse<0&&std::abs(a.getSample(0,i))>.5f)serialImpulse=i;if(parallelImpulse<0&&std::abs(b.getSample(0,i))>.5f)parallelImpulse=i;}
+  check(serialImpulse==serial.getLatencySamples()&&parallelImpulse==serialImpulse,"full parallel dry impulse is not aligned to host PDC");
+ }
  for(double rate:{44100.,48000.,96000.,192000.}){
   auto parallel=std::make_unique<Processor>(),eq=std::make_unique<Processor>(),dynamics=std::make_unique<Processor>(),dry=std::make_unique<Processor>();
   for(auto* p:{parallel.get(),eq.get(),dynamics.get(),dry.get()}){empty(*p);set(*p,"gain",9);set(*p,"dynThreshold",-30);set(*p,"dynRatio",5);set(*p,"dynAttack",1);}
@@ -18,7 +24,7 @@ int main(){
   for(auto* p:{parallel.get(),eq.get(),dynamics.get(),dry.get()}){p->setRateAndBufferSizeDetails(rate,257);p->prepareToPlay(rate,257);check(p->getLatencySamples()==static_cast<int>(std::ceil(rate*.005))+masterlab::AnalogExciter::latencySamples()+masterlab::FinalTruePeak::latencySamples,"APVTS parallel controls changed PDC");}
   juce::MidiBuffer midi;juce::AudioBuffer<float> a(2,257),b(2,257),c(2,257),d(2,257);const float gd=masterlab::dbGain(6),ge=masterlab::dbGain(-6);double error=0;
   for(int block=0;block<400;++block){fill(a,block,rate);b.makeCopyOf(a);c.makeCopyOf(a);d.makeCopyOf(a);parallel->processBlock(a,midi);eq->processBlock(b,midi);dynamics->processBlock(c,midi);dry->processBlock(d,midi);if(block>200)for(int ch=0;ch<2;++ch)for(int i=0;i<257;++i){const float dm=d.getSample(ch,i)+.25f*(c.getSample(ch,i)-d.getSample(ch,i)),em=d.getSample(ch,i)+.75f*(b.getSample(ch,i)-d.getSample(ch,i));const float expected=(gd*dm+ge*em)/(gd+ge);error+=std::pow(a.getSample(ch,i)-expected,2);}}
-  check(std::sqrt(error/(199*257*2))<2e-5,"APVTS trim/mix/compensation did not reach graph audio");
+  const double rms=std::sqrt(error/(199*257*2));if(rms>=2e-5)std::cerr<<"parallel integration RMS="<<rms<<" rate="<<rate<<'\n';check(rms<2e-5,"APVTS trim/mix/compensation did not reach graph audio");
   juce::MemoryBlock saved;parallel->getStateInformation(saved);auto restored=std::make_unique<Processor>();restored->setStateInformation(saved.getData(),static_cast<int>(saved.getSize()));
   for(const char* id:{"parallelTrimDynamics","parallelMixDynamics","parallelTrimEq","parallelMixEq","parallelCompensated"})check(restored->state.getRawParameterValue(id)->load()==parallel->state.getRawParameterValue(id)->load(),"parallel state did not restore");
  }
