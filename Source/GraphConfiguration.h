@@ -22,6 +22,26 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
   tp.character=static_cast<int>(v(312));tp.autoRelease=v(313)>.5f;tp.softClip=v(314);tp.outputDb=v(315);
   engine.finalTruePeakSettings(tp);
   engine.analogExciterMonitor(v(316),v(317)>.5f);
+ // Shared by host rendering and Brain offline verification.
+ masterlab::AnalogizerSettings az;
+ az.enabled=v(285)>.5f && v(278)>.5f;
+ az.mode=static_cast<masterlab::AnalogizerMode>(std::clamp(static_cast<int>(v(279)),0,2));
+ az.driveDb=v(280);az.warmth=v(281);az.deFizz=v(282);
+ az.mix=v(283);az.outputDb=v(284);
+ engine.analogizerSettings(az);
+ engine.analogExcite(v(305));
+ masterlab::RestorationSettings rs;
+ rs.enabled=v(286)>.5f&&v(287)>.5f;
+ rs.hiss=v(288)>.5f;rs.hum=v(289)>.5f;
+ rs.click=v(290)>.5f;rs.clip=v(291)>.5f;
+ rs.learn=v(292)>.5f;rs.freeze=v(293)>.5f;
+ rs.delta=v(294)>.5f;rs.abDry=v(295)>.5f;
+ rs.humHz=v(296)>.5f?60:50;rs.thresholdDb=v(297);
+ rs.reductionDb=v(298);rs.quality=v(299);
+ rs.protect=v(300);rs.mix=v(301);
+ engine.restorationSettings(rs);
+ engine.profileSettings(v(161)<.5f&&v(302)>.5f?std::clamp(v(303),0.f,1.f):1.f);
+
   engine.routing(static_cast<int>(v(138)),v(6)>.5f);
   FullModuleOrder full{};
   for(size_t slot=0;slot<full.size();++slot)

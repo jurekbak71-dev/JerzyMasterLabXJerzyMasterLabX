@@ -1,0 +1,2 @@
+Passed: custom EQ controls, node drag, Q wheel, host gestures, response rendering, Master Brain analysis/approval/Undo, reopen and resize at three sizes
+Passed: parameter state roundtrip, fixed PDC, automated routing, oversized buffers, host bypass, deterministic render without editor

@@ -177,7 +177,6 @@ public:
  bool isBusesLayoutSupported(const BusesLayout& l)const override{return l.getMainInputChannelSet()==juce::AudioChannelSet::stereo()&&l.getMainOutputChannelSet()==juce::AudioChannelSet::stereo();}
  void prepareToPlay(double sr,int)override{
   masterlab::configureGraph(engine,[&](size_t i){return parameters[i]->load();});
-  engine.profileSettings(parameters[302]->load()>.5f?parameters[303]->load():1.f);
   engine.prepare(sr,parameters[6]->load()>.5f,static_cast<int>(parameters[138]->load()));
   displayRate.store(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr:48000);
   limiterMeter.prepare(displayRate.load());inputMeter.prepare(displayRate.load());
@@ -204,24 +203,6 @@ public:
  masterlab::configureGraph(engine,value);
  const bool serialRouter=value(161)<.5f;
  const float requestedBlend=value(302)>.5f?std::clamp(value(303),0.f,1.f):1.f;
- engine.profileSettings(serialRouter?requestedBlend:1.f);
- masterlab::AnalogizerSettings az;
- az.enabled=value(285)>.5f && value(278)>.5f;
- az.mode=static_cast<masterlab::AnalogizerMode>(std::clamp(static_cast<int>(value(279)),0,2));
- az.driveDb=value(280);az.warmth=value(281);az.deFizz=value(282);
- az.mix=value(283);az.outputDb=value(284);
- engine.analogizerSettings(az);
- engine.analogExcite(value(305));
- masterlab::RestorationSettings rs;
- rs.enabled=value(286)>.5f&&value(287)>.5f;
- rs.hiss=value(288)>.5f;rs.hum=value(289)>.5f;
- rs.click=value(290)>.5f;rs.clip=value(291)>.5f;
- rs.learn=value(292)>.5f;rs.freeze=value(293)>.5f;
- rs.delta=value(294)>.5f;rs.abDry=value(295)>.5f;
- rs.humHz=value(296)>.5f?60:50;rs.thresholdDb=value(297);
- rs.reductionDb=value(298);rs.quality=value(299);
- rs.protect=value(300);rs.mix=value(301);
- engine.restorationSettings(rs);
  hostBypassTarget=hostBypassed;
  if(hostDryDelay[0].empty()){b.clear();return;}
  for(int offset=0;offset<b.getNumSamples();){int length=std::min(128,b.getNumSamples()-offset);

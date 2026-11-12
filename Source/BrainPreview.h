@@ -11,6 +11,17 @@ template<class Cancel> BrainPreviewResult renderBrainPreview(const std::vector<f
  const size_t latency=static_cast<size_t>(graph.latency()),total=left.size()+latency;
  for(size_t offset=0;offset<total;offset+=128){if(cancel())return out;int count=static_cast<int>(std::min(size_t{128},total-offset));for(int i=0;i<count;++i){size_t index=offset+i;l[i]=index<left.size()?left[index]:0;r[i]=index<right.size()?right[index]:0;}
   graph.process(l.data(),r.data(),count,values[6]>.5f,trace.data());
+  // The legacy parallel profile blends after the complete latency-aligned
+  // chain in Processor. Reproduce that same operation in the preview.
+  if(values[161]>.5f&&values[302]>.5f){
+   const float mix=std::clamp(values[303],0.f,1.f);
+   for(int i=0;i<count;++i){
+    const size_t position=offset+static_cast<size_t>(i);
+    const float dryL=position>=latency&&position-latency<left.size()?left[position-latency]:0.f;
+    const float dryR=position>=latency&&position-latency<right.size()?right[position-latency]:0.f;
+    l[i]=dryL+mix*(l[i]-dryL);r[i]=dryR+mix*(r[i]-dryR);
+   }
+  }
   for(int i=0;i<count;++i)if(offset+i>=latency){if(!std::isfinite(l[i])||!std::isfinite(r[i]))return out;loudness.push(l[i],r[i]);dynamics.push(l[i],r[i]);out.peak=std::max(out.peak,std::max(std::abs(l[i]),std::abs(r[i])));}
   reductions.push_back(std::max(0.f,-20*std::log10(std::max(1e-9f,*std::min_element(trace.begin(),trace.begin()+count)))));
  }

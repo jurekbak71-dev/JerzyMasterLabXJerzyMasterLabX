@@ -1,0 +1,16 @@
+44100 serial MASTER preview-host LUFS error=10.7154617 peak error=0.345511377
+44100 serial INSERT preview-host LUFS error=5.2138796 peak error=0.101632580
+44100 parallel MASTER preview-host LUFS error=10.7227020 peak error=0.345376432
+44100 parallel INSERT preview-host LUFS error=5.2193546 peak error=0.102336213
+48000 serial MASTER preview-host LUFS error=10.7134247 peak error=0.349897265
+48000 serial INSERT preview-host LUFS error=5.2120409 peak error=0.101745054
+48000 parallel MASTER preview-host LUFS error=10.7205925 peak error=0.349960685
+48000 parallel INSERT preview-host LUFS error=5.2174292 peak error=0.102370843
+96000 serial MASTER preview-host LUFS error=10.7003479 peak error=0.340860128
+96000 serial INSERT preview-host LUFS error=5.2048073 peak error=0.101858690
+96000 parallel MASTER preview-host LUFS error=10.7075253 peak error=0.341493189
+96000 parallel INSERT preview-host LUFS error=5.2102232 peak error=0.102657661
+192000 serial MASTER preview-host LUFS error=10.7220554 peak error=0.394044936
+192000 serial INSERT preview-host LUFS error=5.2180595 peak error=0.101651192
+192000 parallel MASTER preview-host LUFS error=10.7293453 peak error=0.393808782
+192000 parallel INSERT preview-host LUFS error=5.2239952 peak error=0.103023499
