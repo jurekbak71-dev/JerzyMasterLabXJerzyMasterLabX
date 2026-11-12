@@ -66,6 +66,33 @@ int main(){
           "INSERT dry blend bypassed fixed final limiter");
   }
  }
+ // The Final Maximizer is a physical fixed slot. Migrated projects may carry
+ // truePeakPresent=0 and limPresent=0, but truePeakOn=1 must still configure
+ // the real stage before the first callback; no UI toggle cycle is permitted.
+ {
+  Processor source;
+  set(source,"limPresent",0);set(source,"lim",0);
+  set(source,"truePeakPresent",0);set(source,"truePeakOn",1);
+  set(source,"truePeakCeiling",-6.f);set(source,"truePeakDrive",12.f);
+  juce::MemoryBlock saved;source.getStateInformation(saved);
+  Processor restored;
+  restored.setStateInformation(saved.getData(),static_cast<int>(saved.getSize()));
+  restored.prepareToPlay(48000.,257);
+  juce::AudioBuffer<float> signal(2,257);juce::MidiBuffer midi;
+  const float ceiling=std::pow(10.f,-6.f/20.f);
+  float maximum=0.f;
+  for(int block=0;block<24;++block){
+   for(int i=0;i<257;++i){
+    const float sample=.96f*std::sin((block*257+i)*.17f);
+    signal.setSample(0,i,sample);signal.setSample(1,i,sample);
+   }
+   audit=true;restored.processBlock(signal,midi);audit=false;
+   if(block>2)for(int i=0;i<257;++i)
+    maximum=std::max(maximum,std::abs(signal.getSample(0,i)));
+  }
+  check(maximum<=ceiling+1.e-4f,
+        "restored ACTIVE fixed maximizer requires a toggle cycle");
+ }
  // Dynamic EQ DELTA compares its own unprocessed input against its actual
  // eight-band signal output. A static gain within Dynamic EQ is included.
  {

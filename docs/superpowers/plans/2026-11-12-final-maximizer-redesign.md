@@ -43,11 +43,11 @@
 - Consumes: APVTS parameters `truePeakPresent`, `truePeakOn`, legacy `limPresent`, `lim`.
 - Produces: one shared final-stage-active predicate used by DSP configuration and visible power state.
 
-- [ ] **Step 1: Write failing state tests** asserting that absent+enabled renders inactive, present+enabled processes the first block, restored present+enabled requires no toggle cycle, and OFF retains the fixed delay.
-- [ ] **Step 2: Run targeted tests** with `ctest --test-dir build-plugin -R 'module_integration|gui_smoke' --output-on-failure`; expected: the absent+enabled truth test fails on the current implementation.
-- [ ] **Step 3: Implement one authoritative active predicate** and make panel/card status derive from presence AND enabled state; do not mutate presence as a side effect of repainting.
-- [ ] **Step 4: Re-run targeted tests**; expected: PASS.
-- [ ] **Step 5: Commit** state test and fix as `Fix final maximizer activation truth`.
+- [x] **Step 1: Write failing state tests** asserting that absent+enabled renders inactive, present+enabled processes the first block, restored present+enabled requires no toggle cycle, and OFF retains the fixed delay.
+- [x] **Step 2: Run targeted tests** with `ctest --test-dir build-plugin -R 'module_integration|gui_smoke' --output-on-failure`; expected: the absent+enabled truth test fails on the current implementation.
+- [x] **Step 3: Implement one authoritative active predicate** and make panel/card status derive from presence AND enabled state; do not mutate presence as a side effect of repainting.
+- [x] **Step 4: Re-run targeted tests**; expected: PASS.
+- [x] **Step 5: Commit** state test and fix as `Fix final maximizer activation truth`.
 
 ### Task 2: Maximizer signal path
 

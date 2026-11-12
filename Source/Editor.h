@@ -90,9 +90,7 @@ class Editor final : public juce::AudioProcessorEditor,
       if(kind==6)return on("exciterPresent","exciterOn")||
                          on("analogizerPresent","analogizerOn")||
                          on("analogPresent","analogOn");
-      if(kind==10)return processor.state.getRawParameterValue("truePeakOn")->load()>.5f &&
-        (processor.state.getRawParameterValue("truePeakPresent")->load()>.5f ||
-         on("limPresent","lim"));
+      if(kind==10)return processor.state.getRawParameterValue("truePeakOn")->load()>.5f;
       return kind>=0&&kind<static_cast<int>(routeOnIds.size()) &&
              on(routePresentIds[static_cast<size_t>(kind)],routeOnIds[static_cast<size_t>(kind)]);
     }
@@ -110,7 +108,7 @@ class Editor final : public juce::AudioProcessorEditor,
        for(const char* id:{"exciterPresent","exciterOn","analogPresent","analogOn",
                            "analogizerPresent","analogizerOn"})assign(id);
       }else if(kind==10){
-       for(const char* id:{"truePeakPresent","truePeakOn","limPresent","lim"})assign(id);
+       assign("truePeakOn");
       }else {
        assign(routePresentIds[static_cast<size_t>(kind)]);
        assign(routeOnIds[static_cast<size_t>(kind)]);

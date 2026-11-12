@@ -24,12 +24,15 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
   BassArchitectSettings b;b.enabled=v(203)>.5f&&v(204)>.5f;b.sub=v(205);b.body=v(206);b.harmonics=v(207);b.monoBass=0.f; // Stereo Architect alone handles mono bass.
   b.mix=v(209);b.outputDb=v(210);b.delta=v(310)>.5f;engine.bassArchitectSettings(b);
   TransientSculptorSettings t;t.enabled=v(211)>.5f&&v(212)>.5f;for(size_t k=0;k<3;++k){t.attack[k]=v(213+k);t.sustain[k]=v(216+k);}t.mix=v(219);t.outputDb=v(220);t.delta=v(311)>.5f;engine.transientSculptorSettings(t);
-  FinalTruePeakSettings tp;const bool dedicatedTP=v(221)>.5f&&v(222)>.5f;
-  const bool legacyLimiter=v(87)>.5f&&v(5)>.5f;
-  tp.enabled=v(222)>.5f&&(v(221)>.5f||legacyLimiter);
-  tp.ceilingDb=dedicatedTP?v(223):v(3);
-  tp.releaseMs=dedicatedTP?v(224):v(53);
-  tp.driveDb=dedicatedTP?v(225):0.f;
+  // The Maximizer is a physical fixed final slot. `truePeakPresent` remains
+  // in host state for migration only; gating the DSP with it made an ACTIVE
+  // panel silently ignore every dedicated control until users toggled the
+  // legacy presence state.
+  FinalTruePeakSettings tp;
+  tp.enabled=v(222)>.5f;
+  tp.ceilingDb=v(223);
+  tp.releaseMs=v(224);
+  tp.driveDb=v(225);
   tp.character=static_cast<int>(v(312));tp.autoRelease=v(313)>.5f;tp.softClip=v(314);tp.outputDb=v(315);
   tp.attackMs=v(326);tp.lookaheadSamples=v(327);tp.transientEmphasis=v(328);tp.oversamplingMode=static_cast<int>(v(329));
   engine.finalTruePeakSettings(tp);
@@ -62,13 +65,13 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
 }
 template<class Getter> void configureGraph(SerialGraph& engine,Getter v) noexcept {
  configureModules(engine,v);
- const bool finalOn=v(222)>.5f&&(v(221)>.5f||(v(87)>.5f&&v(5)>.5f));
- // Combine sample-peak lookahead and true-peak detection under one final ON state.
- // Final-stage drive belongs to TruePeak; do not multiply it twice.
- engine.limiterParameters(finalOn && v(221)>.5f?0.f:v(52),finalOn && v(221)>.5f?v(224):v(53));
- engine.parameters(v(0),v(1),v(2),v(221)>.5f&&v(222)>.5f?v(223):v(3),
+ const bool finalOn=v(222)>.5f;
+ // Retire the hidden legacy limiter gain computer. The one fixed final stage
+ // owns drive, release and ceiling, so its visible controls cannot diverge.
+ engine.limiterParameters(0.f,v(224));
+ engine.parameters(v(0),v(1),v(2),v(223),
                    v(4)>.5f&&v(86)>.5f,
-                   finalOn);
+                   false);
  for(size_t k=1;k<16;++k){size_t i=7+(k-1)*3;engine.setBand(k,v(i),v(i+1),v(i+2));}
  for(size_t k=0;k<16;++k)engine.setBandMode(k,static_cast<FilterType>(static_cast<int>(v(54+k*2))),v(55+k*2)>.5f);
 }

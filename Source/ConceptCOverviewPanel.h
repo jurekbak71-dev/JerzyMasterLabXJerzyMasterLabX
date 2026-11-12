@@ -87,7 +87,8 @@ class ConceptCOverviewPanel final : public juce::Component {
             }};
             auto* enabled=processor_.state.getRawParameterValue(onIds[static_cast<size_t>(index)]);
             auto* present=processor_.state.getRawParameterValue(presentIds[static_cast<size_t>(index)]);
-            moduleEnabled=enabled&&enabled->load()>.5f&&(!present||present->load()>.5f);
+            moduleEnabled=enabled&&enabled->load()>.5f&&
+                (index==3||!present||present->load()>.5f);
         }
         theme_.paintModuleGlow(g,r,moduleEnabled);
         theme_.paintSmallRedLed(g,juce::roundToInt(r.getRight()-85.f),

@@ -7,7 +7,7 @@ class FinalTruePeakPanel final : public juce::Component {
  StudioTheme& theme_;
  juce::ToggleButton included_{"Fixed slot"},enabled_{"Active"},autoRelease_{"Auto release"};
  juce::ComboBox character_,oversampling_;
- std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> includedAttachment_,enabledAttachment_,autoReleaseAttachment_;
+ std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> enabledAttachment_,autoReleaseAttachment_;
  std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> characterAttachment_,oversamplingAttachment_;
  struct Knob {juce::Label name;juce::Slider slider;
   std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;};
@@ -31,6 +31,7 @@ public:
   included_.setComponentID("true-peak-present");
   enabled_.setComponentID("true-peak-enabled");
   addAndMakeVisible(included_);addAndMakeVisible(enabled_);included_.setEnabled(false);
+  included_.setToggleState(true,juce::dontSendNotification);
   addAndMakeVisible(character_);addAndMakeVisible(autoRelease_);
   addAndMakeVisible(oversampling_);oversampling_.setComponentID("true-peak-oversampling");
   for(const char* label:{"1x","2x","4x"})oversampling_.addItem(label,oversampling_.getNumItems()+1);
@@ -40,7 +41,6 @@ public:
   characterAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(p.state,"truePeakCharacter",character_);
   autoRelease_.setComponentID("true-peak-auto-release");
   autoReleaseAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.state,"truePeakAutoRelease",autoRelease_);
-  includedAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.state,"truePeakPresent",included_);
   enabledAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.state,"truePeakOn",enabled_);
   addKnob("Ceiling dBTP (target)","truePeakCeiling");
   addKnob("Release ms","truePeakRelease");
