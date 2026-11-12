@@ -62,13 +62,13 @@
 - Consumes: `FinalTruePeakSettings` plus fixed `FinalTruePeak::latencySamples`.
 - Produces: bounded density compressor, oversampled soft clip, mode-dependent program limiter and measured `FinalTruePeakReading` fields for input/output/GR/density.
 
-- [ ] **Step 1: Add failing audio tests** for no routine hard-clamp plateaus, sine/impulse/bass/dense/near-Nyquist stimuli, density gain bounds, mode differentiation, bypass continuity, parameter ramps, callback partition invariance and independent 8x output ceiling measurement.
-- [ ] **Step 2: Run `final_true_peak_dsp`, differential and adversarial tests**; expected: new density/plateau/continuity assertions fail.
-- [ ] **Step 3: Add settings and state** for `density`, `compressorMix`, `stereoLink` and `delta`; implement a stereo-linked soft-knee density stage with bounded makeup and smoothed wet/dry.
-- [ ] **Step 4: Implement oversampled pre-clip and program limiter** so all nonlinearity precedes the true-peak detector and the normal output path does not depend on sample hard clipping.
-- [ ] **Step 5: Implement Clean/Punch/Dense envelope policies** using bounded release/hold behavior and continuous smoothed transitions while retaining constant latency.
-- [ ] **Step 6: Re-run targeted tests and benchmark**; expected: all pass and benchmark reports no regression above the existing CI budget.
-- [ ] **Step 7: Commit** as `Rebuild final maximizer signal path`.
+- [x] **Step 1: Add failing audio tests** for no routine hard-clamp plateaus, sine/impulse/bass/dense/near-Nyquist stimuli, density gain bounds, mode differentiation, bypass continuity, parameter ramps, callback partition invariance and independent 8x output ceiling measurement.
+- [x] **Step 2: Run `final_true_peak_dsp`, differential and adversarial tests**; expected: new density/plateau/continuity assertions fail.
+- [x] **Step 3: Add settings and state** for `density`, `compressorMix`, `stereoLink` and `delta`; implement a stereo-linked soft-knee density stage with bounded makeup and smoothed wet/dry.
+- [x] **Step 4: Implement oversampled pre-clip and program limiter** so all nonlinearity precedes the true-peak detector and the normal output path does not depend on sample hard clipping.
+- [x] **Step 5: Implement Clean/Punch/Dense envelope policies** using bounded release/hold behavior and continuous smoothed transitions while retaining constant latency.
+- [x] **Step 6: Re-run targeted tests and benchmark**; expected: all pass and benchmark reports no regression above the existing CI budget.
+- [x] **Step 7: Commit** as `Rebuild final maximizer signal path`.
 
 ### Task 3: Exciter peak and alias safeguards
 

@@ -120,6 +120,63 @@ int main(){
   double difference=0;for(size_t i=1024;i<output.size();++i)difference+=std::abs(output[i]-reference[i]);
   check(difference>1.,"attack/lookahead/transient emphasis do not affect actual limiter audio");
  }
+ // Normal maximizer operation must be achieved by continuous gain control,
+ // not by flattening repeated samples at the requested ceiling. Exact ceiling
+ // plateaus are the audible "charczenie" regression reported for high drive.
+ {
+  FinalTruePeakSettings s;s.enabled=true;s.ceilingDb=-6.f;s.driveDb=18.f;
+  s.softClip=.65f;s.releaseMs=120.f;
+  auto output=render(48000,s,127,true);
+  const float ceiling=std::pow(10.f,s.ceilingDb/20.f);
+  int exactPlateau=0;
+  for(size_t i=512;i+512<output.size();++i)
+   if(std::abs(std::abs(output[i])-ceiling)<1.e-7f)++exactPlateau;
+  check(exactPlateau<4,"maximizer relies on repeated hard-ceiling plateaus");
+ }
+ // Soft Clip is a nonlinear pre-limiter stage and therefore must be
+ // oversampled. A 13 kHz tone's third harmonic folds to 9 kHz at 48 kHz when
+ // the waveshaper runs at base rate; the independent DFT catches that alias.
+ {
+  FinalTruePeakSettings s;s.enabled=true;s.ceilingDb=-.1f;s.driveDb=12.f;
+  s.softClip=1.f;s.releaseMs=300.f;
+  const auto output=render(48000,s,127,true);
+  const double fundamental=amplitude(output,48000.,13000.);
+  const double alias=amplitude(output,48000.,9000.);
+  std::printf("soft-clip 13 kHz alias ratio %.6f\n",alias/std::max(1.e-12,fundamental));
+  check(alias/fundamental<.02,"soft clip runs without effective oversampling");
+ }
+ // Density is a real pre-limiter compressor, not a GUI macro. On an
+ // amplitude-modulated tone it must reduce crest factor while the neutral
+ // setting remains the reference path and both obey the same final ceiling.
+ {
+  auto densityRender=[](float amount){
+   constexpr int count=48000;
+   std::vector<float> left(count),right(count);
+   for(int i=0;i<count;++i){
+    const float envelope=(i/9600)%2?.12f:.82f;
+    left[i]=right[i]=envelope*std::sin(2*pi*997.*i/48000.);
+   }
+   FinalTruePeakSettings s;s.enabled=true;s.ceilingDb=-.3f;s.releaseMs=180.f;
+   s.density=amount;s.compressorMix=1.f;
+   FinalTruePeak limiter;limiter.settings(s);limiter.prepare(48000.);
+   for(int offset=0;offset<count;offset+=127)
+    limiter.process(left.data()+offset,right.data()+offset,std::min(127,count-offset));
+   double loudSquare=0,quietSquare=0;int loudCount=0,quietCount=0;float peak=0;
+   for(int i=4096;i<count;++i){
+    peak=std::max(peak,std::abs(left[i]));
+    const int phase=i%19200;
+    if(phase>4000&&phase<9000){loudSquare+=left[i]*left[i];++loudCount;}
+    if(phase>13600&&phase<18600){quietSquare+=left[i]*left[i];++quietCount;}
+   }
+   const double contrast=std::sqrt(loudSquare/loudCount)/std::sqrt(quietSquare/quietCount);
+   return std::pair<double,float>{contrast,peak};
+  };
+  const auto neutral=densityRender(0.f),dense=densityRender(1.f);
+  std::printf("density loud/quiet neutral %.6f dense %.6f\n",neutral.first,dense.first);
+  check(dense.first<neutral.first*.82,"density compressor does not reduce level contrast");
+  check(dense.second<=std::pow(10.f,-.3f/20.f)+1.e-6f,
+        "density compressor bypasses final ceiling");
+ }
  FinalTruePeak dsp;FinalTruePeakSettings s;s.enabled=true;
  dsp.settings(s);dsp.prepare(48000);
  std::array<float,512> a{},b{};a[0]=std::numeric_limits<float>::quiet_NaN();

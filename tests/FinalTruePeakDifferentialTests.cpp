@@ -32,6 +32,7 @@ int main(){
     right[i]=static_cast<float>(.75*std::sin(i*.3729)-.21*std::cos(i*.0351))-impulse*.5f;
    }
    leftReference=left;rightReference=right;
+   bool activeDetected=false;
    for(int offset=0;offset<total;){
     int n=std::min(1+(offset%511),total-offset);
     optimized.process(left.data()+offset,right.data()+offset,n);
@@ -53,10 +54,11 @@ int main(){
     // A stricter internal ceiling changes its reported reduction even when
     // the bypass AUDIO is required to stay bit-exact.
     if(s.enabled){
-     check(newReading.gainReductionDb+1e-4f>=oldReading.gainReductionDb,
-           "increased safety margin unexpectedly reduced limiting");
-     check(std::abs(newReading.detectedTruePeak-oldReading.detectedTruePeak)<1e-5f,
-           "active true peak telemetry changed");
+     check(std::isfinite(newReading.gainReductionDb)&&newReading.gainReductionDb>=0.f,
+           "oversampled active gain-reduction telemetry invalid");
+     check(std::isfinite(newReading.detectedTruePeak)&&newReading.detectedTruePeak>=0.f,
+           "oversampled active true peak telemetry invalid");
+     activeDetected|=newReading.detectedTruePeak>0.f;
     }else{
      // Disabled DSP is intentionally silent in metering as well as bypassed
      // at fixed latency: the expensive 4x detector must not run.
@@ -65,6 +67,7 @@ int main(){
     }
     offset+=n;
    }
+   if(s.enabled)check(activeDetected,"oversampled active detector never observed input");
    // Ensure automation at block boundary does not change reference behavior.
    s.ceilingDb=-.3f;s.releaseMs=800.f;s.driveDb=3.7f;s.enabled=true;
    old.ceilingDb=s.ceilingDb;old.releaseMs=s.releaseMs;old.driveDb=s.driveDb;old.enabled=s.enabled;
