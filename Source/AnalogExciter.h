@@ -5,9 +5,18 @@
 #include "HarmonicExciter.h"
 #include "Analogizer.h"
 #include "AnalogColor.h"
+#include "ScopeCapture.h"
 
 namespace masterlab {
+struct AnalogExciterReading {
+ float inputRms=0.f,outputRms=0.f,deltaRms=0.f;
+ ScopeCapture::Wave inputWave{},outputWave{};
+};
 class AnalogExciter {
+ ScopeCapture scope_;
+ AnalogExciterReading reading_{};
+ float mixTarget_=1.f,mix_=1.f,delta_=0.f,slew_=.001f;
+ bool deltaTarget_=false;
  HarmonicExciter harmonic_;
  Analogizer colour_;
  HarmonicExciterSettings harmonics_{};
@@ -48,16 +57,49 @@ class AnalogExciter {
  }
 public:
  void prepare(double rate)noexcept {
-  update();harmonic_.prepare(rate);colour_.prepare(rate);
+  rate=std::isfinite(rate)?std::clamp(rate,8000.,384000.):48000.;
+  slew_=static_cast<float>(1.-std::exp(-1./(rate*.02)));
+  update();harmonic_.prepare(rate);colour_.prepare(rate);scope_.prepare(rate);
+  mix_=mixTarget_;delta_=deltaTarget_?1.f:0.f;reading_={};
  }
- void reset()noexcept {harmonic_.reset();colour_.reset();}
+ void reset()noexcept {harmonic_.reset();colour_.reset();scope_.reset();reading_={};mix_=mixTarget_;delta_=deltaTarget_?1.f:0.f;}
+ void monitor(float mix,bool delta)noexcept {
+  mixTarget_=std::isfinite(mix)?std::clamp(mix,0.f,1.f):1.f;deltaTarget_=delta;
+ }
+ AnalogExciterReading reading()const noexcept{return reading_;}
  void harmonicSettings(HarmonicExciterSettings settings)noexcept {harmonics_=settings;update();}
  void legacySettings(AnalogColorSettings settings)noexcept {legacyColour_=settings;update();}
  void colourSettings(AnalogizerSettings settings)noexcept {modernColour_=settings;update();}
  void excitement(float value)noexcept {excitement_=std::isfinite(value)?std::clamp(value,0.f,1.f):0.f;update();}
  void process(float* left,float* right,int count)noexcept {
-  harmonic_.process(left,right,count);
-  colour_.process(left,right,count);
+  if(!left||!right||count<=0)return;
+  std::array<std::array<float,128>,2> dry{};
+  double in2=0.,out2=0.,difference2=0.;
+  for(int base=0;base<count;base+=128){
+   const int n=std::min(128,count-base);
+   for(int c=0;c<2;++c)for(int i=0;i<n;++i){
+    auto& input=(c==0?left:right)[base+i];if(!std::isfinite(input))input=0.f;
+    dry[c][i]=input;
+   }
+   harmonic_.process(left+base,right+base,n);
+   colour_.process(left+base,right+base,n);
+   for(int i=0;i<n;++i){
+    mix_+=slew_*(mixTarget_-mix_);delta_+=slew_*((deltaTarget_?1.f:0.f)-delta_);
+    for(int c=0;c<2;++c){
+     float& output=(c==0?left:right)[base+i];const float input=dry[c][i];
+     const float mixed=mix_==1.f?output:(mix_==0.f?input:input+mix_*(output-input));
+     const float difference=input-mixed;
+     output=mixed+delta_*(difference-mixed);
+     in2+=static_cast<double>(input)*input;out2+=static_cast<double>(output)*output;
+     difference2+=static_cast<double>(difference)*difference;
+    }
+    scope_.push(.5f*(dry[0][i]+dry[1][i]),.5f*(left[base+i]+right[base+i]));
+   }
+  }
+  const double scale=1./(2.*count);
+  reading_.inputRms=static_cast<float>(std::sqrt(in2*scale));reading_.outputRms=static_cast<float>(std::sqrt(out2*scale));
+  reading_.deltaRms=static_cast<float>(std::sqrt(difference2*scale));
+  reading_.inputWave=scope_.input();reading_.outputWave=scope_.output();
  }
  HarmonicExciterReading harmonicReading()const noexcept{return harmonic_.reading();}
  AnalogizerReading colourReading()const noexcept{return colour_.reading();}

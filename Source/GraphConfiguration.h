@@ -21,6 +21,7 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
   tp.driveDb=dedicatedTP?v(225):0.f;
   tp.character=static_cast<int>(v(312));tp.autoRelease=v(313)>.5f;tp.softClip=v(314);tp.outputDb=v(315);
   engine.finalTruePeakSettings(tp);
+  engine.analogExciterMonitor(v(316),v(317)>.5f);
   engine.routing(static_cast<int>(v(138)),v(6)>.5f);
   FullModuleOrder full{};
   for(size_t slot=0;slot<full.size();++slot)

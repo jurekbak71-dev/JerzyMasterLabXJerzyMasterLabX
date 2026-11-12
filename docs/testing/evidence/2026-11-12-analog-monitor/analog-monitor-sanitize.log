@@ -1,0 +1,5 @@
+rate 44100 dry/wet/delta null 0.000000030 mix 0.000000015 partition PASS
+rate 48000 dry/wet/delta null 0.000000030 mix 0.000000015 partition PASS
+rate 96000 dry/wet/delta null 0.000000030 mix 0.000000015 partition PASS
+rate 192000 dry/wet/delta null 0.000000030 mix 0.000000015 partition PASS
+Analog combined monitor PASS

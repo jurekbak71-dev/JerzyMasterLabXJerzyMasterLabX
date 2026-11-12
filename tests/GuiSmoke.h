@@ -131,6 +131,18 @@ class GuiSmoke final : private juce::Timer {
         colorPresent->setToggleState(false,juce::sendNotificationSync);
         if(actual("analogPresent")!=0.f)return false;
         analogPanel->setVisible(false);
+        auto* combined=editor->findChildWithID("analogizer-panel");if(!combined)return false;
+        auto* globalMix=dynamic_cast<juce::Slider*>(combined->findChildWithID("analogGlobalMix"));
+        auto* delta=dynamic_cast<juce::Button*>(combined->findChildWithID("analog-delta"));
+        auto* details=dynamic_cast<juce::Button*>(combined->findChildWithID("analog-details"));
+        if(!globalMix||!delta||!details)return false;
+        globalMix->setValue(.25,juce::sendNotificationSync);delta->setToggleState(true,juce::sendNotificationSync);
+        if(std::abs(actual("analogGlobalMix")-.25f)>1.e-6f||actual("analogDelta")!=1)return false;
+        details->onClick();
+        if(!combined->findChildWithID("analogizerMix")->isVisible()||globalMix->isVisible())return false;
+        details->onClick();
+        globalMix->setValue(1,juce::sendNotificationSync);delta->setToggleState(false,juce::sendNotificationSync);
+
         auto* brain=dynamic_cast<juce::Button*>(editor->findChildWithID("view-brain"));auto* analyse=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-analyse"));
         if(!brain||!analyse)return false;brain->onClick();
         auto* genre=dynamic_cast<juce::ComboBox*>(editor->findChildWithID("brain-genre"));if(!genre)return false;genre->setSelectedId(5,juce::sendNotificationSync);
@@ -248,7 +260,7 @@ class GuiSmoke final : private juce::Timer {
                                     std::cerr<<"Analog controls overlap at "<<dim.x<<"x"<<dim.y<<'\n';return captureError(__LINE__);
                                 }
                             }
-                        for(auto* child:panel->getChildren())if(auto* slider=dynamic_cast<juce::Slider*>(child)){
+                        for(auto* child:panel->getChildren())if(child->isVisible())if(auto* slider=dynamic_cast<juce::Slider*>(child)){
                             const auto layout=slider->getLookAndFeel().getSliderLayout(*slider);
                             if(layout.sliderBounds.getWidth()<24||layout.sliderBounds.getHeight()<24){
                                 std::cerr<<"Analog rotary has no drawable area: "<<slider->getComponentID()

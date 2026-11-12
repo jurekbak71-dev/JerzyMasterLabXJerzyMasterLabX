@@ -1,5 +1,6 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "../Source/FinalTruePeak.h"
+#include "../Source/ModuleParameters.h"
 #include <iostream>
 #include <memory>
 #include <functional>
@@ -16,25 +17,25 @@ int main(){
  // Old FL Studio projects used schema 24 with exactly 304 parameters.
  // New host parameters must migrate to their factory defaults, while the
  // original parameter values and their IDs are preserved byte-for-byte.
- {
+ for(int legacyCount:{304,316}){
   auto legacy=original.createCopy();
-  if(legacy.getNumChildren()!=316){std::cerr<<"unexpected expanded state count";return 1;}
+  if(legacy.getNumChildren()!=static_cast<int>(masterlab::parameterCount)){std::cerr<<"unexpected expanded state count";return 1;}
   // APVTS stores PARAM children in a map/key order, not necessarily in
   // parameter registration order. Remove the twelve new *IDs*, not the
   // last twelve ValueTree children, or this fixture is not a legacy preset.
-  for(int i=304;i<source->getParameters().size();++i){
+  for(int i=legacyCount;i<source->getParameters().size();++i){
    auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(source->getParameters()[i]);
    if(parameter==nullptr){std::cerr<<"missing ranged parameter";return 1;}
    const auto child=legacy.getChildWithProperty("id",parameter->paramID);
    if(!child.isValid()){std::cerr<<"missing appended ID "<<parameter->paramID;return 1;}
    legacy.removeChild(child,nullptr);
   }
-  if(legacy.getNumChildren()!=304){std::cerr<<"legacy fixture count mismatch";return 1;}
+  if(legacy.getNumChildren()!=legacyCount){std::cerr<<"legacy fixture count mismatch";return 1;}
   auto legacyXml=legacy.createXml();juce::MemoryBlock legacyBlock;
   juce::AudioProcessor::copyXmlToBinary(*legacyXml,legacyBlock);
   target->setStateInformation(legacyBlock.getData(),static_cast<int>(legacyBlock.getSize()));
   for(int i=0;i<source->getParameters().size();++i){
-   const float expected=i<304?source->getParameters()[i]->getValue():
+   const float expected=i<legacyCount?source->getParameters()[i]->getValue():
                             source->getParameters()[i]->getDefaultValue();
    if(std::abs(target->getParameters()[i]->getValue()-expected)>1.e-6f){
     std::cerr<<"legacy state migration mismatch "<<i<<" id="<<dynamic_cast<juce::RangedAudioParameter*>(target->getParameters()[i])->paramID<<" got="<<target->getParameters()[i]->getValue()<<" expected="<<expected<<" source="<<source->getParameters()[i]->getValue()<<" targetDefault="<<target->getParameters()[i]->getDefaultValue();return 1;

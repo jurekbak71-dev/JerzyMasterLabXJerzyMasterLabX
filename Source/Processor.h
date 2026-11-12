@@ -34,7 +34,7 @@ public:
  float profileBlend=1.f,profileStep=1.f/960.f;
  std::array<std::atomic<float>*,masterlab::parameterCount> parameters{};
  juce::AbstractFifo fifo{8192};std::array<float,8192> traceL{},traceR{},traceBeforeL{},traceBeforeR{};
- struct ResponseFrame {std::array<masterlab::Biquad,16> bands;std::array<float,16> blends{};double rate=48000;std::array<float,12> stabilizerGain{};std::array<masterlab::Biquad,12> stabilizerBands{};float stabilizerMix=0;float eqMix=1;masterlab::StereoReading stereo;masterlab::DynamicsReading dynamics;masterlab::ParallelReading parallel;masterlab::HarmonicExciterReading exciter;masterlab::AnalogColorReading analog;masterlab::AnalogizerReading analogizer;masterlab::RestorationReading restoration;masterlab::BassArchitectReading bass;masterlab::TransientSculptorReading transient;masterlab::FinalTruePeakReading truePeak;std::array<float,masterlab::dynamicEqBandCount> dynamicGain{},dynamicBlends{};std::array<masterlab::Biquad,masterlab::dynamicEqBandCount> dynamicBands{};masterlab::MeterReading inputReading,outputReading;masterlab::LoudnessReading inputLufs,outputLufs;};
+ struct ResponseFrame {std::array<masterlab::Biquad,16> bands;std::array<float,16> blends{};double rate=48000;std::array<float,12> stabilizerGain{};std::array<masterlab::Biquad,12> stabilizerBands{};float stabilizerMix=0;float eqMix=1;masterlab::StereoReading stereo;masterlab::DynamicsReading dynamics;masterlab::ParallelReading parallel;masterlab::HarmonicExciterReading exciter;masterlab::AnalogColorReading analog;masterlab::AnalogizerReading analogizer;masterlab::AnalogExciterReading analogExciter;masterlab::RestorationReading restoration;masterlab::BassArchitectReading bass;masterlab::TransientSculptorReading transient;masterlab::FinalTruePeakReading truePeak;std::array<float,masterlab::dynamicEqBandCount> dynamicGain{},dynamicBlends{};std::array<masterlab::Biquad,masterlab::dynamicEqBandCount> dynamicBands{};masterlab::MeterReading inputReading,outputReading;masterlab::LoudnessReading inputLufs,outputLufs;};
  juce::AbstractFifo responseFifo{4};std::array<ResponseFrame,4> responses{};
  std::atomic<double> displayRate{48000};
  std::atomic<float> peak{0},rms{0},correlation{0};
@@ -103,6 +103,8 @@ public:
  p.add(std::make_unique<juce::AudioParameterBool>("truePeakAutoRelease","Final Maximizer auto release",false));
  p.add(std::make_unique<juce::AudioParameterFloat>("truePeakSoftClip","Final Maximizer soft clip",0.f,1.f,0.f));
  p.add(std::make_unique<juce::AudioParameterFloat>("truePeakOutput","Final Maximizer output trim dB",-12.f,6.f,0.f));
+ p.add(std::make_unique<juce::AudioParameterFloat>("analogGlobalMix","Analog Exciter combined mix",0.f,1.f,1.f));
+ p.add(std::make_unique<juce::AudioParameterBool>("analogDelta","Analog Exciter input minus processed",false));
  return p;}
  static void addModuleParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
   auto boolean=[&](const char* id,const char* name,bool initial){p.add(std::make_unique<juce::AudioParameterBool>(id,name,initial));};
@@ -259,7 +261,7 @@ public:
  }
  int responseStart,responseCount,responseStart2,responseCount2;
  responseFifo.prepareToWrite(1,responseStart,responseCount,responseStart2,responseCount2);
- if(responseCount+responseCount2){int index=responseCount?responseStart:responseStart2;engine.copyEqCoefficients(responses[index].bands);engine.copyBandBlends(responses[index].blends);responses[index].stereo=engine.stereoRead();responses[index].dynamics=engine.dynamicsRead();responses[index].parallel=engine.parallelRead();responses[index].exciter=engine.harmonicExciterRead();responses[index].analog=engine.analogColorRead();responses[index].analogizer=engine.analogizerRead();responses[index].restoration=engine.restorationRead();responses[index].bass=engine.bassArchitectRead();responses[index].transient=engine.transientSculptorRead();responses[index].truePeak=engine.finalTruePeakRead();responses[index].dynamicGain=engine.dynamicRead();responses[index].dynamicBlends=engine.dynamicBlends();engine.dynamicCoefficients(responses[index].dynamicBands);responses[index].stabilizerGain=engine.stabilizerRead();engine.stabilizerCoefficients(responses[index].stabilizerBands);responses[index].stabilizerMix=engine.stabilizerBlend();responses[index].rate=displayRate.load();responses[index].eqMix=engine.eqBlend();responses[index].inputReading=inputMeter.read();responses[index].outputReading=outputMeter.read();responses[index].inputLufs=inputLoudness.read();responses[index].outputLufs=outputLoudness.read();}
+ if(responseCount+responseCount2){int index=responseCount?responseStart:responseStart2;engine.copyEqCoefficients(responses[index].bands);engine.copyBandBlends(responses[index].blends);responses[index].stereo=engine.stereoRead();responses[index].dynamics=engine.dynamicsRead();responses[index].parallel=engine.parallelRead();responses[index].exciter=engine.harmonicExciterRead();responses[index].analog=engine.analogColorRead();responses[index].analogizer=engine.analogizerRead();responses[index].analogExciter=engine.analogExciterRead();responses[index].restoration=engine.restorationRead();responses[index].bass=engine.bassArchitectRead();responses[index].transient=engine.transientSculptorRead();responses[index].truePeak=engine.finalTruePeakRead();responses[index].dynamicGain=engine.dynamicRead();responses[index].dynamicBlends=engine.dynamicBlends();engine.dynamicCoefficients(responses[index].dynamicBands);responses[index].stabilizerGain=engine.stabilizerRead();engine.stabilizerCoefficients(responses[index].stabilizerBands);responses[index].stabilizerMix=engine.stabilizerBlend();responses[index].rate=displayRate.load();responses[index].eqMix=engine.eqBlend();responses[index].inputReading=inputMeter.read();responses[index].outputReading=outputMeter.read();responses[index].inputLufs=inputLoudness.read();responses[index].outputLufs=outputLoudness.read();}
  responseFifo.finishedWrite(responseCount+responseCount2);
  const auto reading=outputMeter.read();peak.store(reading.peak);rms.store(reading.rms);correlation.store(reading.correlation);
 
@@ -283,9 +285,10 @@ public:
    // parameter adapters. Do not change values on a complete current preset.
    const auto xml=getXmlFromBinary(data,size);
    const auto incoming=xml!=nullptr?juce::ValueTree::fromXml(*xml):juce::ValueTree{};
-   const bool legacy304=incoming.getNumChildren()==304;
-   if(legacy304){
-    for(size_t i=304;i<masterlab::parameterCount;++i){
+   const int supplied=incoming.getNumChildren();
+   const bool previousState=supplied==304||supplied==316;
+   if(previousState){
+    for(size_t i=static_cast<size_t>(supplied);i<masterlab::parameterCount;++i){
      auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(getParameters()[static_cast<int>(i)]);
      if(parameter!=nullptr){
       const auto factoryDefault=parameter->getDefaultValue();

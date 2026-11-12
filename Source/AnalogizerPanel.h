@@ -41,6 +41,9 @@ class AnalogizerPanel final : public juce::Component {
  masterlab::HarmonicExciterReading harmonicReading_{};
  juce::ToggleButton present_{"Colour in"},enabled_{"Colour on"},harmonicsPresent_{"Harmonics in"},harmonicsEnabled_{"Harmonics on"};
  juce::ComboBox mode_;
+ juce::ToggleButton delta_{"DELTA"};juce::TextButton details_{"Details"};bool showingDetails_=false;
+ std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> deltaAttachment_;
+ double scopeRate_=48000.;
  std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> presentAttachment_,enabledAttachment_,harmonicsPresentAttachment_,harmonicsEnabledAttachment_;
  std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAttachment_;
  struct Control {
@@ -48,7 +51,7 @@ class AnalogizerPanel final : public juce::Component {
   std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;
  };
  std::vector<std::unique_ptr<Control>> controls_;
- masterlab::AnalogizerReading reading_{};
+ masterlab::AnalogExciterReading reading_{};
  void add(const char* title,const char* id){
   auto item=std::make_unique<Control>();item->label.setText(title,juce::dontSendNotification);
   item->label.setColour(juce::Label::textColourId,juce::Colour(0xffc0cedb));
@@ -63,6 +66,11 @@ public:
  AnalogizerPanel(Processor& processor,StudioTheme& theme):processor_(processor),theme_(theme) {
   setComponentID("analogizer-panel");setLookAndFeel(&theme_);
   addAndMakeVisible(present_);addAndMakeVisible(enabled_);addAndMakeVisible(harmonicsPresent_);addAndMakeVisible(harmonicsEnabled_);addAndMakeVisible(mode_);
+  addAndMakeVisible(delta_);addAndMakeVisible(details_);
+  delta_.setComponentID("analog-delta");details_.setComponentID("analog-details");
+  deltaAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor_.state,"analogDelta",delta_);
+  delta_.setTooltip("Monitor input minus the complete processed Analog Exciter, after combined Mix.");
+  details_.onClick=[this]{showingDetails_=!showingDetails_;details_.setButtonText(showingDetails_?"Main":"Details");resized();repaint();};
   excite_.setComponentID("analog-excite");
   excite_.setTooltip("EXCITE is a real harmonic-intensity macro: drives four-band harmonics and Tube/FET/Tape saturation; 0 preserves old session settings.");
   addAndMakeVisible(excite_);
@@ -75,64 +83,86 @@ public:
   harmonicsPresentAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor_.state,"exciterPresent",harmonicsPresent_);
   harmonicsEnabledAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor_.state,"exciterOn",harmonicsEnabled_);
   add("Drive dB","analogizerDrive");add("Warmth","analogizerWarmth");
-  add("Dynamic de-fizz","analogizerDeFizz");add("Dry / wet","analogizerMix");
-  add("Output dB","analogizerOutput");
+  add("Dynamic de-fizz","analogizerDeFizz");add("Colour mix","analogizerMix");
+  add("Colour output dB","analogizerOutput");
   add("Low harmonics","exciterAmountLow");add("Mid harmonics","exciterAmountMid");
   add("High harmonics","exciterAmountHigh");add("Air harmonics","exciterAmountAir");
   add("Even H2","exciterEven");add("Odd H3","exciterOdd");
   add("Bias","analogBias");add("Tone","analogTone");
   add("Dynamics","analogDynamics");add("Impact","analogImpact");
+  add("Combined mix","analogGlobalMix");
  }
  ~AnalogizerPanel()override{setLookAndFeel(nullptr);}
- void update(const Processor::ResponseFrame& frame){reading_=frame.analogizer;harmonicReading_=frame.exciter;repaint();}
+ void update(const Processor::ResponseFrame& frame){reading_=frame.analogExciter;harmonicReading_=frame.exciter;scopeRate_=frame.rate;repaint();}
  void resized()override{
-  const bool compactWidth=getWidth()<850;
-  present_.setBounds(24,12,compactWidth?112:130,30);
-  enabled_.setBounds(compactWidth?140:162,12,compactWidth?98:110,30);
-  harmonicsPresent_.setBounds(compactWidth?244:282,12,compactWidth?119:145,30);
-  harmonicsEnabled_.setBounds(compactWidth?367:438,12,compactWidth?110:145,30);
-  mode_.setBounds(compactWidth?481:596,12,compactWidth?170:170,30);
+  const int rowWidth=(getWidth()-48)/6;
+  present_.setBounds(24,35,rowWidth-5,28);enabled_.setBounds(24+rowWidth,35,rowWidth-5,28);
+  harmonicsPresent_.setBounds(24+2*rowWidth,35,rowWidth-5,28);harmonicsEnabled_.setBounds(24+3*rowWidth,35,rowWidth-5,28);
+  mode_.setBounds(24+4*rowWidth,35,rowWidth-5,28);delta_.setBounds(24+5*rowWidth,35,rowWidth-5,28);
+  details_.setBounds(getWidth()-126,4,102,26);
   const bool compact=getHeight()<440;
-  const int centre=getWidth()/2;
-  excite_.setBounds(centre-(compact?90:122),compact?88:101,compact?180:244,compact?185:253);
-  // Two columns on each side leave room for a rotary plus its value box.
-  // Four narrow stacked rows previously left only 15 px for the rotary,
-  // below StudioTheme's 24 px draw threshold at the minimum editor size.
-  const int sideWidth=(getWidth()-(compact?240:288)-44)/4;
-  const int top=compact?86:105;
-  const int rowHeight=compact?96:112;
+  const int body=getHeight()-88;
+  const int diameter=std::min(static_cast<int>(getWidth()*.29f),static_cast<int>(body*.64f));
+  const int outputHeight=compact?78:110;
+  const int knobTop=76+std::max(0,(body-diameter-outputHeight-14)/2);
+  excite_.setVisible(!showingDetails_);excite_.setBounds((getWidth()-diameter)/2,knobTop,diameter,diameter);
+  const int sideWidth=(getWidth()-diameter-88)/2;
+  const int scopeHeight=juce::jlimit(62,150,getHeight()/5);
+  int detailIndex=0;
   for(size_t i=0;i<controls_.size();++i){
-   int x=0,y=0,width=sideWidth;
-   if(i<8){
-    const int slot=static_cast<int>(i)%4;
-    const int origin=i<4?22:getWidth()-22-2*sideWidth;
-    x=origin+(slot%2)*sideWidth;y=top+(slot/2)*rowHeight;
+   const bool primary=i==0||i==1||i==4||i==12||i==15;
+   auto& c=*controls_[i];const bool visible=showingDetails_?!primary:primary;
+   c.label.setVisible(visible);c.slider.setVisible(visible);
+   int x=0,y=0,width=0,height=compact?60:92;
+   if(primary){
+    if(i==4){width=std::min(130,diameter);x=(getWidth()-width)/2;y=knobTop+diameter+8;}
+    else {width=sideWidth/2;x=(i==0||i==1?24:getWidth()-24-sideWidth)+(i==1||i==15?width:0);y=76+scopeHeight+12;}
    }else{
-    width=(getWidth()-44)/7;x=22+static_cast<int>(i-8)*width;
-    y=getHeight()-(compact?82:132);
+    width=(getWidth()-48)/6;x=24+(detailIndex%6)*width;y=82+(detailIndex/6)*(compact?116:154);++detailIndex;
    }
-   controls_[i]->label.setBounds(x,y,width-4,18);
-   controls_[i]->slider.setBounds(x,y+18,width-4,compact?60:76);
+   c.label.setBounds(x,y,width-5,18);c.slider.setBounds(x,y+18,width-5,height);
   }
  }
- void paint(juce::Graphics& g)override{
-  g.fillAll(juce::Colour(0xff20303e));g.setColour(juce::Colour(0xffe9c190));
-  g.setFont(juce::FontOptions(23.f));g.drawText("ANALOG EXCITER  /  Tube - FET - Tape",24,50,getWidth()-48,34,juce::Justification::left);
-  g.setColour(juce::Colours::lightgrey);g.setFont(juce::FontOptions(14.f));
-  if(getHeight()>=440)g.drawText("Input RMS "+juce::String(reading_.inputRms,4)+"   Output RMS "+juce::String(reading_.outputRms,4)+"   Delta RMS "+juce::String(reading_.deltaRms,4),
-      24,81,getWidth()-48,20,juce::Justification::left);
-  const int meterY=std::min(getHeight()-160,335);
-  g.setFont(11.f);
-  if(getHeight()>=440)for(size_t band=0;band<4;++band){
-   const float energy=harmonicReading_.generatedRms[band];
-   const float normalized=juce::jlimit(0.f,1.f,(20.f*std::log10(std::max(1.e-8f,energy))+72.f)/48.f);
-   const float width=std::max(32.f,static_cast<float>(getWidth()-328)/4.f);
-   const float x=164.f+static_cast<float>(band)*width;
-   g.setColour(juce::Colour(0xff1b252e));g.fillRoundedRectangle(x,meterY,width-9.f,9.f,4.f);
-   g.setColour(juce::Colour(0xffffb969));g.fillRoundedRectangle(x,meterY,std::max(0.1f,(width-9.f)*normalized),9.f,4.f);
-   g.setColour(juce::Colour(0xffcbd6e0));g.drawText(juce::String(std::array<const char*,4>{"LOW H","MID H","HIGH H","AIR H"}[band]),static_cast<int>(x),meterY+10,static_cast<int>(width-9),18,juce::Justification::left);
+ void drawScope(juce::Graphics& g,juce::Rectangle<float> box,const masterlab::ScopeCapture::Wave& wave,const juce::String& title,juce::Colour colour){
+  g.setColour(juce::Colour(0xff080f13));g.fillRoundedRectangle(box,8.f);
+  g.setColour(juce::Colour(0xff5e665d));g.drawRoundedRectangle(box,8.f,1.f);
+  g.setFont(11.f);g.setColour(juce::Colour(0xffd6dcca));g.drawText(title,box.removeFromTop(18),juce::Justification::centred);
+  auto plot=box.reduced(7,4);juce::Graphics::ScopedSaveState save(g);g.reduceClipRegion(plot.toNearestInt());
+  g.setColour(juce::Colour(0xff24413a));g.drawHorizontalLine(static_cast<int>(plot.getCentreY()),plot.getX(),plot.getRight());
+  juce::Path path;for(size_t i=0;i<wave.size();++i){const float x=plot.getX()+plot.getWidth()*i/(wave.size()-1);
+   const float y=plot.getCentreY()-std::clamp(wave[i],-1.f,1.f)*plot.getHeight()*.45f;
+   if(i==0)path.startNewSubPath(x,y);else path.lineTo(x,y);
   }
-  if(getHeight()>=440)g.drawText("Actual harmonic DSP RMS / Tube - FET - Tape / EXCITE macro",
-      24,getHeight()-29,getWidth()-48,24,juce::Justification::left);
+  g.setColour(colour);g.strokePath(path,juce::PathStrokeType(1.3f));
+ }
+ void paint(juce::Graphics& g)override{
+  g.setGradientFill(juce::ColourGradient(juce::Colour(0xff323a3c),0,0,juce::Colour(0xff0b1115),0,static_cast<float>(getHeight()),false));g.fillAll();
+  g.setColour(juce::Colour(0xffa28b63));g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(6),12.f,1.f);
+  g.setColour(juce::Colour(0xffe9c190));g.setFont(juce::FontOptions(21.f));
+  g.drawText(showingDetails_?"ANALOG EXCITER / DETAILS":"ANALOG EXCITER",24,2,getWidth()-164,30,juce::Justification::left);
+  if(showingDetails_){
+   g.setColour(juce::Colour(0xffccd3ce));g.setFont(12.f);
+   g.drawText("Colour mix controls saturation only. Combined mix and DELTA cover the entire module.",24,getHeight()-35,getWidth()-48,24,juce::Justification::left);return;
+  }
+  const int body=getHeight()-88;
+  const int diameter=std::min(static_cast<int>(getWidth()*.29f),static_cast<int>(body*.64f));
+  const float sideWidth=static_cast<float>((getWidth()-diameter-88)/2);
+  const float scopeHeight=static_cast<float>(juce::jlimit(62,150,getHeight()/5));
+  drawScope(g,{24.f,76.f,sideWidth,scopeHeight},reading_.inputWave,"INPUT / MID WAVE",juce::Colour(0xff64dfca));
+  drawScope(g,{getWidth()-24.f-sideWidth,76.f,sideWidth,scopeHeight},reading_.outputWave,"OUTPUT / MID WAVE",juce::Colour(0xffffc878));
+  const float y=76.f+scopeHeight+12.f+18.f+(getHeight()<440?60.f:92.f)+10.f;
+  g.setFont(11.f);g.setColour(juce::Colour(0xffcbd6ce));
+  g.drawText("+/-1 FS | "+juce::String(511000./scopeRate_,2)+" ms | rising/auto",24,static_cast<int>(y),static_cast<int>(sideWidth),18,juce::Justification::left);
+  g.drawText("INPUT "+juce::String(juce::Decibels::gainToDecibels(reading_.inputRms,-100.f),1)+" dBFS RMS",24,static_cast<int>(y)+22,static_cast<int>(sideWidth),18,juce::Justification::left);
+  const int right=static_cast<int>(getWidth()-24.f-sideWidth);
+  g.drawText("OUT "+juce::String(juce::Decibels::gainToDecibels(reading_.outputRms,-100.f),1)+" dBFS RMS",right,static_cast<int>(y),static_cast<int>(sideWidth),18,juce::Justification::left);
+  g.drawText("DELTA "+juce::String(juce::Decibels::gainToDecibels(reading_.deltaRms,-100.f),1)+" dBFS RMS",right,static_cast<int>(y)+22,static_cast<int>(sideWidth),18,juce::Justification::left);
+  for(size_t band=0;band<4;++band){
+   const float level=juce::jlimit(0.f,1.f,(juce::Decibels::gainToDecibels(harmonicReading_.generatedRms[band],-72.f)+72.f)/72.f);
+   const float width=sideWidth/4.f,x=24.f+band*width,barY=y+48.f;
+   g.setColour(juce::Colour(0xff142724));g.fillRect(x,barY,width-5,6.f);
+   g.setColour(juce::Colour(0xff7edcc4));g.fillRect(x,barY,(width-5)*level,6.f);
+   g.setColour(juce::Colour(0xffbfcac4));g.drawText(std::array<const char*,4>{"Low H","Mid H","High H","Air H"}[band],static_cast<int>(x),static_cast<int>(barY)+8,static_cast<int>(width),16,juce::Justification::left);
+  }
  }
 };

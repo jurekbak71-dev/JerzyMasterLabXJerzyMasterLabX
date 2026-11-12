@@ -1,0 +1,35 @@
+tests/AnalogExciterMonitorTests.cpp:8:39: error: ‘AnalogExciterReading’ does not name a type
+    8 | struct Render {std::vector<float> l,r;AnalogExciterReading reading;};
+      |                                       ^~~~~~~~~~~~~~~~~~~~
+tests/AnalogExciterMonitorTests.cpp: In function ‘Render render(float, bool, int, double, bool)’:
+tests/AnalogExciterMonitorTests.cpp:12:52: error: ‘class masterlab::AnalogExciter’ has no member named ‘monitor’
+   12 |  dsp.harmonicSettings(h);dsp.colourSettings(c);dsp.monitor(mix,delta);dsp.prepare(rate);
+      |                                                    ^~~~~~~
+tests/AnalogExciterMonitorTests.cpp:16:6: error: ‘struct Render’ has no member named ‘reading’
+   16 |  out.reading=dsp.reading();return out;
+      |      ^~~~~~~
+tests/AnalogExciterMonitorTests.cpp:16:18: error: ‘class masterlab::AnalogExciter’ has no member named ‘reading’
+   16 |  out.reading=dsp.reading();return out;
+      |                  ^~~~~~~
+tests/AnalogExciterMonitorTests.cpp: In function ‘int main()’:
+tests/AnalogExciterMonitorTests.cpp:34:25: error: ‘const struct Render’ has no member named ‘reading’
+   34 |    for(size_t i=0;i<wet.reading.inputWave.size();++i)if(std::abs(other.reading.inputWave[i]-wet.reading.inputWave[i])>1.e-6||std::abs(other.reading.outputWave[i]-wet.reading.outputWave[i])>1.e-6)return 4;
+      |                         ^~~~~~~
+tests/AnalogExciterMonitorTests.cpp:34:72: error: ‘const struct Render’ has no member named ‘reading’
+   34 |    for(size_t i=0;i<wet.reading.inputWave.size();++i)if(std::abs(other.reading.inputWave[i]-wet.reading.inputWave[i])>1.e-6||std::abs(other.reading.outputWave[i]-wet.reading.outputWave[i])>1.e-6)return 4;
+      |                                                                        ^~~~~~~
+tests/AnalogExciterMonitorTests.cpp:34:97: error: ‘const struct Render’ has no member named ‘reading’
+   34 |    for(size_t i=0;i<wet.reading.inputWave.size();++i)if(std::abs(other.reading.inputWave[i]-wet.reading.inputWave[i])>1.e-6||std::abs(other.reading.outputWave[i]-wet.reading.outputWave[i])>1.e-6)return 4;
+      |                                                                                                 ^~~~~~~
+tests/AnalogExciterMonitorTests.cpp:34:141: error: ‘const struct Render’ has no member named ‘reading’
+   34 |    for(size_t i=0;i<wet.reading.inputWave.size();++i)if(std::abs(other.reading.inputWave[i]-wet.reading.inputWave[i])>1.e-6||std::abs(other.reading.outputWave[i]-wet.reading.outputWave[i])>1.e-6)return 4;
+      |                                                                                                                                             ^~~~~~~
+tests/AnalogExciterMonitorTests.cpp:34:167: error: ‘const struct Render’ has no member named ‘reading’
+   34 |    for(size_t i=0;i<wet.reading.inputWave.size();++i)if(std::abs(other.reading.inputWave[i]-wet.reading.inputWave[i])>1.e-6||std::abs(other.reading.outputWave[i]-wet.reading.outputWave[i])>1.e-6)return 4;
+      |                                                                                                                                                                       ^~~~~~~
+tests/AnalogExciterMonitorTests.cpp:38:24: error: ‘class masterlab::AnalogExciter’ has no member named ‘monitor’
+   38 |  AnalogExciter dsp;dsp.monitor(std::numeric_limits<float>::quiet_NaN(),true);dsp.prepare(48000);
+      |                        ^~~~~~~
+tests/AnalogExciterMonitorTests.cpp:40:21: error: ‘class masterlab::AnalogExciter’ has no member named ‘reading’
+   40 |  dsp.reset();if(dsp.reading().inputRms!=0)return 6;
+      |                     ^~~~~~~
