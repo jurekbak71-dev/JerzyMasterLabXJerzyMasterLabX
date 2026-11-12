@@ -192,7 +192,17 @@ if(MASTERLAB_PLUGIN)
    "${MASTERLAB_GUI_ASSET_DIR}/module_glow_on.png"
    "${MASTERLAB_GUI_ASSET_DIR}/module_glow_off.png"
    "${MASTERLAB_GUI_ASSET_DIR}/switch_on.png"
-   "${MASTERLAB_GUI_ASSET_DIR}/switch_off.png")
+   "${MASTERLAB_GUI_ASSET_DIR}/switch_off.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/maximizer_fader_cap_vertical.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/maximizer_fader_cap_vertical_2x.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/maximizer_fader_cap_horizontal.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/maximizer_fader_cap_horizontal_2x.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/maximizer_power_on.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/maximizer_power_off.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/maximizer_selector_on.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/maximizer_selector_off.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/maximizer_display_bezel.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/maximizer_readout_bezel.png")
  target_link_libraries(JerzyMasterLabX PUBLIC MasterLabFonts MasterLabGuiAssets)
  add_test(NAME concept_c_asset_pack
    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/gui_assets/validate_concept_c.py" "${MASTERLAB_GUI_ASSET_DIR}")

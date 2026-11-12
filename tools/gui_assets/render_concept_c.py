@@ -221,6 +221,51 @@ for name,im,category in (
 ):
     save(im,name,category)
 
+# Final Maximizer / Modern Metering Console. These are separate reusable
+# surfaces; all captions, values, meter fills and graphs remain live JUCE
+# drawing and are never baked into raster artwork.
+def maximizer_fader_cap(size, vertical):
+    w,h=size; im=Image.new("RGBA",size,(0,0,0,0));d=ImageDraw.Draw(im,"RGBA")
+    d.rounded_rectangle((2,3,w-3,h-2),radius=max(3,min(w,h)//5),
+                        fill=(198,207,213,255),outline=(35,51,63,255),width=2)
+    d.rounded_rectangle((5,5,w-6,h-5),radius=max(2,min(w,h)//6),
+                        fill=(118,132,143,255),outline=(235,241,244,175),width=1)
+    if vertical:
+        d.line((7,h//2,w-8,h//2),fill=(17,225,238,255),width=max(2,h//8))
+    else:
+        d.line((w//2,7,w//2,h-8),fill=(17,225,238,255),width=max(2,w//8))
+    return im
+
+def maximizer_surface(size,on=False,kind="switch"):
+    w,h=size;im=Image.new("RGBA",size,(0,0,0,0));d=ImageDraw.Draw(im,"RGBA")
+    radius=max(4,min(10,h//3))
+    d.rounded_rectangle((1,1,w-2,h-2),radius=radius,fill=(12,27,38,255),
+                        outline=((47,229,193,255) if on else (62,84,101,255)),width=2)
+    d.rounded_rectangle((4,4,w-5,h-5),radius=max(2,radius-3),
+                        fill=((17,69,68,255) if on else (21,39,53,255)))
+    d.line((8,5,w-9,5),fill=(203,245,249,45 if not on else 85),width=1)
+    return im
+
+def maximizer_bezel(size):
+    w,h=size;im=Image.new("RGBA",size,(0,0,0,0));d=ImageDraw.Draw(im,"RGBA")
+    d.rounded_rectangle((1,1,w-2,h-2),radius=12,fill=(7,21,31,255),
+                        outline=(66,91,108,255),width=2)
+    d.rounded_rectangle((7,7,w-8,h-8),radius=8,fill=(5,17,27,255),
+                        outline=(19,96,119,185),width=1)
+    d.line((18,6,w-19,6),fill=(111,229,240,70),width=2)
+    return im
+
+for suffix,scale in (("",1),("_2x",2)):
+    save(maximizer_fader_cap((44*scale,20*scale),True),
+         f"maximizer_fader_cap_vertical{suffix}.png","maximizer_fader",scale=scale)
+    save(maximizer_fader_cap((20*scale,44*scale),False),
+         f"maximizer_fader_cap_horizontal{suffix}.png","maximizer_fader",scale=scale)
+for state in (False,True):
+    save(maximizer_surface((160,42),state),f"maximizer_power_{'on' if state else 'off'}.png","maximizer_switch",state=state)
+    save(maximizer_surface((104,34),state),f"maximizer_selector_{'on' if state else 'off'}.png","maximizer_selector",state=state)
+save(maximizer_bezel((720,260)),"maximizer_display_bezel.png","maximizer_bezel")
+save(maximizer_bezel((220,58)),"maximizer_readout_bezel.png","maximizer_bezel")
+
 with (OUT/"manifest.json").open("w",encoding="utf-8") as f:
     json.dump(SPEC,f,indent=2)
 print(f"Created {len(SPEC['assets'])} RGBA images in {OUT}")

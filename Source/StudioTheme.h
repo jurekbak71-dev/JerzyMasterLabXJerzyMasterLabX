@@ -82,6 +82,10 @@ public:
      MasterLabGuiAssets::knob_96_atlas_png,MasterLabGuiAssets::knob_96_atlas_pngSize)};
  juce::Image knob160_{juce::ImageCache::getFromMemory(
      MasterLabGuiAssets::knob_160_atlas_png,MasterLabGuiAssets::knob_160_atlas_pngSize)};
+ juce::Image maximizerVerticalCap_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::maximizer_fader_cap_vertical_2x_png,MasterLabGuiAssets::maximizer_fader_cap_vertical_2x_pngSize)};
+ juce::Image maximizerHorizontalCap_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::maximizer_fader_cap_horizontal_2x_png,MasterLabGuiAssets::maximizer_fader_cap_horizontal_2x_pngSize)};
  juce::Image greenOn_{juce::ImageCache::getFromMemory(
      MasterLabGuiAssets::led_green_on_png,MasterLabGuiAssets::led_green_on_pngSize)};
  juce::Image greenOff_{juce::ImageCache::getFromMemory(
@@ -201,14 +205,18 @@ public:
   g.setColour(lit);
   if(horizontal)g.fillRoundedRectangle(track.withWidth(juce::jmax(1.f,position-track.getX())),3.f);
   else g.fillRoundedRectangle(track.withTop(position),3.f);
-  const int cap=juce::jmin(34,horizontal?height:width);
-  const int px=juce::roundToInt(horizontal?position-cap*.5f:centreX-cap*.5f);
-  const int py=juce::roundToInt(vertical?position-cap*.5f:centreY-cap*.5f);
-  if(!knob96_.isNull())g.drawImage(knob96_,px,py,cap,cap,6*96,4*96,96,96);
+  const bool maximizer=slider.getComponentID().startsWith("truePeak");
+  const auto& capImage=horizontal?maximizerHorizontalCap_:maximizerVerticalCap_;
+  const int capW=maximizer?(horizontal?20:44):34;
+  const int capH=maximizer?(horizontal?44:20):34;
+  const int px=juce::roundToInt(horizontal?position-capW*.5f:centreX-capW*.5f);
+  const int py=juce::roundToInt(vertical?position-capH*.5f:centreY-capH*.5f);
+  if(maximizer&&!capImage.isNull())g.drawImage(capImage,px,py,capW,capH,0,0,capImage.getWidth(),capImage.getHeight());
+  else if(!knob96_.isNull())g.drawImage(knob96_,px,py,capW,capH,6*96,4*96,96,96);
   if(slider.hasKeyboardFocus(true)){
    g.setColour(juce::Colour(0xff0c8bff));
    g.drawEllipse(static_cast<float>(px-1),static_cast<float>(py-1),
-                 static_cast<float>(cap+2),static_cast<float>(cap+2),1.f);
+                 static_cast<float>(capW+2),static_cast<float>(capH+2),1.f);
   }
  }
  void drawLabel(juce::Graphics& g,juce::Label& label) override{

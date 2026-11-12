@@ -128,13 +128,13 @@
 - Consumes: Task 4 APVTS IDs and telemetry.
 - Produces: selected option 1 layout at supported editor sizes with real host gestures and value entry.
 
-- [ ] **Step 1: Extend failing GUI smoke** to require linear slider styles, authoritative power state, all primary component IDs, host gestures/value edits and non-overlapping bounds at 750, 1000 and 1440 px widths.
-- [ ] **Step 2: Run GUI smoke**; expected: new component/style/geometry assertions fail.
-- [ ] **Step 3: Render and inspect individual assets** for fader caps/tracks, switch states, selector/readout/display bezels and meter overlays; keep text, values and live fills out of raster assets.
-- [ ] **Step 4: Register assets in BinaryData/theme** and implement the option 1 panel hierarchy with vertical primary faders, native history graph, IN/GR/OUT meter bridge and horizontal lower controls.
-- [ ] **Step 5: Capture actual JUCE screenshots** at the three target widths and compare them with the selected generated reference; fix P0-P2 overlap, hierarchy and state-legibility issues.
-- [ ] **Step 6: Run GUI smoke and plugin parameter integration**; expected: PASS.
-- [ ] **Step 7: Commit** as `Build modern final maximizer console`.
+- [x] **Step 1: Extend failing GUI smoke** to require linear slider styles, authoritative power state, all primary component IDs, host gestures/value edits and non-overlapping bounds at 750, 1000 and 1440 px widths.
+- [x] **Step 2: Run GUI smoke**; expected: new component/style/geometry assertions fail.
+- [x] **Step 3: Render and inspect individual assets** for fader caps/tracks, switch states, selector/readout/display bezels and meter overlays; keep text, values and live fills out of raster assets.
+- [x] **Step 4: Register assets in BinaryData/theme** and implement the option 1 panel hierarchy with vertical primary faders, native history graph, IN/GR/OUT meter bridge and horizontal lower controls.
+- [x] **Step 5: Capture actual JUCE screenshots** at the three target widths and compare them with the selected generated reference; fix P0-P2 overlap, hierarchy and state-legibility issues.
+- [x] **Step 6: Run GUI smoke and plugin parameter integration**; expected: PASS.
+- [x] **Step 7: Commit** as `Build modern final maximizer console`.
 
 ### Task 6: Full regression and Windows evidence
 

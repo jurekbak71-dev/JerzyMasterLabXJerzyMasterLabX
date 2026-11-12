@@ -7,7 +7,7 @@ from PIL import Image
 p=Path(sys.argv[1] if len(sys.argv)>1 else "assets/gui-concept-c")
 manifest=json.loads((p/"manifest.json").read_text(encoding="utf-8"))
 assert manifest["kit"]=="masterlabx-concept-c"
-assert len(manifest["assets"])==225, "Expected 202 knob frames + 2 atlases + 6 LEDs + 3 rings + 1 tile + 1 GR bezel"
+assert len(manifest["assets"])==235, "Expected Concept C pack plus 10 separate Final Maximizer assets"
 seen=set()
 for a in manifest["assets"]:
     name=a["name"]
@@ -52,4 +52,14 @@ for size in (96,160):
         n0,n50,n100=(count_lit(f) for f in (0,50,100))
         assert n0==0 and n50>20 and n100>n50*1.35, (
             "Wreath arc fails to increase with normalized APVTS value",size,n0,n50,n100)
-print("OK: 225 assets, 2x101 knob frames, 6 LED sprites, 1 powdercoat tile; dimensions/RGBA verified.")
+for name,size in {
+    "maximizer_fader_cap_vertical.png":(44,20),
+    "maximizer_fader_cap_vertical_2x.png":(88,40),
+    "maximizer_fader_cap_horizontal.png":(20,44),
+    "maximizer_fader_cap_horizontal_2x.png":(40,88),
+    "maximizer_power_on.png":(160,42),"maximizer_power_off.png":(160,42),
+    "maximizer_selector_on.png":(104,34),"maximizer_selector_off.png":(104,34),
+    "maximizer_display_bezel.png":(720,260),"maximizer_readout_bezel.png":(220,58),
+}.items():
+    with Image.open(p/name) as im: assert im.mode=="RGBA" and im.size==size,name
+print("OK: 235 assets including 10 separate Final Maximizer surfaces; dimensions/RGBA verified.")

@@ -75,10 +75,24 @@ class GuiSmoke final : private juce::Timer {
         if(!truePeakPanel)return false;
         auto* finalCeiling=dynamic_cast<juce::Slider*>(truePeakPanel->findChildWithID("truePeakCeiling"));
         auto* finalRelease=dynamic_cast<juce::Slider*>(truePeakPanel->findChildWithID("truePeakRelease"));
+        auto* finalDrive=dynamic_cast<juce::Slider*>(truePeakPanel->findChildWithID("truePeakDrive"));
+        auto* finalDensity=dynamic_cast<juce::Slider*>(truePeakPanel->findChildWithID("truePeakDensity"));
+        auto* finalCompressorMix=dynamic_cast<juce::Slider*>(truePeakPanel->findChildWithID("truePeakCompressorMix"));
+        auto* finalStereoLink=dynamic_cast<juce::Slider*>(truePeakPanel->findChildWithID("truePeakStereoLink"));
+        auto* finalSoftClip=dynamic_cast<juce::Slider*>(truePeakPanel->findChildWithID("truePeakSoftClip"));
+        auto* finalDelta=dynamic_cast<juce::Button*>(truePeakPanel->findChildWithID("true-peak-delta"));
         auto* truePeakPresent=dynamic_cast<juce::Button*>(truePeakPanel->findChildWithID("true-peak-present"));
         auto* truePeakEnabled=dynamic_cast<juce::Button*>(truePeakPanel->findChildWithID("true-peak-enabled"));
-        if(!finalCeiling||!finalRelease||!truePeakPresent||!truePeakEnabled)return false;
+        if(!finalCeiling||!finalRelease||!finalDrive||!finalDensity||!finalCompressorMix||
+           !finalStereoLink||!finalSoftClip||!finalDelta||!truePeakPresent||!truePeakEnabled)return false;
         truePeakPanel->setVisible(true);
+        if(finalCeiling->getSliderStyle()!=juce::Slider::LinearVertical||
+           finalDrive->getSliderStyle()!=juce::Slider::LinearVertical||
+           finalDensity->getSliderStyle()!=juce::Slider::LinearVertical||
+           finalRelease->getSliderStyle()!=juce::Slider::LinearHorizontal||
+           finalCompressorMix->getSliderStyle()!=juce::Slider::LinearHorizontal||
+           finalStereoLink->getSliderStyle()!=juce::Slider::LinearHorizontal||
+           finalSoftClip->getSliderStyle()!=juce::Slider::LinearHorizontal)return false;
         // The physical final slot is not removable: its one power control is
         // authoritative even when a migrated state still stores the retired
         // presence flag as false.
@@ -354,8 +368,9 @@ class GuiSmoke final : private juce::Timer {
             if(!finalPanel->isVisible()||!controlsFit())return captureError(__LINE__);
             auto image=editor->createComponentSnapshot(editor->getLocalBounds());
             if(!image.isValid()||image.getWidth()!=size.x||image.getHeight()!=size.y)return captureError(__LINE__);
-            if(iteration==0&&size.x==1000){
-                auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/limiter-smoke.png");
+            if(iteration==0){
+                const auto name=size.x==1000?"limiter-smoke.png":("limiter-"+juce::String(size.x)+"x"+juce::String(size.y)+"-smoke.png");
+                auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin").getChildFile(name);
                 juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();
                 if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return captureError(__LINE__);
             }
