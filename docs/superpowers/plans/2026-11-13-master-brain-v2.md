@@ -68,10 +68,10 @@
 
 **Interfaces:** Consume compact snapshot targets, score, iteration, issues and ordered module decisions; no audio buffers.
 
-- [ ] Extend GUI smoke first for absence of manual target/ceiling and A/B, phase/status IDs, module cards, current controls and geometry at 750/1000/2000.
-- [ ] Run GUI smoke and confirm RED.
-- [ ] Render separate surfaces and implement the dark mastering workspace with real telemetry and accessible controls.
-- [ ] Inspect actual JUCE screenshots, fix hierarchy/overlap, rerun smoke; commit `Rebuild Master Brain mastering workspace`.
+- [x] Extend GUI smoke first for absence of manual target/ceiling and A/B, phase/status IDs, module cards, current controls and geometry at 750/1000/2000.
+- [x] Run GUI smoke and confirm RED.
+- [x] Render separate surfaces and implement the dark mastering workspace with real telemetry and accessible controls.
+- [x] Inspect actual JUCE screenshots, fix hierarchy/overlap, rerun smoke; commit `Rebuild Master Brain mastering workspace`.
 
 ### Task 5: Regression and exact-SHA Windows package
 

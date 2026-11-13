@@ -193,7 +193,7 @@ class GuiSmoke final : private juce::Timer {
     bool controlsFit(){
         for(int i=0;i<editor->getNumChildComponents();++i){auto* a=editor->getChildComponent(i);if(!a->isVisible())continue;
             if(!editor->getLocalBounds().contains(a->getBounds()))return false;
-            for(int j=i+1;j<editor->getNumChildComponents();++j){auto* b=editor->getChildComponent(j);if(b->isVisible()&&a->getBounds().intersects(b->getBounds())){std::cerr<<"Overlapping controls: "<<a->getComponentID()<<" / "<<b->getComponentID()<<" bounds "<<a->getBounds().toString()<<" / "<<b->getBounds().toString()<<'\n';return false;}}
+            for(int j=i+1;j<editor->getNumChildComponents();++j){auto* b=editor->getChildComponent(j);const bool background=a->getComponentID()=="master-brain-panel"||b->getComponentID()=="master-brain-panel";if(!background&&b->isVisible()&&a->getBounds().intersects(b->getBounds())){std::cerr<<"Overlapping controls: "<<a->getComponentID()<<" / "<<b->getComponentID()<<" bounds "<<a->getBounds().toString()<<" / "<<b->getBounds().toString()<<'\n';return false;}}
         }
         return true;
     }
@@ -406,33 +406,24 @@ class GuiSmoke final : private juce::Timer {
             editor->setSize(size.x,size.y);if(!controlsFit())return captureError(__LINE__);auto image=editor->createComponentSnapshot(editor->getLocalBounds());if(!image.isValid())return captureError(__LINE__);
             if(iteration==0&&size.x==1000){auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/inspector-smoke.png");juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return captureError(__LINE__);}
         }
-        auto* brain=dynamic_cast<juce::Button*>(editor->findChildWithID("view-brain"));auto* apply=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-apply"));auto* report=dynamic_cast<juce::TextEditor*>(editor->findChildWithID("brain-report"));
-        if(!brain||!apply||!report)return captureError(__LINE__);brain->onClick();
-        if(!apply->isEnabled()||!report->getText().contains("PROPOSED EQ")||!report->getText().contains("TONAL ENERGY %")){std::cerr<<report->getText()<<'\n';return captureError(__LINE__);}
+        auto* brain=dynamic_cast<juce::Button*>(editor->findChildWithID("view-brain"));auto* apply=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-apply"));
+        if(!brain||!apply)return captureError(__LINE__);brain->onClick();
+        if(!apply->isEnabled()||editor->findChildWithID("brain-target")||editor->findChildWithID("brain-ceiling")||editor->findChildWithID("brain-report")||editor->findChildWithID("brain-audition-b"))return captureError(__LINE__);
+        auto* brainPanel=editor->findChildWithID("master-brain-panel");if(!brainPanel||!brainPanel->isVisible())return captureError(__LINE__);
+        for(const char* id:{"brain-phase-status","brain-target-lufs","brain-target-dbtp","brain-quality-score","brain-chain-cards"}){
+            auto* component=brainPanel->findChildWithID(id);if(!component||!component->isVisible())return captureError(__LINE__);
+        }
         for(int i=0;i<processor.getParameters().size();++i)if(processor.getParameters()[i]->getValue()!=brainBefore[static_cast<size_t>(i)])return captureError(__LINE__);
         for(auto size:{juce::Point<int>(750,550),juce::Point<int>(1000,700),juce::Point<int>(2000,1400)}){
             editor->setSize(size.x,size.y);if(!controlsFit())return captureError(__LINE__);auto image=editor->createComponentSnapshot(editor->getLocalBounds());if(!image.isValid())return captureError(__LINE__);
-            if(iteration==0&&size.x==1000){auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/brain-smoke.png");juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return captureError(__LINE__);}
+            if(iteration==0){const auto name=size.x==1000?juce::String("brain-smoke.png"):"brain-"+juce::String(size.x)+"x"+juce::String(size.y)+"-smoke.png";auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin").getChildFile(name);juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return captureError(__LINE__);}
         }
-        auto* a=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-audition-a"));
-        auto* b=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-audition-b"));
-        if(!a||!b||!a->isVisible()||!b->isVisible()||!a->isEnabled()||!b->isEnabled()){
-            std::cerr<<"Brain GUI A/B control state failed: A "<<(a&&a->isVisible())<<"/"<<(a&&a->isEnabled())
-                     <<" B "<<(b&&b->isVisible())<<"/"<<(b&&b->isEnabled())
-                     <<"\n"<<report->getText()<<"\n";return captureError(__LINE__);
-        }
+        auto* a=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-audition"));
+        if(!a||!a->isVisible()||!a->isEnabled())return captureError(__LINE__);
         a->onClick();
-        if(!report->getText().contains("Audition A is live")){
-            std::cerr<<"Brain GUI Audition A failed: "<<report->getText()<<"\n";return captureError(__LINE__);
-        }
-        b->onClick();
-        if(!report->getText().contains("Audition B is live")||!apply->isEnabled()){
-            std::cerr<<"Brain GUI Audition B failed: "<<report->getText()<<"\n";return captureError(__LINE__);
-        }
+        if(!apply->isEnabled())return captureError(__LINE__);
         apply->onClick();
-        if(!report->getText().contains("APPLIED")||apply->isEnabled()){
-            std::cerr<<"Brain GUI Apply failed: "<<report->getText()<<"\n";return captureError(__LINE__);
-        }
+        auto* concrete=dynamic_cast<Processor*>(&processor);if(!concrete||concrete->brain.readUI().phase!=masterlab::BrainPhase::Applied||apply->isEnabled())return captureError(__LINE__);
         dynamic_cast<juce::Button*>(editor->findChildWithID("undo"))->onClick();
         for(int i=0;i<processor.getParameters().size();++i)if(processor.getParameters()[i]->getValue()!=brainBefore[static_cast<size_t>(i)]){
             std::cerr<<"Brain GUI Undo failed parameter index "<<i<<"\n";return captureError(__LINE__);

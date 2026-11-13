@@ -12,6 +12,7 @@
 #include "TransientSculptorPanel.h"
 #include "FinalTruePeakPanel.h"
 #include "ConceptCOverviewPanel.h"
+#include "MasterBrainPanel.h"
 
 // Included after Processor. GUI work and FFT never run in the audio callback.
 class Editor final : public juce::AudioProcessorEditor,
@@ -34,6 +35,7 @@ class Editor final : public juce::AudioProcessorEditor,
     FinalTruePeakPanel truePeakPanel;
     ConceptCOverviewPanel overviewPanel;
     ParallelPanel parallelPanel;
+    MasterBrainPanel brainPanel;
     juce::TextButton consoleView{"Console"};
     bool showingConsole=false;
     juce::TextButton dynamicView{"Dynamic EQ"},dynamicsView{"Dynamics"},stereoView{"Stereo"},stabilizerView{"Stabilizer"},modulesButton{"+ Modules"};
@@ -223,8 +225,7 @@ class Editor final : public juce::AudioProcessorEditor,
     void showParallel(){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);showingParallel=true;parallelPanel.setVisible(true);repaint();}
     void setBrainVisible(bool visible){
         showingBrain=visible;brainView.setToggleState(visible,juce::dontSendNotification);
-        for(auto* component:std::initializer_list<juce::Component*>{&brainGenre,&brainStyle,&brainDuration,&brainTarget,&brainCeiling,&brainIntensity,&brainModulesButton,&brainAnalyse,&brainApply,&brainAuditionA,&brainAuditionB,&brainReport})component->setVisible(visible);
-        for(auto& label:brainLabels)label.setVisible(visible);
+        for(auto* component:std::initializer_list<juce::Component*>{&brainPanel,&brainGenre,&brainStyle,&brainDuration,&brainModulesButton,&brainAnalyse,&brainApply,&brainAuditionA})component->setVisible(visible);
     }
     void reflectFactoryBrainControls(){
         const masterlab::BrainConfig defaults{};
@@ -244,24 +245,21 @@ class Editor final : public juce::AudioProcessorEditor,
     }
     void showBrain(){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);setBrainVisible(true);refreshBrain();repaint();}
     masterlab::BrainConfig brainConfig() const {
-        masterlab::BrainConfig config;config.genre=brainGenre.getSelectedId()-1;config.style=brainStyle.getSelectedId()-1;config.seconds=brainDuration.getSelectedId();config.targetLufs=static_cast<float>(brainTarget.getValue());config.ceiling=static_cast<float>(brainCeiling.getValue());config.intensity=static_cast<float>(brainIntensity.getValue());config.useEq=brainEq.getToggleState();config.useLimiter=brainLimiter.getToggleState();config.useStabilizer=brainUseStabilizer;config.automaticModules=brainAutomatic;config.useStereo=brainUseStereo;config.useDynamics=brainUseDynamics;config.useDynamicEq=brainUseDynamicEq;
+        masterlab::BrainConfig config;config.genre=brainGenre.getSelectedId()-1;config.style=brainStyle.getSelectedId()-1;config.seconds=brainDuration.getSelectedId();config.useEq=brainEq.getToggleState();config.useLimiter=brainLimiter.getToggleState();config.useStabilizer=brainUseStabilizer;config.automaticModules=brainAutomatic;config.useStereo=brainUseStereo;config.useDynamics=brainUseDynamics;config.useDynamicEq=brainUseDynamicEq;
         config.useExciter=brainUseExciter;config.useAnalog=brainUseAnalog;config.useBass=brainUseBass;
         config.useTransient=brainUseTransient;config.useTruePeak=brainUseTruePeak;return config;
     }
     void refreshBrain(){
         brainSnapshot=processor.brain.readUI();const auto& snapshot=brainSnapshot;const bool active=snapshot.phase==masterlab::BrainPhase::Pending||snapshot.phase==masterlab::BrainPhase::Analysing||snapshot.phase==masterlab::BrainPhase::Validating;
         brainProgress=active?snapshot.progress:((snapshot.phase==masterlab::BrainPhase::Ready||snapshot.phase==masterlab::BrainPhase::Applied)?1.:0.);
-        brainProgressText=snapshot.phase==masterlab::BrainPhase::Validating?"VERIFYING ACTUAL DSP":active?juce::String(snapshot.progress*100,0)+"% AUDIO CAPTURED":(brainProgress==1.?"ANALYSIS COMPLETE":"READY TO ANALYSE");
+        brainProgressText=snapshot.phase==masterlab::BrainPhase::Optimising?"BUILDING VERIFIED CHAIN":active?juce::String(snapshot.progress*100,0)+"% AUDIO CAPTURED":(brainProgress==1.?"ANALYSIS COMPLETE":"READY TO ANALYSE");brainPanel.update(snapshot,brainProgress);
         brainModulesButton.setButtonText(juce::String(static_cast<int>(snapshot.config.useStabilizer)+static_cast<int>(snapshot.config.useEq)+static_cast<int>(snapshot.config.useLimiter)+static_cast<int>(snapshot.config.useStereo)+static_cast<int>(snapshot.config.useDynamics)+static_cast<int>(snapshot.config.useDynamicEq)+static_cast<int>(snapshot.config.useExciter)+static_cast<int>(snapshot.config.useAnalog)+static_cast<int>(snapshot.config.useBass)+static_cast<int>(snapshot.config.useTransient)+static_cast<int>(snapshot.config.useTruePeak))+" allowed");
         brainAnalyse.setButtonText(active?"Cancel analysis":"Analyse audio");
-        for(auto* component:std::initializer_list<juce::Component*>{&brainGenre,&brainStyle,&brainDuration,&brainTarget,&brainCeiling,&brainIntensity,&brainModulesButton})component->setEnabled(!active);
+        for(auto* component:std::initializer_list<juce::Component*>{&brainGenre,&brainStyle,&brainDuration,&brainModulesButton})component->setEnabled(!active);
         const bool stale=processor.brainStaleUI();
         const bool canAudition=snapshot.phase==masterlab::BrainPhase::Ready&&
                                snapshot.proposal.valid&&snapshot.proposal.previewVerified&&!stale;
-        brainAuditionA.setEnabled(canAudition);
-        brainAuditionB.setEnabled(canAudition&&snapshot.alternateReady);
-        brainAuditionA.setToggleState(snapshot.selectedVariant==0&&canAudition,juce::dontSendNotification);
-        brainAuditionB.setToggleState(snapshot.selectedVariant==1&&canAudition,juce::dontSendNotification);
+        brainAuditionA.setEnabled(canAudition);brainAuditionA.setToggleState(canAudition,juce::dontSendNotification);
         brainApply.setEnabled(snapshot.phase==masterlab::BrainPhase::Ready&&snapshot.proposal.valid&&!stale);
         juce::String report=juce::String(snapshot.message)+"\n"+
                             "ACTION: "+processor.brainActionMessage+"\n";
@@ -312,7 +310,7 @@ class Editor final : public juce::AudioProcessorEditor,
         if(report!=previousBrainReport){brainReport.setText(report,false);previousBrainReport=report;}
     }
     void paintBrain(juce::Graphics& g){
-        g.setColour(background);g.fillRect(0,170,getWidth(),getHeight()-170);
+        g.setColour(background);g.fillRect(0,78,getWidth(),getHeight()-78);return;
         g.setColour(panel);g.fillRoundedRectangle(24.f,154.f,getWidth()-48.f,178.f,18);
         g.setColour(juce::Colour(0xff284760));g.setFont(theme.font(14));g.drawText("Master Brain  /  Guided mastering",40,134,getWidth()-80,20,juce::Justification::left);
         g.setColour(juce::Colour(0xff0a1119));g.fillRoundedRectangle(40.f,294.f,getWidth()-80.f,18.f,4.f);
@@ -609,7 +607,7 @@ class Editor final : public juce::AudioProcessorEditor,
         slider.setComponentID(id);slider.setColour(juce::Slider::rotarySliderFillColourId,accent);
     }
 public:
-    explicit Editor(Processor& p) : AudioProcessorEditor(p),processor(p),exciterPanel(processor,theme),analogPanel(processor,theme),analogizerPanel(processor,theme),restorationPanel(processor,theme),modePanel(processor,theme),bassPanel(processor,theme),transientPanel(processor,theme),truePeakPanel(processor,theme),overviewPanel(processor,theme),parallelPanel(processor,theme) {
+    explicit Editor(Processor& p) : AudioProcessorEditor(p),processor(p),exciterPanel(processor,theme),analogPanel(processor,theme),analogizerPanel(processor,theme),restorationPanel(processor,theme),modePanel(processor,theme),bassPanel(processor,theme),transientPanel(processor,theme),truePeakPanel(processor,theme),overviewPanel(processor,theme),parallelPanel(processor,theme),brainPanel(theme) {
         theme.setColour(juce::ResizableWindow::backgroundColourId,background);
         theme.setColour(juce::Slider::textBoxOutlineColourId,juce::Colours::transparentBlack);
         theme.setColour(juce::Slider::textBoxBackgroundColourId,panel);
@@ -623,6 +621,7 @@ public:
         addChildComponent(modePanel);
         addChildComponent(bassPanel);
         addChildComponent(transientPanel);
+        addChildComponent(brainPanel);
         addChildComponent(truePeakPanel);
         addChildComponent(overviewPanel);
         addAndMakeVisible(consoleView);consoleView.setComponentID("view-console");
@@ -742,7 +741,7 @@ public:
         addAndMakeVisible(brainView);brainView.setComponentID("view-brain");brainView.onClick=[this]{showBrain();};
         for(size_t i=0;i<masterlab::brainGenres.size();++i)brainGenre.addItem(masterlab::brainGenres[i],static_cast<int>(i)+1);
         for(size_t i=0;i<masterlab::brainStyles.size();++i)brainStyle.addItem(masterlab::brainStyles[i],static_cast<int>(i)+1);
-        for(int seconds:{8,16,30,60,120,180,300,600})brainDuration.addItem(juce::String(seconds)+" seconds",seconds);
+        for(int seconds:{8,16,20})brainDuration.addItem(juce::String(seconds)+" seconds",seconds);
         auto config=processor.brain.readUI().config;
         brainGenre.setSelectedId(config.genre+1,juce::dontSendNotification);brainStyle.setSelectedId(config.style+1,juce::dontSendNotification);brainDuration.setSelectedId(config.seconds,juce::dontSendNotification);
         brainTarget.setRange(-24,-8,.1);brainTarget.setValue(config.targetLufs,juce::dontSendNotification);brainTarget.setTextValueSuffix(" LUFS");
@@ -750,9 +749,7 @@ public:
         brainIntensity.setRange(.25,1.5,.05);brainIntensity.setValue(config.intensity,juce::dontSendNotification);brainIntensity.setTextValueSuffix(" x");
         brainUseStabilizer=config.useStabilizer;brainAutomatic=config.automaticModules;brainUseStereo=config.useStereo;brainUseDynamics=config.useDynamics;brainUseDynamicEq=config.useDynamicEq;
         brainEq.setToggleState(config.useEq,juce::dontSendNotification);brainLimiter.setToggleState(config.useLimiter,juce::dontSendNotification);
-        for(auto* component:std::initializer_list<juce::Component*>{&brainGenre,&brainStyle,&brainDuration,&brainTarget,&brainCeiling,&brainIntensity,&brainModulesButton,&brainAnalyse,&brainApply,&brainAuditionA,&brainAuditionB,&brainReport})addAndMakeVisible(component);
-        for(auto* slider:{&brainTarget,&brainCeiling,&brainIntensity}){slider->setSliderStyle(juce::Slider::LinearHorizontal);slider->setTextBoxStyle(juce::Slider::TextBoxRight,false,72,24);}
-        for(size_t i=0;i<brainLabels.size();++i){auto& label=brainLabels[i];addAndMakeVisible(label);label.setText(std::array<const char*,6>{"Genre profile","Style","Target loudness","Output ceiling","Analysis length","Tonal intensity"}[i],juce::dontSendNotification);label.setColour(juce::Label::textColourId,muted);}
+        for(auto* component:std::initializer_list<juce::Component*>{&brainGenre,&brainStyle,&brainDuration,&brainModulesButton,&brainAnalyse,&brainApply,&brainAuditionA})addAndMakeVisible(component);
         brainReport.setMultiLine(true,true);brainReport.setReadOnly(true);brainReport.setScrollbarsShown(true);brainReport.setFont(theme.font(14.f));brainReport.setColour(juce::TextEditor::backgroundColourId,juce::Colours::transparentBlack);brainReport.setColour(juce::TextEditor::textColourId,juce::Colour(0xffe2ecf4));brainReport.setColour(juce::TextEditor::outlineColourId,juce::Colours::transparentBlack);
         brainModulesButton.setComponentID("brain-processors");brainModulesButton.onClick=[this]{
             juce::PopupMenu menu;menu.addItem(7,"Stabilizer",true,brainUseStabilizer);menu.addItem(6,"Automatically select needed modules",true,brainAutomatic);menu.addSeparator();menu.addItem(1,"Spectral EQ",true,brainEq.getToggleState());menu.addItem(2,"Limiter",true,brainLimiter.getToggleState());menu.addItem(3,"Stereo Architect",true,brainUseStereo);menu.addItem(4,"Smart Dynamics",true,brainUseDynamics);menu.addItem(5,"Dynamic EQ",true,brainUseDynamicEq);menu.addSeparator();menu.addItem(8,"Harmonic Exciter (post-chain)",true,brainUseExciter);menu.addItem(9,"Analog Color (post-chain)",true,brainUseAnalog);menu.addItem(10,"Bass Architect (post-chain)",true,brainUseBass);menu.addItem(11,"Transient Sculptor (post-chain)",true,brainUseTransient);menu.addItem(12,"Final True-Peak (post-chain)",true,brainUseTruePeak);
@@ -765,13 +762,12 @@ public:
             safe->processor.brain.reviseUI(safe->brainConfig());safe->refreshBrain();});
         };
         auto revise=[this]{if(!brainControlsUpdating){processor.brain.reviseUI(brainConfig());refreshBrain();}};
-        brainGenre.onChange=revise;brainStyle.onChange=revise;brainDuration.onChange=revise;brainTarget.onValueChange=revise;brainCeiling.onValueChange=revise;brainIntensity.onValueChange=revise;brainEq.onClick=revise;brainLimiter.onClick=revise;
-        brainAnalyse.setComponentID("brain-analyse");brainApply.setComponentID("brain-apply");brainReport.setComponentID("brain-report");brainGenre.setComponentID("brain-genre");brainStyle.setComponentID("brain-style");brainTarget.setComponentID("brain-target");
+        brainGenre.onChange=revise;brainStyle.onChange=revise;brainDuration.onChange=revise;brainEq.onClick=revise;brainLimiter.onClick=revise;
+        brainAnalyse.setComponentID("brain-analyse");brainApply.setComponentID("brain-apply");brainGenre.setComponentID("brain-genre");brainStyle.setComponentID("brain-style");brainDuration.setComponentID("brain-duration");
         brainAnalyse.onClick=[this]{auto current=processor.brain.readUI();if(brainAnalyse.getButtonText()=="Cancel analysis"||current.phase==masterlab::BrainPhase::Pending||current.phase==masterlab::BrainPhase::Analysing||current.phase==masterlab::BrainPhase::Validating)processor.brain.cancelUI();else processor.startBrainUI(brainConfig());refreshBrain();};
         brainApply.onClick=[this]{processor.applyBrainUI();refreshBrain();repaint();};
-        brainAuditionA.setComponentID("brain-audition-a");brainAuditionB.setComponentID("brain-audition-b");
+        brainAuditionA.setButtonText("Audition result");brainAuditionA.setComponentID("brain-audition");
         brainAuditionA.onClick=[this]{processor.auditionBrainUI(0);refreshBrain();repaint();};
-        brainAuditionB.onClick=[this]{processor.auditionBrainUI(1);refreshBrain();repaint();};
         brainApply.setTooltip("Apply only the reviewed proposal, then re-measure the full song. Disabled if audio settings changed since capture. Undo restores the previous state.");
         brainEq.setTooltip("Include EQ: replaces all 16 bands on Apply. Untick to preserve the current EQ.");brainLimiter.setTooltip("Include sample-peak limiter and move it after EQ. No true-peak guarantee.");
         selectBand(0);showLimiter(false);if(routingChoice.getSelectedId()==2)showParallel();showConsole();
@@ -793,12 +789,9 @@ public:
         newButton.setBounds(211,13,52,30);presetButton.setBounds(267,13,89,30);
         undoButton.setBounds(360,13,40,30);redoButton.setBounds(404,13,40,30);
         eqView.setBounds(getWidth()-432,48,98,26);limiterView.setBounds(getWidth()-326,48,98,26);inspectorView.setBounds(getWidth()-220,48,98,26);brainView.setBounds(getWidth()-114,48,98,26);
-        const int brainCell=(getWidth()-80)/4;
-        for(int i=0;i<4;++i)brainLabels[static_cast<size_t>(i)].setBounds(40+i*brainCell,166,brainCell-12,20);
-        brainGenre.setBounds(40,190,brainCell-12,28);brainStyle.setBounds(40+brainCell,190,brainCell-12,28);brainTarget.setBounds(40+2*brainCell,190,brainCell-12,28);brainCeiling.setBounds(40+3*brainCell,190,brainCell-12,28);
-        brainLabels[4].setBounds(40,226,brainCell-12,20);brainLabels[5].setBounds(40+brainCell,226,brainCell-12,20);brainDuration.setBounds(40,248,brainCell-12,28);brainIntensity.setBounds(40+brainCell,248,brainCell-12,28);
-        brainModulesButton.setBounds(40+2*brainCell,248,brainCell-12,28);brainAnalyse.setBounds(40+3*brainCell,242,brainCell-12,34);const int resultWidth=std::clamp(getWidth()/2-48,300,600);const bool compactBrain=getHeight()<650;brainReport.setFont(theme.font(compactBrain?12.f:14.f));brainReport.setBounds(36+resultWidth,342,getWidth()-60-resultWidth,getHeight()-(compactBrain?414:426));brainApply.setBounds(getWidth()-210,getHeight()-66,186,34);
-        brainAuditionA.setBounds(40,315,138,24);brainAuditionB.setBounds(185,315,138,24);
+        brainPanel.setBounds(18,118,getWidth()-36,getHeight()-138);const int brainControlWidth=std::clamp((getWidth()-420)/5,92,150),brainControlY=176;int brainControlX=42;
+        for(auto* control:{static_cast<juce::Component*>(&brainGenre),static_cast<juce::Component*>(&brainStyle),static_cast<juce::Component*>(&brainDuration),static_cast<juce::Component*>(&brainModulesButton),static_cast<juce::Component*>(&brainAnalyse)}){control->setBounds(brainControlX,brainControlY,brainControlWidth,30);brainControlX+=brainControlWidth+8;}
+        brainAuditionA.setBounds(getWidth()-382,getHeight()-62,170,34);brainApply.setBounds(getWidth()-202,getHeight()-62,176,34);
         const int top=getHeight()-163,width=(getWidth()-64)/4;
         for(int i=0;i<4;++i){auto* label=std::array<juce::Label*,4>{&frequencyLabel,&gainLabel,&qualityLabel,&ceilingLabel}[i];auto* slider=std::array<juce::Slider*,4>{&frequency,&gain,&quality,&ceiling}[i];label->setBounds(32+i*width,top,width-12,22);slider->setBounds(32+i*width,top+22,width-16,113);}
         driveLabel.setBounds(32,top,width-12,22);drive.setBounds(32,top+22,width-16,113);
