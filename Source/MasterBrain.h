@@ -7,6 +7,7 @@
 #include <mutex>
 namespace masterlab {
 enum class BrainPhase { Idle, Pending, Analysing, Validating, Ready, Failed, Cancelled, Applied };
+struct BrainResourceReading {std::size_t heavyBytes=0;bool working=false;};
 struct BrainSnapshot {
  BrainPhase phase=BrainPhase::Idle;BrainConfig config;BrainFeatures features;
  BrainProposal proposal,alternateProposal;int selectedVariant=0;bool alternateReady=false;
@@ -67,14 +68,15 @@ class MasterBrain final : private juce::Thread {
  std::mutex mutex;std::unique_ptr<Job> job;BrainSnapshot snapshot;
  std::atomic<std::uint64_t> active{0},dropped{0},cancelled{0},nextGeneration{0},targetSamples{0};
  std::uint64_t audioGeneration=0,audioCount=0;double rate=48000;const int capacity;
+ void releasePacketsLocked(){std::vector<Packet>{}.swap(packets);fifo.reset();}
  void fail(const std::string& message){snapshot.phase=BrainPhase::Failed;snapshot.message=message;snapshot.proposal={};if(job){auto expected=job->generation;active.compare_exchange_strong(expected,0);}}
  void run()override{
   while(!threadShouldExit()){
    std::unique_ptr<Job> verification;
    {
     std::scoped_lock lock(mutex);
-    if(job&&cancelled.load()==job->generation&&(snapshot.phase==BrainPhase::Pending||snapshot.phase==BrainPhase::Analysing)){snapshot.phase=BrainPhase::Cancelled;snapshot.message="Analysis cancelled. No parameters changed.";auto expected=job->generation;active.compare_exchange_strong(expected,0);}
-    if(job&&dropped.load()==job->generation&&snapshot.phase==BrainPhase::Analysing)fail("Analysis queue overflow. Retry during realtime playback; no partial result is used.");
+    if(job&&cancelled.load()==job->generation&&(snapshot.phase==BrainPhase::Pending||snapshot.phase==BrainPhase::Analysing)){snapshot.phase=BrainPhase::Cancelled;snapshot.message="Analysis cancelled. No parameters changed.";auto expected=job->generation;active.compare_exchange_strong(expected,0);job.reset();releasePacketsLocked();}
+    if(job&&dropped.load()==job->generation&&snapshot.phase==BrainPhase::Analysing){fail("Analysis queue overflow. Retry during realtime playback; no partial result is used.");job.reset();releasePacketsLocked();}
     int start,n,start2,n2;fifo.prepareToRead(fifo.getNumReady(),start,n,start2,n2);
     auto consume=[&](int first,int length){for(int i=0;i<length;++i){const auto& packet=packets[static_cast<size_t>(first+i)];
      if(!job||snapshot.phase!=BrainPhase::Analysing||packet.generation!=job->generation)continue;
@@ -113,7 +115,7 @@ class MasterBrain final : private juce::Thread {
       snapshot.message=snapshot.proposal.previewVerified?
         "A/B proposals verified through actual DSP. Audition A or B, then Apply.":
         "Analysis complete. Review before Apply.";
-      job=std::move(verification);}
+      job.reset();releasePacketsLocked();}
    }
    wait(10);
   }
@@ -124,20 +126,22 @@ public:
  void prepare(double sampleRate){
   active.store(0);nextGeneration.fetch_add(1);{
    std::scoped_lock lock(mutex);rate=std::isfinite(sampleRate)&&sampleRate>=8000&&sampleRate<=384000?sampleRate:48000;
-   packets.resize(static_cast<size_t>(capacity));fifo.reset();job.reset();snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Play the full track from the beginning. No parameters change before Apply.";audioGeneration=audioCount=0;
+   releasePacketsLocked();job.reset();snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Play up to 20 seconds of a representative loud section. No parameters change before Apply.";audioGeneration=audioCount=0;
   }if(!isThreadRunning())startThread();
  }
  void startUI(BrainConfig config){
   std::scoped_lock lock(mutex);active.store(0);const auto gen=nextGeneration.fetch_add(1)+1;config=cleanBrainConfig(config);
+  packets.resize(static_cast<size_t>(capacity));fifo.reset();
   job=std::make_unique<Job>(rate,config,gen);snapshot={};snapshot.phase=BrainPhase::Pending;snapshot.config=config;snapshot.message="Waiting for the analysis worker and DAW audio.";targetSamples.store(job->target);
  }
  void cancelRT()noexcept {active.store(0);cancelled.store(nextGeneration.load());}
- void cancelUI(){cancelRT();std::scoped_lock lock(mutex);active.store(0);snapshot.phase=BrainPhase::Cancelled;snapshot.proposal={};snapshot.message="Analysis cancelled. No parameters changed.";}
+ void cancelUI(){cancelRT();std::scoped_lock lock(mutex);active.store(0);job.reset();releasePacketsLocked();snapshot.phase=BrainPhase::Cancelled;snapshot.proposal={};snapshot.message="Analysis cancelled. No parameters changed.";}
  // User-initiated NEW/DEFAULT: invalidate proposals without touching the realtime
  // FIFO or requiring a host transport stop. Stored presets remain untouched.
  void clearUI(){
   cancelRT();std::scoped_lock lock(mutex);
   active.store(0);
+  job.reset();releasePacketsLocked();
   snapshot=BrainSnapshot{};
   snapshot.message="Factory default loaded. Play audio and analyse to create a new proposal.";
  }
@@ -150,6 +154,12 @@ public:
   else {snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Settings changed. Analyse a new fragment.";}
  }
  BrainSnapshot readUI(){std::scoped_lock lock(mutex);return snapshot;}
+ BrainResourceReading resourceReadingUI(){
+  std::scoped_lock lock(mutex);BrainResourceReading out;
+  out.working=snapshot.phase==BrainPhase::Pending||snapshot.phase==BrainPhase::Analysing||snapshot.phase==BrainPhase::Validating;
+  if(job)out.heavyBytes=sizeof(Job)+job->previewLeft.capacity()*sizeof(float)+job->previewRight.capacity()*sizeof(float);
+  out.heavyBytes+=packets.capacity()*sizeof(Packet);return out;
+ }
  bool selectVariantUI(int index){
   std::scoped_lock lock(mutex);
   if(snapshot.phase!=BrainPhase::Ready||index<0||index>1)return false;

@@ -35,10 +35,10 @@
 
 **Interfaces:** Produce `BrainResourceReading MasterBrain::resourceReadingUI()`, job-owned capture storage and phase `Optimising`.
 
-- [ ] Write failing tests for 20-second clamp, cancellation generation, heavy bytes released in Idle/Ready/Cancelled/Failed and no idle analysis counters.
-- [ ] Run `brain_tests` and `allocation_tests`; confirm expected failures.
-- [ ] Move heavy capture/FFT/render ownership into the active job, publish only compact features/proposal, and block the worker instead of doing idle DSP work.
-- [ ] Re-run targeted tests; commit `Bound Master Brain jobs and idle resources`.
+- [x] Write failing tests for 20-second clamp, cancellation generation, heavy bytes released in Idle/Ready/Cancelled/Failed and no idle analysis counters.
+- [x] Run `brain_tests` and `allocation_tests`; confirm expected failures.
+- [x] Move heavy capture/FFT/render ownership into the active job, publish only compact features/proposal, and block the worker instead of doing idle DSP work.
+- [x] Re-run targeted tests; commit `Bound Master Brain jobs and idle resources`.
 
 ### Task 2: Current-parameter chain builder and automatic targets
 
