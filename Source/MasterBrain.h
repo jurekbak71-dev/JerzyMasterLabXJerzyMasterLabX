@@ -1,16 +1,17 @@
 #pragma once
 #include <juce_dsp/juce_dsp.h>
 #include "BrainRules.h"
-#include "BrainPreview.h"
+#include "BrainOptimizer.h"
 #include "LoudnessMeter.h"
 #include "ModularDsp.h"
 #include <mutex>
 namespace masterlab {
-enum class BrainPhase { Idle, Pending, Analysing, Validating, Ready, Failed, Cancelled, Applied };
+enum class BrainPhase { Idle, Pending, Analysing, Optimising, Validating=Optimising, Ready, Failed, Cancelled, Applied };
 struct BrainResourceReading {std::size_t heavyBytes=0;bool working=false;};
 struct BrainSnapshot {
  BrainPhase phase=BrainPhase::Idle;BrainConfig config;BrainFeatures features;
  BrainProposal proposal,alternateProposal;int selectedVariant=0;bool alternateReady=false;
+ BrainScore score{};int optimizationTrials=0;
  double progress=0;std::string message="Play the track from the beginning, then analyse. No parameters change until Apply.";
 };
 class MasterBrain final : private juce::Thread {
@@ -82,38 +83,30 @@ class MasterBrain final : private juce::Thread {
      if(!job||snapshot.phase!=BrainPhase::Analysing||packet.generation!=job->generation)continue;
      if(packet.firstSample!=job->count){fail("Audio continuity was lost. Reanalyse the fragment.");continue;}
      job->process(packet);snapshot.progress=static_cast<double>(job->count)/job->target;
-     if(job->count==job->target){snapshot.features=job->finish();snapshot.proposal=proposeMastering(snapshot.features,snapshot.config);snapshot.phase=snapshot.proposal.valid?BrainPhase::Validating:BrainPhase::Ready;snapshot.message=snapshot.proposal.valid?"Verifying the proposal through the actual DSP chain.":"Insufficient material or no modules selected. Apply is disabled.";}
+     if(job->count==job->target){snapshot.features=job->finish();snapshot.proposal=proposeMastering(snapshot.features,snapshot.config);snapshot.phase=snapshot.proposal.valid?BrainPhase::Optimising:BrainPhase::Ready;snapshot.message=snapshot.proposal.valid?"Optimising the chain through bounded actual-DSP renders.":"Insufficient material or no modules selected. Apply is disabled.";}
     }};consume(start,n);consume(start2,n2);fifo.finishedRead(n+n2);
     if(job&&snapshot.phase==BrainPhase::Pending){snapshot.phase=BrainPhase::Analysing;snapshot.message="Listening to input before processing. Play audio in the DAW.";active.store(job->generation);}
-    if(job&&snapshot.phase==BrainPhase::Validating)verification=std::move(job);
+    if(job&&snapshot.phase==BrainPhase::Optimising)verification=std::move(job);
    }
    if(verification){
     auto proposal=proposeMastering(verification->features,verification->config);
-    // Two independently verified options from exactly the same captured audio.
-    // B is an alternate mastering character, not a copy of the A controls.
-    BrainConfig alternativeConfig=verification->config;
-    alternativeConfig.style=verification->config.style==2?0:2;
-    alternativeConfig.intensity=std::clamp(verification->config.intensity*
-                                          (alternativeConfig.style==2?1.15f:.8f),.25f,1.5f);
-    auto alternative=proposeMastering(verification->features,alternativeConfig);
     const auto generation=verification->generation;
     auto abort=[&]{return threadShouldExit()||nextGeneration.load()!=generation||cancelled.load()==generation;};
     try{
-     verifyBrainProposal(proposal,verification->features,verification->config,
-                         verification->previewLeft,verification->previewRight,abort);
-     if(!abort())verifyBrainProposal(alternative,verification->features,alternativeConfig,
-                                   verification->previewLeft,verification->previewRight,abort);
+     auto optimized=optimizeBrainChain(std::move(proposal),verification->features,verification->config,
+                                       verification->previewLeft,verification->previewRight,abort);
+     proposal=std::move(optimized.proposal);
+     if(!abort()){std::scoped_lock lock(mutex);snapshot.score=optimized.bestScore;snapshot.optimizationTrials=optimized.trials;}
     }
-    catch(const std::exception&){proposal.valid=false;proposal.previewVerified=false;alternative.valid=false;
+    catch(const std::exception&){proposal.valid=false;proposal.previewVerified=false;
      proposal.warnings.push_back("DSP verification failed. No parameters changed; Apply disabled.");}
     std::scoped_lock lock(mutex);
-    if(cancelled.load()==generation&&nextGeneration.load()==generation&&snapshot.phase==BrainPhase::Validating){snapshot.phase=BrainPhase::Cancelled;snapshot.proposal={};snapshot.message="Verification cancelled. No parameters changed.";}
-    if(!abort()&&snapshot.phase==BrainPhase::Validating){snapshot.proposal=std::move(proposal);
-      snapshot.alternateReady=alternative.valid&&alternative.previewVerified;
-      snapshot.alternateProposal=std::move(alternative);snapshot.selectedVariant=0;
+    if(cancelled.load()==generation&&nextGeneration.load()==generation&&snapshot.phase==BrainPhase::Optimising){snapshot.phase=BrainPhase::Cancelled;snapshot.proposal={};snapshot.message="Optimisation cancelled. No parameters changed.";}
+    if(!abort()&&snapshot.phase==BrainPhase::Optimising){snapshot.proposal=std::move(proposal);
+      snapshot.alternateReady=false;snapshot.alternateProposal={};snapshot.selectedVariant=0;
       snapshot.phase=BrainPhase::Ready;
       snapshot.message=snapshot.proposal.previewVerified?
-        "A/B proposals verified through actual DSP. Audition A or B, then Apply.":
+        "One mastering chain verified through bounded actual-DSP renders. Review, audition and Apply.":
         "Analysis complete. Review before Apply.";
       job.reset();releasePacketsLocked();}
    }
@@ -162,13 +155,8 @@ public:
  }
  bool selectVariantUI(int index){
   std::scoped_lock lock(mutex);
-  if(snapshot.phase!=BrainPhase::Ready||index<0||index>1)return false;
-  if(index==1&&!snapshot.alternateReady)return false;
-  if(index!=snapshot.selectedVariant){
-   std::swap(snapshot.proposal,snapshot.alternateProposal);
-   snapshot.selectedVariant=index;
-  }
-  snapshot.message=index==0?"Variant A selected: original style. Audition and Apply.":"Variant B selected: contrasting style. Audition and Apply.";
+  if(snapshot.phase!=BrainPhase::Ready||index!=0)return false;
+  snapshot.selectedVariant=0;snapshot.message="Verified mastering chain selected. Audition and Apply.";
   return true;
  }
  void markAppliedUI(){std::scoped_lock lock(mutex);snapshot.phase=BrainPhase::Applied;snapshot.message="Applied as one Undo transaction. Measure and audition the full processed song.";}

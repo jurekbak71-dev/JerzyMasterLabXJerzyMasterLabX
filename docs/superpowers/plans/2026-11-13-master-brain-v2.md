@@ -57,10 +57,10 @@
 
 **Interfaces:** Produce `BrainScore scoreBrainRender(...)` and `BrainOptimizationResult optimizeBrainChain(...)`, maximum six trials, best-valid retention.
 
-- [ ] Add failing fixtures for already-loud, bass-heavy, harsh, transient, clipped and anti-phase fragments; assert finite output, dBTP bound, crest/GR limits and non-worsening score.
-- [ ] Run targeted tests and capture RED evidence.
-- [ ] Render the exact captured fragment through the real graph, measure it, adjust bounded parameters and stop after convergence/non-improvement.
-- [ ] Verify deterministic results and callback partition invariance; commit `Optimize Master Brain through actual DSP`.
+- [x] Add failing fixtures for already-loud, bass-heavy, harsh, transient, clipped and anti-phase fragments; assert finite output, dBTP bound, crest/GR limits and non-worsening score.
+- [x] Run targeted tests and capture RED evidence.
+- [x] Render the exact captured fragment through the real graph, measure it, adjust bounded parameters and stop after convergence/non-improvement.
+- [x] Verify deterministic results and callback partition invariance; commit `Optimize Master Brain through actual DSP`.
 
 ### Task 4: Premium Brain workspace
 
