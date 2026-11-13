@@ -46,10 +46,10 @@
 
 **Interfaces:** Produce `BrainTargets deriveBrainTargets(const BrainFeatures&, const BrainConfig&)` and `BrainProposal buildBrainChain(...)` using current APVTS IDs only.
 
-- [ ] Write failing tests proving automatic targets are bounded/material-aware and proposals use `truePeak*` but never retired limiter IDs.
-- [ ] Run tests and confirm the legacy-ID regression fails.
-- [ ] Implement target policy and measured module selection with shared tonal/stereo/dynamics budgets.
-- [ ] Re-run targeted tests; commit `Build current Master Brain chain decisions`.
+- [x] Write failing tests proving automatic targets are bounded/material-aware and proposals use `truePeak*` but never retired limiter IDs.
+- [x] Run tests and confirm the legacy-ID regression fails.
+- [x] Implement target policy and measured module selection with shared tonal/stereo/dynamics budgets.
+- [x] Re-run targeted tests; commit `Build current Master Brain chain decisions`.
 
 ### Task 3: Analysis-by-synthesis optimiser
 

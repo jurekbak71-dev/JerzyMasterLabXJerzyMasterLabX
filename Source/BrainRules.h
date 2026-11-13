@@ -25,6 +25,7 @@ struct BrainProposal {
  bool previewVerified=false;float previewLufs=-120,previewPeak=0,previewSectionSpread=0,previewGr95=0;int previewPasses=0;
  bool valid=false;std::vector<std::pair<std::string,float>> changes;
  std::array<float,5> gains{},shares{},targetShares{},estimatedShares{};float drive=0,eqEstimate=0;
+ float targetLufs=-14.f,targetCeilingDbtp=-1.f;
  std::vector<std::string> reasons,warnings;
 };
 inline constexpr std::array<const char*,9> brainGenres{"Rock","Punk","Post-Punk","Dark Wave","Electronic","Techno","Ambient","Pop","Acoustic"};
@@ -36,6 +37,7 @@ inline BrainConfig cleanBrainConfig(BrainConfig c){
  c.targetLufs=std::clamp(clean(c.targetLufs),-24.f,-8.f);c.ceiling=std::clamp(clean(c.ceiling),-6.f,-.1f);c.intensity=std::clamp(clean(c.intensity),.25f,1.5f);return c;
 }
 inline void refineDetailedProposal(BrainProposal&,const BrainFeatures&,const BrainConfig&);
+#include "BrainTargets.h"
 inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config){
  const auto c=cleanBrainConfig(config);BrainProposal p;
  if(!std::isfinite(f.seconds)||!std::isfinite(f.rms)||!std::isfinite(f.correlation)||!std::isfinite(f.integrated)||f.integrated<=-70||!std::isfinite(f.peak)||f.peak<1e-5f||f.seconds<c.seconds-.01||!std::isfinite(f.rate)||f.rate<8000){p.warnings.push_back("Insufficient audible material. Play a full analysis interval.");return p;}
@@ -46,6 +48,7 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
  double sum=0;for(double e:f.energy){if(!std::isfinite(e)||e<0){p.warnings.push_back("Invalid spectral analysis.");return p;}sum+=e;}
  if(sum<1e-20){p.warnings.push_back("No reliable spectrum. No proposal generated.");return p;}
  if(f.stereoAnalysed)for(float correlation:f.bandCorrelation)if(!std::isfinite(correlation)||std::abs(correlation)>1){p.warnings.push_back("Invalid stereo analysis.");return p;}
+ const auto automaticTargets=deriveBrainTargets(f,c);p.targetLufs=automaticTargets.lufs;p.targetCeilingDbtp=automaticTargets.ceilingDbtp;
  const std::array<std::array<double,5>,9> weights{{{.65,1.05,1.10,1.,.85},{.55,1.,1.20,1.10,.85},{.75,1.10,1.15,.95,.75},{1.05,1.15,1.,.85,.65},{1.30,1.20,.85,.95,1.10},{1.40,1.20,.85,.90,1.},{.95,1.,1.,.80,.85},{.85,1.05,1.,1.05,1.},{.60,.90,1.15,1.,.90}}};
  const std::array<double,6> edges{20,80,250,2000,6000,20000};
  std::array<double,5> target{};double totalTarget=0;
@@ -82,15 +85,15 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
  for(auto& share:p.estimatedShares)share=static_cast<float>(share/(predicted/sum));
  p.eqEstimate=static_cast<float>(10*std::log10(std::max(1e-20,predicted/sum)));
  if(c.useLimiter){
-  const float wanted=c.targetLufs-f.integrated-p.eqEstimate;
+  const float wanted=p.targetLufs-f.integrated-p.eqEstimate;
   const float peakDb=20*std::log10(f.peak),budget=std::array<float,4>{3,4,6,3}[c.style],maximumDrive=std::array<float,4>{8,10,12,6}[c.style];
-  const float peakBudget=std::max(0.f,c.ceiling-peakDb-positiveBoost+budget);
+  const float peakBudget=std::max(0.f,p.targetCeilingDbtp-peakDb-positiveBoost+budget);
   p.drive=std::clamp(wanted,0.f,std::min(maximumDrive,peakBudget));
-  add("limiterDrive",p.drive);add("limiterRelease",std::array<float,4>{120,160,70,220}[c.style]);add("ceiling",c.ceiling);add("lim",1);add("limPresent",1);add("order",0);
-  // The old limiter is represented by the single fixed output stage.
-  // Avoid duplicate IDs if the explicit True Peak family is also selected.
-  if(!c.useTruePeak){add("truePeakPresent",1);add("truePeakOn",1);}
-  p.reasons.push_back("Limiter: target minus measured input LUFS and estimated EQ level change. Drive is capped by style and estimated peak-reduction budget; limiter moves after EQ.");
+  add("truePeakOn",1);add("truePeakDrive",p.drive);add("truePeakCeiling",p.targetCeilingDbtp);add("truePeakRelease",std::array<float,4>{120,160,70,220}[c.style]);
+  add("truePeakCharacter",static_cast<float>(std::min(c.style,2)));add("truePeakAutoRelease",1);add("truePeakSoftClip",c.style==2?.2f:.05f);add("truePeakOutput",0);
+  add("truePeakAttack",c.style==2?2.f:5.f);add("truePeakLookahead",128);add("truePeakTransientEmphasis",c.style==2?.25f:.08f);add("truePeakOversampling",2);
+  add("truePeakDensity",c.style==2?.35f:.12f);add("truePeakCompressorMix",c.style==3?.3f:.65f);add("truePeakStereoLink",1);
+  p.reasons.push_back("Final Maximizer: automatic material-aware LUFS and dBTP targets, bounded drive and style-specific density/transient policy in the one audible final stage.");
   if(wanted<0)p.warnings.push_back("Input is already above the selected target. Drive cannot attenuate it; lower input gain in the DAW.");
   if(wanted>p.drive+.5f)p.warnings.push_back("Drive was restricted to protect dynamics. The requested loudness may not be reached.");
  }else p.reasons.push_back("Limiter excluded: its settings and chain order are preserved.");
@@ -158,10 +161,8 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
   add("transientAttackHigh",accent*.5f);add("transientMix",.6f);
   p.reasons.push_back("Transient Sculptor: modest attack adjustment based on measured crest factor; avoid restoring peaks already clipped.");
  }
- if(c.useTruePeak){
-  add("truePeakPresent",1);add("truePeakOn",1);
-  add("truePeakCeiling",c.ceiling);add("truePeakDrive",0);
-  add("truePeakRelease",120);
+ if(c.useTruePeak&&!c.useLimiter){
+  add("truePeakOn",1);add("truePeakCeiling",p.targetCeilingDbtp);add("truePeakDrive",0);add("truePeakRelease",120);
   p.reasons.push_back("Final True-Peak module: conservative ceiling without extra drive; check oversampled meter and actual exported peak.");
  }
  // Select only processors justified by the measured fragment. Excluded families
@@ -172,10 +173,10 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
   for(size_t band:std::array<size_t,3>{1,3,4})spectral|=p.shares[band]>p.targetShares[band]*1.4f;
   const auto correlations=f.stereoAnalysed?f.bandCorrelation:std::array<float,4>{f.correlation,f.correlation,f.correlation,f.correlation};for(float correlation:correlations)stereo|=correlation<.2f;
   const float crest=20*std::log10(f.peak/std::max(1e-9f,f.rms));
-  const bool dynamics=crest>14||(c.style==2&&crest>10),limiting=p.drive>.25f||20*std::log10(f.peak)>c.ceiling;
+  const bool dynamics=crest>14||(c.style==2&&crest>10),limiting=p.drive>.25f||20*std::log10(f.peak)>p.targetCeilingDbtp;
   int largeRegions=0;for(float gain:p.gains)largeRegions+=std::abs(gain)>1.5f;const bool stabilizing=largeRegions>=3;
   if(c.useStabilizer)replace("stabilizerPresent",stabilizing);
-  if(c.useEq)replace("eqPresent",tonal);if(c.useDynamicEq)replace("dynamicEqPresent",spectral);if(c.useStereo)replace("stereoPresent",stereo);if(c.useDynamics)replace("dynamicsPresent",dynamics);if(c.useLimiter){replace("limPresent",limiting);if(!c.useTruePeak)replace("truePeakPresent",limiting);}
+  if(c.useEq)replace("eqPresent",tonal);if(c.useDynamicEq)replace("dynamicEqPresent",spectral);if(c.useStereo)replace("stereoPresent",stereo);if(c.useDynamics)replace("dynamicsPresent",dynamics);if(c.useLimiter)replace("truePeakOn",limiting);
   const int count=(c.useStabilizer&&stabilizing)+(c.useEq&&tonal)+(c.useDynamicEq&&spectral)+(c.useStereo&&stereo)+(c.useDynamics&&dynamics)+(c.useLimiter&&limiting);
   p.reasons.push_back("Automatic module selection: "+std::to_string(count)+" processors from the allowed families. EQ: correction above 0.25 dB; Dynamic EQ: regional energy above 1.4 times target; Imager: correlation below 0.2; Dynamics: crest above 14 dB (10 dB Aggressive); Limiter: required drive above 0.25 dB or input above ceiling. Stabilizer: at least three broad corrections above 1.5 dB. Unneeded allowed modules are removed, with settings retained.");
  }

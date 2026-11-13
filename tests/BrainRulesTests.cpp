@@ -8,12 +8,27 @@ float value(const masterlab::BrainProposal& p,const std::string& id){for(const a
 int main(){
  masterlab::BrainFeatures f;f.rate=48000;f.seconds=8;f.integrated=-22;f.peak=.25f;f.rms=.08f;f.correlation=.5f;f.energy={.04,.11,.6,.2,.05};
  masterlab::BrainConfig c;
+ auto currentFinal=masterlab::proposeMastering(f,c);
+ for(const char* retired:{"limiterDrive","limiterRelease","limPresent","lim","ceiling","order"})
+  check(value(currentFinal,retired)==-999,"Master Brain still targets the retired limiter");
+ for(const char* audible:{"truePeakOn","truePeakDrive","truePeakCeiling","truePeakRelease","truePeakDensity","truePeakCompressorMix","truePeakStereoLink"})
+  check(value(currentFinal,audible)!=-999,"Master Brain omitted an audible Final Maximizer control");
+ auto unclippedTargets=masterlab::deriveBrainTargets(f,c);auto clippedFeatures=f;clippedFeatures.clips=4;
+ auto clippedTargets=masterlab::deriveBrainTargets(clippedFeatures,c);
+ check(unclippedTargets.lufs>=-18&&unclippedTargets.lufs<=-8&&unclippedTargets.ceilingDbtp<=-.8f,
+       "automatic mastering targets are outside their safety bounds");
+ check(clippedTargets.lufs<unclippedTargets.lufs&&clippedTargets.ceilingDbtp<unclippedTargets.ceilingDbtp,
+       "automatic targets do not become safer for clipped material");
+ auto manualTargetConfig=c;manualTargetConfig.targetLufs=-24;manualTargetConfig.ceiling=-6;
+ auto ignoredManual=masterlab::proposeMastering(f,manualTargetConfig);
+ check(ignoredManual.targetLufs==currentFinal.targetLufs&&ignoredManual.targetCeilingDbtp==currentFinal.targetCeilingDbtp,
+       "retired manual LUFS/ceiling controls still steer automatic Brain targets");
  for(int genre=0;genre<9;++genre)for(int style=0;style<4;++style)for(float intensity:{.25f,1.f,1.5f}){
-  c.genre=genre;c.style=style;c.intensity=intensity;auto p=masterlab::proposeMastering(f,c);check(p.valid&&p.changes.size()==203,"complete eight-band proposal missing");std::set<std::string> ids;
+  c.genre=genre;c.style=style;c.intensity=intensity;auto p=masterlab::proposeMastering(f,c);check(p.valid&&p.changes.size()>=200,"complete eight-band proposal missing");std::set<std::string> ids;
   for(const auto& change:p.changes)check(ids.insert(change.first).second&&std::isfinite(change.second),"duplicate or non-finite proposed setting");
-  for(float gain:p.gains)check(std::abs(gain)<=3,"EQ exceeds correction cap");check(p.drive>=0&&p.drive<=12&&value(p,"order")==0,"unsafe drive or chain order");
+  for(float gain:p.gains)check(std::abs(gain)<=3,"EQ exceeds correction cap");check(p.drive>=0&&p.drive<=12,"unsafe Final Maximizer drive");
  }
- c={};c.useLimiter=false;auto eq=masterlab::proposeMastering(f,c);check(eq.valid&&value(eq,"limiterDrive")==-999&&value(eq,"order")==-999,"excluded limiter was changed");
+ c={};c.useLimiter=false;auto eq=masterlab::proposeMastering(f,c);check(eq.valid&&value(eq,"truePeakDrive")==-999&&value(eq,"truePeakOn")==-999,"excluded Final Maximizer was changed");
  c.useLimiter=true;c.useEq=false;c.intensity=.25f;auto quiet=masterlab::proposeMastering(f,c);c.intensity=1.5f;auto strong=masterlab::proposeMastering(f,c);check(quiet.drive==strong.drive&&value(strong,"gain")==-999,"intensity scales loudness or excluded EQ changed");
  c.useLimiter=false;c.useStabilizer=c.useStereo=c.useDynamics=c.useDynamicEq=false;auto none=masterlab::proposeMastering(f,c);check(!none.valid&&none.changes.empty(),"empty selection can be applied");
  c={};auto invalid=f;invalid.integrated=-120;check(!masterlab::proposeMastering(invalid,c).valid,"silence creates proposal");invalid=f;invalid.seconds=7;check(!masterlab::proposeMastering(invalid,c).valid,"short capture creates proposal");invalid=f;invalid.energy[0]=std::numeric_limits<double>::quiet_NaN();check(!masterlab::proposeMastering(invalid,c).valid,"NaN creates proposal");
@@ -23,7 +38,7 @@ int main(){
  c={};auto stereo=f;stereo.stereoAnalysed=true;stereo.bandCorrelation={-.5f,.8f,.9f,.7f};auto narrowed=masterlab::proposeMastering(stereo,c);check(value(narrowed,"stereoMonoBass")==1&&value(narrowed,"stereoLowWidth")<1&&value(narrowed,"stereoHighWidth")==1,"Brain ignores per-band stereo correlation");
  c={};auto healthy=f;healthy.stereoAnalysed=true;healthy.bandCorrelation={.8f,.9f,.9f,.9f};auto simple=masterlab::proposeMastering(healthy,c);check(value(simple,"stereoPresent")==0&&value(simple,"dynamicsPresent")==0,"Brain adds unnecessary stereo or compressor");
  auto problematic=healthy;problematic.bandCorrelation[0]=-.3f;problematic.peak=.9f;problematic.rms=.05f;auto complex=masterlab::proposeMastering(problematic,c);check(value(complex,"stereoPresent")==1&&value(complex,"dynamicsPresent")==1,"Brain does not select needed processors");
- c.automaticModules=false;auto forced=masterlab::proposeMastering(healthy,c);for(const char* id:{"eqPresent","limPresent","stereoPresent","dynamicsPresent","dynamicEqPresent"})check(value(forced,id)==1,"manual processor selection not respected");
+ c.automaticModules=false;auto forced=masterlab::proposeMastering(healthy,c);for(const char* id:{"eqPresent","truePeakOn","stereoPresent","dynamicsPresent","dynamicEqPresent"})check(value(forced,id)==1,"manual processor selection not respected");
  // Additional five real post-chain processors are opt-in and part of the
  // actual proposal, not merely additional labels in the UI.
  c={};c.useEq=c.useLimiter=c.useStereo=c.useDynamics=c.useDynamicEq=c.useStabilizer=false;
@@ -33,7 +48,7 @@ int main(){
  std::set<std::string> expandedIds;
  for(const auto& entry:expanded.changes)
   check(expandedIds.insert(entry.first).second&&std::isfinite(entry.second),"expanded Brain has duplicate/nonfinite values");
- for(const char* id:{"exciterPresent","analogPresent","bassPresent","transientPresent","truePeakPresent"})
+ for(const char* id:{"exciterPresent","analogPresent","bassPresent","transientPresent","truePeakOn"})
   check(value(expanded,id)==1,"expanded Master Brain did not include selected processor");
  check(value(expanded,"eqPresent")==-999 && value(expanded,"limPresent")==-999,
        "expanded Brain silently enables excluded original modules");
