@@ -96,13 +96,19 @@ public:
   const float release=std::exp(-1.f/(static_cast<float>(sampleRate_)*.001f*
                                       sane(settings_.releaseMs*characterScale,10.f,1400.f)));
   const float clip=std::clamp(settings_.softClip,0.f,1.f);
-  // Nonlinear saturation must run *before* the lookahead true-peak detector:
-  // shaping after gain control creates new, undetected intersample peaks.
-  const float clipThreshold=std::max(.1f,ceiling*.75f);
+  // Optional soft clipping must be silent below its knee. The previous
+  // full-range tanh bent even quiet vocal passages and added unwanted THD.
+  // Preserve transients under the knee, shape only strong peaks before the
+  // lookahead true-peak detector; this is NOT an Ozone IRC emulation.
+  const float clipKnee=std::max(.1f,ceiling*.85f);
+  const float clipSpan=std::max(.04f,ceiling*.25f);
   auto preShape=[&](float x)noexcept {
    if(clip<=0.f)return x;
-   const float saturation=clipThreshold*std::tanh(x/clipThreshold);
-   return x+clip*(saturation-x);
+   const float a=std::abs(x);
+   if(a<=clipKnee)return x;
+   const float rounded=clipKnee+clipSpan*std::tanh((a-clipKnee)/clipSpan);
+   const float weight=clip*.40f; // maximum 40% wet clip, then TP protection
+   return std::copysign(a+weight*(rounded-a),x);
   };
   std::array<float,64> inputWave{},outputWave{},gainEnvelope{};
   float detected=0.f,outputPeak=0.f,minGain=1.f;
