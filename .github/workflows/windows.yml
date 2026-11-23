@@ -147,7 +147,7 @@ jobs:
           Copy-Item $bundle (Join-Path $stage 'JerzyMasterLabX.vst3') -Recurse -Force
           Copy-Item install/INSTALL_MASTERLABX.cmd (Join-Path $stage 'INSTALL_MASTERLABX.cmd')
           Copy-Item install/install_masterlabx.ps1 (Join-Path $stage 'install_masterlabx.ps1')
-          Copy-Item README.md (Join-Path $stage 'INSTALACJA.md')
+          Copy-Item install/INSTALACJA.md (Join-Path $stage 'INSTALACJA.md')
           Copy-Item Assets/Fonts/OFL-Manrope.txt (Join-Path $stage 'OFL-Manrope.txt')
           $hash = (Get-FileHash $binary -Algorithm SHA256).Hash.ToUpperInvariant()
           Set-Content (Join-Path $stage 'MASTERLABX_SHA256.txt') $hash -Encoding ascii
