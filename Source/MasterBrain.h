@@ -169,7 +169,10 @@ public:
  }
  void startUI(BrainConfig config){
   active.store(0);
-  if(isThreadRunning())stopThread(3000);
+  if(isThreadRunning()&&!stopThread(3000)){
+   std::scoped_lock lock(mutex);snapshot.phase=BrainPhase::Failed;
+   snapshot.message="Previous analysis worker could not stop.";return;
+  }
   while(capturesInFlight.load()!=0)juce::Thread::sleep(1);
   {
    std::scoped_lock lock(mutex);const auto gen=nextGeneration.fetch_add(1)+1;config=cleanBrainConfig(config);
@@ -184,10 +187,17 @@ public:
  // User-initiated NEW/DEFAULT: invalidate proposals without touching the realtime
  // FIFO or requiring a host transport stop. Stored presets remain untouched.
  void clearUI(){
-  cancelRT();std::scoped_lock lock(mutex);
-  active.store(0);
+  cancelRT();
+  if(isThreadRunning()&&!stopThread(3000)){
+   std::scoped_lock lock(mutex);snapshot.phase=BrainPhase::Failed;
+   snapshot.message="Analysis worker did not stop. No buffers released; restart the plugin before retrying.";
+   return;
+  }
+  while(capturesInFlight.load()!=0)juce::Thread::sleep(1);
+  std::scoped_lock lock(mutex);
+  releaseCaptureStorage();
   snapshot=BrainSnapshot{};
-  snapshot.message="Factory default loaded. Play audio and analyse to create a new proposal.";
+  snapshot.message="Factory default loaded. Play a representative fragment and analyse again.";
  }
 
  void reviseUI(BrainConfig config){
