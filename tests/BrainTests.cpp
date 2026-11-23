@@ -21,6 +21,34 @@ int main(){
  }
  bound.seconds=20;
  check(masterlab::cleanBrainConfig(bound).seconds==20,"Brain rejected the 20-second interval");
+ // Exercise a real 20-second capture at 8 kHz, not just config clamping.
+ {
+  masterlab::MasterBrain full20;
+  full20.prepare(8000);
+  masterlab::BrainConfig length20;length20.seconds=20;
+  full20.startUI(length20);
+  for(int retry=0;retry<2000&&full20.readUI().phase!=masterlab::BrainPhase::Analysing;++retry)
+   std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  check(full20.readUI().phase==masterlab::BrainPhase::Analysing,"20-second worker did not start");
+  std::array<float,128> wave{};
+  for(int packet=0;packet<1250;++packet){
+   for(int i=0;i<128;++i)wave[static_cast<size_t>(i)]=.1f*std::sin((packet*128+i)*.04f);
+   full20.capture(wave.data(),wave.data(),128);
+   std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  masterlab::BrainSnapshot twenty;
+  for(int retry=0;retry<10000;++retry){
+   twenty=full20.readUI();
+   if(twenty.phase==masterlab::BrainPhase::Ready||twenty.phase==masterlab::BrainPhase::Failed)break;
+   std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  check(twenty.phase==masterlab::BrainPhase::Ready&&
+        std::abs(twenty.features.seconds-20.)<1.e-6,"full 20-second capture failed");
+  for(int retry=0;retry<2000&&full20.resourcesUI().workerRunning;++retry)
+   std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  check(!full20.resourcesUI().workerRunning&&full20.resourcesUI().packetBytes==0,
+        "20-second job retained resources");
+ }
  Processor p;p.prepareToPlay(48000,256);auto* gain=p.state.getParameter("gain");gain->setValueNotifyingHost(gain->convertTo0to1(2));auto before=values(p);
  masterlab::BrainConfig config;p.startBrainUI(config);wait(p,masterlab::BrainPhase::Analysing);
  juce::AudioBuffer<float> buffer(2,256);juce::MidiBuffer midi;int sample=0;
