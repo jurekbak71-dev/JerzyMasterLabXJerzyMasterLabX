@@ -49,6 +49,34 @@ int main(){
   check(!full20.resourcesUI().workerRunning&&full20.resourcesUI().packetBytes==0,
         "20-second job retained resources");
  }
+ // Real producer/consumer race: repeatedly close and reopen the capture gate
+ // while the audio callback is actively offering packets on another thread.
+ // The test is intended to catch use-after-free during cancel/clear/prepare.
+ {
+  masterlab::MasterBrain gate(256);
+  gate.prepare(48000);
+  std::atomic<bool> stopProducer{false};
+  std::array<float,128> input{};
+  std::thread producer([&]{
+   while(!stopProducer.load(std::memory_order_relaxed)){
+    gate.capture(input.data(),input.data(),static_cast<int>(input.size()));
+    std::this_thread::yield();
+   }
+  });
+  masterlab::BrainConfig shortConfig;
+  for(int cycle=0;cycle<16;++cycle){
+   gate.startUI(shortConfig);
+   for(int spin=0;spin<20;++spin)std::this_thread::yield();
+   gate.cancelUI();
+   gate.clearUI();
+   gate.prepare(48000);
+   auto resources=gate.resourcesUI();
+   check(!resources.workerRunning&&!resources.jobAllocated&&resources.packetBytes==0,
+         "concurrent capture retained analysis resources");
+  }
+  stopProducer.store(true,std::memory_order_relaxed);
+  producer.join();
+ }
  Processor p;p.prepareToPlay(48000,256);auto* gain=p.state.getParameter("gain");gain->setValueNotifyingHost(gain->convertTo0to1(2));auto before=values(p);
  masterlab::BrainConfig config;p.startBrainUI(config);wait(p,masterlab::BrainPhase::Analysing);
  juce::AudioBuffer<float> buffer(2,256);juce::MidiBuffer midi;int sample=0;
