@@ -62,7 +62,15 @@ class MasterBrain final : private juce::Thread {
     samples[0][head]=l;samples[1][head]=r;head=(head+1)%size;++count;++hop;if(count>=static_cast<std::uint64_t>(size)&&hop>=size/2){spectrum();hop=0;}
    }
   }
-  BrainFeatures finish(){for(size_t k=0;k<4;++k){features.bandCorrelation[k]=bandLL[k]*bandRR[k]>1e-24?static_cast<float>(std::clamp(bandLR[k]/std::sqrt(bandLL[k]*bandRR[k]),-1.,1.)):0;features.bandWidth[k]=static_cast<float>(std::sqrt(std::max(0.,bandLL[k]+bandRR[k]-2*bandLR[k])/std::max(1e-20,bandLL[k]+bandRR[k]+2*bandLR[k])));}features.detail=detail.finish();features.stereoAnalysed=true;features.seconds=count/features.rate;features.integrated=loudness.read().integrated;features.peak=peak;features.rms=count?static_cast<float>(std::sqrt((ll+rr)/(2*count))):0;features.correlation=ll*rr>1e-24?static_cast<float>(std::clamp(lr/std::sqrt(ll*rr),-1.,1.)):0;features.clips=clips;features.energy=energy;return features;}
+  BrainFeatures finish(){
+   // Preserve only 128 peak values from the exact preview windows to compare
+   // input and trial-processed output on the same timeline. Never retain PCM.
+   for(size_t i=0;i<previewLeft.size();++i){
+    const size_t bin=std::min<size_t>(127,i*128/previewLeft.size());
+    features.inputPreviewEnvelope[bin]=std::max(features.inputPreviewEnvelope[bin],
+      std::max(std::abs(previewLeft[i]),std::abs(previewRight[i])));
+   }
+   for(size_t k=0;k<4;++k){features.bandCorrelation[k]=bandLL[k]*bandRR[k]>1e-24?static_cast<float>(std::clamp(bandLR[k]/std::sqrt(bandLL[k]*bandRR[k]),-1.,1.)):0;features.bandWidth[k]=static_cast<float>(std::sqrt(std::max(0.,bandLL[k]+bandRR[k]-2*bandLR[k])/std::max(1e-20,bandLL[k]+bandRR[k]+2*bandLR[k])));}features.detail=detail.finish();features.stereoAnalysed=true;features.seconds=count/features.rate;features.integrated=loudness.read().integrated;features.peak=peak;features.rms=count?static_cast<float>(std::sqrt((ll+rr)/(2*count))):0;features.correlation=ll*rr>1e-24?static_cast<float>(std::clamp(lr/std::sqrt(ll*rr),-1.,1.)):0;features.clips=clips;features.energy=energy;return features;}
  };
  juce::AbstractFifo fifo;std::vector<Packet> packets;
  std::mutex mutex;std::unique_ptr<Job> job;BrainSnapshot snapshot;
