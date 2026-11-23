@@ -351,18 +351,11 @@ class GuiSmoke final : private juce::Timer {
         }
         auto* a=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-audition-a"));
         auto* b=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-audition-b"));
-        if(!a||!b||!a->isVisible()||!b->isVisible()||!a->isEnabled()||!b->isEnabled()){
-            std::cerr<<"Brain GUI A/B control state failed: A "<<(a&&a->isVisible())<<"/"<<(a&&a->isEnabled())
-                     <<" B "<<(b&&b->isVisible())<<"/"<<(b&&b->isEnabled())
-                     <<"\n"<<report->getText()<<"\n";return captureError(__LINE__);
-        }
-        a->onClick();
-        if(!report->getText().contains("Audition A is live")){
-            std::cerr<<"Brain GUI Audition A failed: "<<report->getText()<<"\n";return captureError(__LINE__);
-        }
-        b->onClick();
-        if(!report->getText().contains("Audition B is live")||!apply->isEnabled()){
-            std::cerr<<"Brain GUI Audition B failed: "<<report->getText()<<"\n";return captureError(__LINE__);
+        auto* genre=editor->findChildWithID("brain-genre");
+        auto* style=editor->findChildWithID("brain-style");
+        if(!a||!b||a->isVisible()||b->isVisible()||!genre||!genre->isVisible()||!style||!style->isVisible()){
+            std::cerr<<"Brain UI regression: guided genre/style must be visible, A/B hidden\n";
+            return captureError(__LINE__);
         }
         apply->onClick();
         if(!report->getText().contains("APPLIED")||apply->isEnabled()){
