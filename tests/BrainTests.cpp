@@ -13,6 +13,14 @@ masterlab::BrainSnapshot wait(Processor& p,masterlab::BrainPhase phase){
  for(int i=0;i<15000;++i){auto snapshot=p.brain.readUI();if(snapshot.phase==phase)return snapshot;if(snapshot.phase==masterlab::BrainPhase::Failed){std::cerr<<snapshot.message<<'\n';std::exit(1);}std::this_thread::sleep_for(std::chrono::milliseconds(2));}check(false,"analysis timeout");return {};
 }
 int main(){
+ // Brain must bound analysis input independently of the GUI selection.
+ masterlab::BrainConfig bound;
+ for(int requested:{30,60,120,180,300,600}){
+  bound.seconds=requested;
+  check(masterlab::cleanBrainConfig(bound).seconds<=20,"Brain accepted an analysis interval above 20 seconds");
+ }
+ bound.seconds=20;
+ check(masterlab::cleanBrainConfig(bound).seconds==20,"Brain rejected the 20-second interval");
  Processor p;p.prepareToPlay(48000,256);auto* gain=p.state.getParameter("gain");gain->setValueNotifyingHost(gain->convertTo0to1(2));auto before=values(p);
  masterlab::BrainConfig config;p.startBrainUI(config);wait(p,masterlab::BrainPhase::Analysing);
  juce::AudioBuffer<float> buffer(2,256);juce::MidiBuffer midi;int sample=0;
