@@ -20,9 +20,11 @@ struct BrainConfig {
 struct BrainFeatures {
  BrainDetail detail;double rate=48000,seconds=0;float integrated=-120,peak=0,rms=0,correlation=0;
  std::array<double,5> energy{};std::array<float,4> bandCorrelation{},bandWidth{};bool stereoAnalysed=false;std::uint64_t clips=0;
+ std::array<float,128> inputPreviewEnvelope{}; // Same audition windows as DSP preview.
 };
 struct BrainProposal {
  bool previewVerified=false;float previewLufs=-120,previewPeak=0,previewTruePeakDb=-120,previewSectionSpread=0,previewGr95=0,previewCorrelation=0,previewCrestDb=0;int previewPasses=0;
+ std::array<float,128> previewOutputEnvelope{}; // Tiny actual-DSP waveform summary; no retained PCM.
  bool valid=false;std::vector<std::pair<std::string,float>> changes;
  std::array<float,5> gains{},shares{},targetShares{},estimatedShares{};float drive=0,eqEstimate=0;
  std::vector<std::string> reasons,warnings;
