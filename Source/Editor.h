@@ -175,7 +175,7 @@ class Editor final : public juce::AudioProcessorEditor,
         brainAuditionB.setEnabled(canAudition&&snapshot.alternateReady);
         brainAuditionA.setToggleState(snapshot.selectedVariant==0&&canAudition,juce::dontSendNotification);
         brainAuditionB.setToggleState(snapshot.selectedVariant==1&&canAudition,juce::dontSendNotification);
-        brainApply.setEnabled(snapshot.phase==masterlab::BrainPhase::Ready&&snapshot.proposal.valid&&!stale);
+        brainApply.setEnabled(snapshot.phase==masterlab::BrainPhase::Ready&&snapshot.proposal.valid&&snapshot.proposal.previewVerified&&!stale);
         juce::String report=juce::String(snapshot.message)+"\n";
         if(active)report+="Capturing "+juce::String(snapshot.progress*snapshot.config.seconds,1)+
                           " / "+juce::String(snapshot.config.seconds)+" seconds.\n";
