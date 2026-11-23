@@ -80,7 +80,7 @@ class MasterBrain final : private juce::Thread {
      if(!job||snapshot.phase!=BrainPhase::Analysing||packet.generation!=job->generation)continue;
      if(packet.firstSample!=job->count){fail("Audio continuity was lost. Reanalyse the fragment.");continue;}
      job->process(packet);snapshot.progress=static_cast<double>(job->count)/job->target;
-     if(job->count==job->target){snapshot.features=job->finish();snapshot.proposal=proposeMastering(snapshot.features,snapshot.config);snapshot.phase=snapshot.proposal.valid?BrainPhase::Validating:BrainPhase::Ready;snapshot.message=snapshot.proposal.valid?"Verifying the proposal through the actual DSP chain.":"Insufficient material or no modules selected. Apply is disabled.";}
+     if(job->count==job->target){snapshot.features=job->finish();job->config=automaticBrainTargets(snapshot.features,job->config);snapshot.config=job->config;snapshot.proposal=proposeMastering(snapshot.features,snapshot.config);snapshot.phase=snapshot.proposal.valid?BrainPhase::Validating:BrainPhase::Ready;snapshot.message=snapshot.proposal.valid?"Verifying the proposal through the actual DSP chain.":"Insufficient material or no modules selected. Apply is disabled.";}
     }};consume(start,n);consume(start2,n2);fifo.finishedRead(n+n2);
     if(job&&snapshot.phase==BrainPhase::Pending){snapshot.phase=BrainPhase::Analysing;snapshot.message="Listening to input before processing. Play audio in the DAW.";active.store(job->generation);}
     if(job&&snapshot.phase==BrainPhase::Validating)verification=std::move(job);
