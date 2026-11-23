@@ -5,6 +5,7 @@
 #include "LoudnessMeter.h"
 #include "ModularDsp.h"
 #include <mutex>
+#include <thread>
 namespace masterlab {
 enum class BrainPhase { Idle, Pending, Analysing, Optimising, Validating=Optimising, Ready, Failed, Cancelled, Applied };
 struct BrainResourceReading {std::size_t heavyBytes=0;bool working=false;};
@@ -68,8 +69,15 @@ class MasterBrain final : private juce::Thread {
  juce::AbstractFifo fifo;std::vector<Packet> packets;
  std::mutex mutex;std::unique_ptr<Job> job;BrainSnapshot snapshot;
  std::atomic<std::uint64_t> active{0},dropped{0},cancelled{0},nextGeneration{0},targetSamples{0};
+ std::atomic<unsigned> captureReaders{0};
  std::uint64_t audioGeneration=0,audioCount=0;double rate=48000;const int capacity;
- void releasePacketsLocked(){std::vector<Packet>{}.swap(packets);fifo.reset();}
+ // The audio callback never waits. Control/worker threads first close the
+ // generation, then wait until a callback that observed the old generation
+ // has left before resizing or releasing its packet storage.
+ void waitForCaptureReaders()noexcept {
+  while(captureReaders.load(std::memory_order_acquire)!=0)std::this_thread::yield();
+ }
+ void releasePacketsLocked(){waitForCaptureReaders();std::vector<Packet>{}.swap(packets);fifo.reset();}
  void fail(const std::string& message){snapshot.phase=BrainPhase::Failed;snapshot.message=message;snapshot.proposal={};if(job){auto expected=job->generation;active.compare_exchange_strong(expected,0);}}
  void run()override{
   while(!threadShouldExit()){
@@ -115,7 +123,7 @@ class MasterBrain final : private juce::Thread {
  }
 public:
  explicit MasterBrain(int packetCapacity=1024):Thread("MasterLab analysis"),fifo(std::max(2,packetCapacity)),capacity(std::max(2,packetCapacity)){}
- ~MasterBrain()override{active.store(0);stopThread(3000);}
+ ~MasterBrain()override{active.store(0,std::memory_order_release);waitForCaptureReaders();stopThread(3000);}
  void prepare(double sampleRate){
   active.store(0);nextGeneration.fetch_add(1);{
    std::scoped_lock lock(mutex);rate=std::isfinite(sampleRate)&&sampleRate>=8000&&sampleRate<=384000?sampleRate:48000;
@@ -162,7 +170,9 @@ public:
  void markAppliedUI(){std::scoped_lock lock(mutex);snapshot.phase=BrainPhase::Applied;snapshot.message="Applied as one Undo transaction. Measure and audition the full processed song.";}
  // Single audio producer. No locks, wake-up signals, allocation or FFT here.
  void capture(const float* left,const float* right,int length)noexcept {
-  const auto gen=active.load();if(gen==0)return;if(audioGeneration!=gen){audioGeneration=gen;audioCount=0;}
+  struct ReaderGuard {std::atomic<unsigned>& readers;~ReaderGuard(){readers.fetch_sub(1,std::memory_order_release);}};
+  captureReaders.fetch_add(1,std::memory_order_acquire);ReaderGuard guard{captureReaders};
+  const auto gen=active.load(std::memory_order_acquire);if(gen==0)return;if(audioGeneration!=gen){audioGeneration=gen;audioCount=0;}
   const auto target=targetSamples.load();
   for(int offset=0;offset<length&&audioCount<target;){
    int first,n,first2,n2;fifo.prepareToWrite(1,first,n,first2,n2);

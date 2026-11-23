@@ -72,6 +72,19 @@ int main(){
  // Deliberately undersized queue: data loss must invalidate the entire analysis.
  masterlab::MasterBrain tiny(2);tiny.prepare(48000);tiny.startUI(config);for(int i=0;i<200&&tiny.readUI().phase!=masterlab::BrainPhase::Analysing;++i)std::this_thread::sleep_for(std::chrono::milliseconds(2));
  std::array<float,4096> zeros{};tiny.capture(zeros.data(),zeros.data(),4096);for(int i=0;i<200&&tiny.readUI().phase!=masterlab::BrainPhase::Failed;++i)std::this_thread::sleep_for(std::chrono::milliseconds(2));check(tiny.readUI().phase==masterlab::BrainPhase::Failed,"queue overflow produced a usable partial result");
+ // Releasing the optional Brain memory must not race a callback which already
+ // observed the previous active generation. This stress case is intended to
+ // run under ASan/TSan as well as in the normal plugin test suite.
+ masterlab::MasterBrain concurrent(8);concurrent.prepare(48000);
+ std::atomic<bool> captureRunning{true};
+ std::thread captureThread([&]{std::array<float,128> signal{};signal.fill(.1f);while(captureRunning.load(std::memory_order_relaxed))concurrent.capture(signal.data(),signal.data(),128);});
+ for(int cycle=0;cycle<250;++cycle){
+  concurrent.startUI(config);
+  if((cycle&1)==0)concurrent.cancelUI();else concurrent.clearUI();
+ }
+ captureRunning.store(false,std::memory_order_relaxed);captureThread.join();concurrent.cancelUI();
+ check(concurrent.resourceReadingUI().heavyBytes==0&&!concurrent.resourceReadingUI().working,
+       "concurrent Brain stop retained optional memory or work");
  // NEW / factory preset zero must restore every declared host default,
  // invalidate Brain proposals and remain one Undo transaction.
  p.beginUiTransaction("Configure non-default test scene");
