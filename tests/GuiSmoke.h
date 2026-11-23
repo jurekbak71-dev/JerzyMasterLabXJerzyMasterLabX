@@ -182,6 +182,11 @@ class GuiSmoke final : private juce::Timer {
                 std::cerr<<"Regression: unified Analog Exciter EXCITE or Tube/FET/Tape missing\n";
                 return captureError(__LINE__);
             }
+            auto* renderedExciter=dynamic_cast<AnalogizerPanel*>(analogExciter);
+            if(!renderedExciter||!renderedExciter->has3DExciteAssets()){
+                std::cerr<<"Regression: Concept C rendered 3D EXCITE or LED atlas not loaded\\n";
+                return captureError(__LINE__);
+            }
             if(!editor->findChildWithID("audio-restoration-panel")){
                 std::cerr<<"Regression: restoration panel missing\n";return captureError(__LINE__);
             }
@@ -252,6 +257,25 @@ class GuiSmoke final : private juce::Timer {
                 console->onClick();
                 if(!overview->isVisible())return captureError(__LINE__);
             }
+            // This screenshot is of the real JUCE Analog Exciter, not a mockup.
+            // Rendering must work at all three supported GUI sizes.
+            overview->onOpen(4);
+            if(!analogExciter->isVisible()){
+                std::cerr<<"Analog Exciter console navigation failed\\n";
+                return captureError(__LINE__);
+            }
+            for(const auto dim:{juce::Point<int>{750,550},juce::Point<int>{1000,700},juce::Point<int>{1400,1000}}){
+                editor->setSize(dim.x,dim.y);
+                if(!controlsFit())return captureError(__LINE__);
+                auto visual=editor->createComponentSnapshot(editor->getLocalBounds());
+                if(!visual.isValid())return captureError(__LINE__);
+                const auto file=juce::File::getCurrentWorkingDirectory().getChildFile(
+                    "build-plugin/analog-exciter-"+juce::String(dim.x)+"x"+juce::String(dim.y)+".png");
+                juce::FileOutputStream out(file);out.truncate();
+                if(!juce::PNGImageFormat{}.writeImageToStream(visual,out))return captureError(__LINE__);
+            }
+            console->onClick();
+            editor->setSize(1000,700);
             auto* eq=dynamic_cast<juce::Button*>(editor->findChildWithID("view-eq"));
             if(!eq)return captureError(__LINE__);eq->onClick();
         }
