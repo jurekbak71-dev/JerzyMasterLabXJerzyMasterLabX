@@ -180,9 +180,21 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
  }
  if(c.useTruePeak){
   add("truePeakPresent",1);add("truePeakOn",1);
-  add("truePeakCeiling",c.ceiling);add("truePeakDrive",0);
-  add("truePeakRelease",120);
-  p.reasons.push_back("Final True-Peak module: conservative ceiling without extra drive; check oversampled meter and actual exported peak.");
+  // GraphConfiguration disables legacy limiterDrive while this fixed final
+  // stage is active. Direct the loudness request to its genuine input drive.
+  const float needed=std::max(0.f,c.targetLufs-f.integrated-p.eqEstimate);
+  const float peakDb=20.f*std::log10(std::max(1.e-9f,f.peak));
+  const float maxGR=std::array<float,4>{3.f,4.f,5.f,2.f}[c.style];
+  const float safeDrive=std::clamp(needed,0.f,
+      std::min(12.f,std::max(0.f,c.ceiling-peakDb+maxGR)));
+  add("truePeakCeiling",c.ceiling);add("truePeakDrive",safeDrive);
+  add("truePeakRelease",std::array<float,4>{150.f,190.f,95.f,240.f}[c.style]);
+  add("truePeakCharacter",c.style==2?2.f:(c.style==1?1.f:0.f));
+  add("truePeakAutoRelease",1.f);
+  add("truePeakSoftClip",0.f);
+  add("truePeakOutput",0.f);
+  p.drive=safeDrive;
+  p.reasons.push_back("Final Maximizer: gain staged at the actual True-Peak input, transparent soft clip OFF, auto release ON; measured DSP preview must approve the selected drive and peak margin.");
  }
  // Select only processors justified by the measured fragment. Excluded families
  // remain untouched. Every decision is reviewable before Apply.
