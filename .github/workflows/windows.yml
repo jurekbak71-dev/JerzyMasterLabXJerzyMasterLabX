@@ -121,6 +121,7 @@ jobs:
           path: |
             build-plugin/*-smoke.png
             build-plugin/console-*.png
+            build-plugin/analog-exciter-*.png
           if-no-files-found: error
       - name: Download pluginval 1.0.3
         shell: pwsh
@@ -138,13 +139,28 @@ jobs:
         shell: pwsh
         run: |
           $bundle = 'build/JerzyMasterLabX_artefacts/Release/VST3/JerzyMasterLabX.vst3'
-          if (-not (Test-Path "$bundle/Contents/x86_64-win/JerzyMasterLabX.vst3")) { throw 'VST3 binary missing' }
-          if (-not (Test-Path 'build/Release/brain_demo.exe')) { throw 'Brain analysis executable missing' }
-          Copy-Item README.md build/INSTALACJA.md
-          Copy-Item Assets/Fonts/OFL-Manrope.txt build/OFL-Manrope.txt
-          Copy-Item install/INSTALL_MASTERLABX.cmd build/INSTALL_MASTERLABX.cmd
-          Copy-Item install/install_masterlabx.ps1 build/install_masterlabx.ps1
-          Compress-Archive -Path $bundle,build/INSTALL_MASTERLABX.cmd,build/install_masterlabx.ps1,build/INSTALACJA.md,build/OFL-Manrope.txt -DestinationPath JerzyMasterLabX-v0.1.0-Windows-x64.zip
+          $binary = Join-Path $bundle 'Contents/x86_64-win/JerzyMasterLabX.vst3'
+          if (-not (Test-Path $binary -PathType Leaf)) { throw 'VST3 binary missing' }
+          if (-not (Test-Path 'build/Release/brain_demo.exe')) { throw 'Brain test executable missing' }
+          $stage = 'build/installer-stage'
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item $bundle (Join-Path $stage 'JerzyMasterLabX.vst3') -Recurse -Force
+          Copy-Item install/INSTALL_MASTERLABX.cmd (Join-Path $stage 'INSTALL_MASTERLABX.cmd')
+          Copy-Item install/install_masterlabx.ps1 (Join-Path $stage 'install_masterlabx.ps1')
+          Copy-Item README.md (Join-Path $stage 'INSTALACJA.md')
+          Copy-Item Assets/Fonts/OFL-Manrope.txt (Join-Path $stage 'OFL-Manrope.txt')
+          $hash = (Get-FileHash $binary -Algorithm SHA256).Hash.ToUpperInvariant()
+          Set-Content (Join-Path $stage 'MASTERLABX_SHA256.txt') $hash -Encoding ascii
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $stage 'install_masterlabx.ps1') -VerifyOnly
+          if ($LASTEXITCODE -ne 0) { throw 'Installer self-verification failed before ZIP' }
+          $zip = 'JerzyMasterLabX-v0.1.0-Windows-x64.zip'
+          Compress-Archive -Path "$stage/*" -DestinationPath $zip -CompressionLevel Optimal
+          $verifyDir = 'build/installer-archive-verify'
+          Expand-Archive $zip -DestinationPath $verifyDir -Force
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $verifyDir 'install_masterlabx.ps1') -VerifyOnly
+          if ($LASTEXITCODE -ne 0) { throw 'Installer ZIP failed SHA-256 verification after extraction' }
+          Write-Output "Packed VST3 SHA-256: $hash"
+          Write-Output "Installer ZIP SHA-256: $((Get-FileHash $zip -Algorithm SHA256).Hash)"
       - uses: actions/upload-artifact@v4
         with:
           name: JerzyMasterLabX-v0.1.0-Windows-x64
@@ -173,3 +189,4 @@ jobs:
             build-plugin/stereo-smoke.png
             build-plugin/parallel-smoke.png
             build-plugin/stabilizer-smoke.png
+            build-plugin/analog-exciter-*.png
