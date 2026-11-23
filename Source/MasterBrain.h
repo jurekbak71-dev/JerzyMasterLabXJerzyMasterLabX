@@ -5,6 +5,7 @@
 #include "LoudnessMeter.h"
 #include "ModularDsp.h"
 #include <mutex>
+#include <limits>
 namespace masterlab {
 enum class BrainPhase { Idle, Pending, Analysing, Validating, Ready, Failed, Cancelled, Applied };
 struct BrainSnapshot {
@@ -61,12 +62,30 @@ class MasterBrain final : private juce::Thread {
     samples[0][head]=l;samples[1][head]=r;head=(head+1)%size;++count;++hop;if(count>=static_cast<std::uint64_t>(size)&&hop>=size/2){spectrum();hop=0;}
    }
   }
-  BrainFeatures finish(){for(size_t k=0;k<4;++k){features.bandCorrelation[k]=bandLL[k]*bandRR[k]>1e-24?static_cast<float>(std::clamp(bandLR[k]/std::sqrt(bandLL[k]*bandRR[k]),-1.,1.)):0;features.bandWidth[k]=static_cast<float>(std::sqrt(std::max(0.,bandLL[k]+bandRR[k]-2*bandLR[k])/std::max(1e-20,bandLL[k]+bandRR[k]+2*bandLR[k])));}features.detail=detail.finish();features.stereoAnalysed=true;features.seconds=count/features.rate;features.integrated=loudness.read().integrated;features.peak=peak;features.rms=count?static_cast<float>(std::sqrt((ll+rr)/(2*count))):0;features.correlation=ll*rr>1e-24?static_cast<float>(std::clamp(lr/std::sqrt(ll*rr),-1.,1.)):0;features.clips=clips;features.energy=energy;return features;}
+  BrainFeatures finish(){
+   // Preserve only 128 peak values from the exact preview windows to compare
+   // input and trial-processed output on the same timeline. Never retain PCM.
+   for(size_t i=0;i<previewLeft.size();++i){
+    const size_t bin=std::min<size_t>(127,i*128/previewLeft.size());
+    features.inputPreviewEnvelope[bin]=std::max(features.inputPreviewEnvelope[bin],
+      std::max(std::abs(previewLeft[i]),std::abs(previewRight[i])));
+   }
+   for(size_t k=0;k<4;++k){features.bandCorrelation[k]=bandLL[k]*bandRR[k]>1e-24?static_cast<float>(std::clamp(bandLR[k]/std::sqrt(bandLL[k]*bandRR[k]),-1.,1.)):0;features.bandWidth[k]=static_cast<float>(std::sqrt(std::max(0.,bandLL[k]+bandRR[k]-2*bandLR[k])/std::max(1e-20,bandLL[k]+bandRR[k]+2*bandLR[k])));}features.detail=detail.finish();features.stereoAnalysed=true;features.seconds=count/features.rate;features.integrated=loudness.read().integrated;features.peak=peak;features.rms=count?static_cast<float>(std::sqrt((ll+rr)/(2*count))):0;features.correlation=ll*rr>1e-24?static_cast<float>(std::clamp(lr/std::sqrt(ll*rr),-1.,1.)):0;features.clips=clips;features.energy=energy;return features;}
  };
  juce::AbstractFifo fifo;std::vector<Packet> packets;
  std::mutex mutex;std::unique_ptr<Job> job;BrainSnapshot snapshot;
  std::atomic<std::uint64_t> active{0},dropped{0},cancelled{0},nextGeneration{0},targetSamples{0};
+ static constexpr std::uint32_t captureClosed=0x80000000u;
+ // The high bit closes the gate; lower bits count in-flight callbacks.
+ std::atomic<std::uint32_t> captureState{captureClosed};
  std::uint64_t audioGeneration=0,audioCount=0;double rate=48000;const int capacity;
+ void releaseCaptureStorage(){
+  active.store(0);
+  captureState.fetch_or(captureClosed,std::memory_order_acq_rel);
+  while((captureState.load(std::memory_order_acquire)&~captureClosed)!=0)
+   juce::Thread::sleep(1);
+  job.reset();std::vector<Packet>().swap(packets);fifo.reset();
+ }
  void fail(const std::string& message){snapshot.phase=BrainPhase::Failed;snapshot.message=message;snapshot.proposal={};if(job){auto expected=job->generation;active.compare_exchange_strong(expected,0);}}
  void run()override{
   while(!threadShouldExit()){
@@ -80,19 +99,21 @@ class MasterBrain final : private juce::Thread {
      if(!job||snapshot.phase!=BrainPhase::Analysing||packet.generation!=job->generation)continue;
      if(packet.firstSample!=job->count){fail("Audio continuity was lost. Reanalyse the fragment.");continue;}
      job->process(packet);snapshot.progress=static_cast<double>(job->count)/job->target;
-     if(job->count==job->target){snapshot.features=job->finish();snapshot.proposal=proposeMastering(snapshot.features,snapshot.config);snapshot.phase=snapshot.proposal.valid?BrainPhase::Validating:BrainPhase::Ready;snapshot.message=snapshot.proposal.valid?"Verifying the proposal through the actual DSP chain.":"Insufficient material or no modules selected. Apply is disabled.";}
+     if(job->count==job->target){snapshot.features=job->finish();job->config=automaticBrainTargets(snapshot.features,job->config);snapshot.config=job->config;snapshot.proposal=proposeMastering(snapshot.features,snapshot.config);snapshot.phase=snapshot.proposal.valid?BrainPhase::Validating:BrainPhase::Ready;snapshot.message=snapshot.proposal.valid?"Verifying the proposal through the actual DSP chain.":"Insufficient material or no modules selected. Apply is disabled.";}
     }};consume(start,n);consume(start2,n2);fifo.finishedRead(n+n2);
     if(job&&snapshot.phase==BrainPhase::Pending){snapshot.phase=BrainPhase::Analysing;snapshot.message="Listening to input before processing. Play audio in the DAW.";active.store(job->generation);}
     if(job&&snapshot.phase==BrainPhase::Validating)verification=std::move(job);
+    if(snapshot.phase==BrainPhase::Cancelled||snapshot.phase==BrainPhase::Failed||
+       (snapshot.phase==BrainPhase::Ready&&!snapshot.proposal.valid)){
+     releaseCaptureStorage();return;
+    }
    }
    if(verification){
     auto proposal=proposeMastering(verification->features,verification->config);
-    // Two independently verified options from exactly the same captured audio.
-    // B is an alternate mastering character, not a copy of the A controls.
+    // Explore a second intensity of the *selected* character, never override
+    // the genre/style explicitly chosen by the user.
     BrainConfig alternativeConfig=verification->config;
-    alternativeConfig.style=verification->config.style==2?0:2;
-    alternativeConfig.intensity=std::clamp(verification->config.intensity*
-                                          (alternativeConfig.style==2?1.15f:.8f),.25f,1.5f);
+    alternativeConfig.intensity=std::clamp(verification->config.intensity*.72f,.25f,1.5f);
     auto alternative=proposeMastering(verification->features,alternativeConfig);
     const auto generation=verification->generation;
     auto abort=[&]{return threadShouldExit()||nextGeneration.load()!=generation||cancelled.load()==generation;};
@@ -109,45 +130,109 @@ class MasterBrain final : private juce::Thread {
     if(!abort()&&snapshot.phase==BrainPhase::Validating){snapshot.proposal=std::move(proposal);
       snapshot.alternateReady=alternative.valid&&alternative.previewVerified;
       snapshot.alternateProposal=std::move(alternative);snapshot.selectedVariant=0;
+      // Rank genuine offline renders. A TP overshoot has much higher cost than
+      // missing the loudness goal; avoid chasing LUFS by flattening dynamics.
+      auto score=[&](const BrainProposal& p){
+       if(!p.valid||!p.previewVerified)return std::numeric_limits<float>::infinity();
+       const float tpExcess=std::max(0.f,p.previewTruePeakDb-verification->config.ceiling);
+       const float loudnessError=std::abs(p.previewLufs-verification->config.targetLufs);
+       const float grExcess=std::max(0.f,p.previewGr95-4.f);
+       const float inputCrest=20.f*std::log10(std::max(1.e-9f,verification->features.peak)/
+                                             std::max(1.e-9f,verification->features.rms));
+       const float crestLoss=std::max(0.f,inputCrest-p.previewCrestDb-3.f);
+       const float stereoPenalty=std::max(0.f,-p.previewCorrelation)*5.f+
+                                 std::max(0.f,verification->features.correlation-p.previewCorrelation-.4f);
+       return 20.f*tpExcess+2.f*loudnessError+1.5f*grExcess+
+              1.2f*crestLoss+stereoPenalty+
+              .08f*std::max(0.f,p.previewSectionSpread-8.f);
+      };
+      const float scoreA=score(snapshot.proposal),scoreB=score(snapshot.alternateProposal);
+      if(scoreB<scoreA){
+       std::swap(snapshot.proposal,snapshot.alternateProposal);
+       snapshot.selectedVariant=1;
+      }
       snapshot.phase=BrainPhase::Ready;
       snapshot.message=snapshot.proposal.previewVerified?
-        "A/B proposals verified through actual DSP. Audition A or B, then Apply.":
-        "Analysis complete. Review before Apply.";
-      job=std::move(verification);}
+        "Best measured full-chain candidate selected. Review and Apply.":
+        "DSP verification unavailable. Apply is disabled.";
+      releaseCaptureStorage();
+      return; // No idle polling, no retained PCM or FFT.
+    }
    }
    wait(10);
   }
  }
 public:
+ struct ResourceInfo {bool workerRunning=false,jobAllocated=false;size_t packetBytes=0;};
+ ResourceInfo resourcesUI(){std::scoped_lock lock(mutex);return {isThreadRunning(),job!=nullptr,packets.capacity()*sizeof(Packet)};}
  explicit MasterBrain(int packetCapacity=1024):Thread("MasterLab analysis"),fifo(std::max(2,packetCapacity)),capacity(std::max(2,packetCapacity)){}
- ~MasterBrain()override{active.store(0);stopThread(3000);}
+ ~MasterBrain()override{active.store(0);signalThreadShouldExit();notify();waitForThreadToExit(-1);}
  void prepare(double sampleRate){
-  active.store(0);nextGeneration.fetch_add(1);{
-   std::scoped_lock lock(mutex);rate=std::isfinite(sampleRate)&&sampleRate>=8000&&sampleRate<=384000?sampleRate:48000;
-   packets.resize(static_cast<size_t>(capacity));fifo.reset();job.reset();snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Play the full track from the beginning. No parameters change before Apply.";audioGeneration=audioCount=0;
-  }if(!isThreadRunning())startThread();
+  active.store(0);nextGeneration.fetch_add(1);
+  if(isThreadRunning()){
+   signalThreadShouldExit();notify();
+   if(!waitForThreadToExit(3000))return; // Never destroy a live worker or its FIFO.
+  }
+  captureState.fetch_or(captureClosed,std::memory_order_acq_rel);
+  while((captureState.load(std::memory_order_acquire)&~captureClosed)!=0)
+   juce::Thread::sleep(1);
+  {std::scoped_lock lock(mutex);rate=std::isfinite(sampleRate)&&sampleRate>=8000&&sampleRate<=384000?sampleRate:48000;
+   std::vector<Packet>().swap(packets);fifo.reset();job.reset();snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Play a representative loud fragment, up to 20 seconds. Avoid intro or breakdown.";audioGeneration=audioCount=0;
+  }
  }
  void startUI(BrainConfig config){
-  std::scoped_lock lock(mutex);active.store(0);const auto gen=nextGeneration.fetch_add(1)+1;config=cleanBrainConfig(config);
-  job=std::make_unique<Job>(rate,config,gen);snapshot={};snapshot.phase=BrainPhase::Pending;snapshot.config=config;snapshot.message="Waiting for the analysis worker and DAW audio.";targetSamples.store(job->target);
+  active.store(0);
+  if(isThreadRunning())signalThreadShouldExit();
+  notify();
+  if(isThreadRunning()&&!waitForThreadToExit(3000)){
+   std::scoped_lock lock(mutex);snapshot.phase=BrainPhase::Failed;
+   snapshot.message="Previous analysis worker could not stop.";return;
+  }
+  captureState.fetch_or(captureClosed,std::memory_order_acq_rel);
+  while((captureState.load(std::memory_order_acquire)&~captureClosed)!=0)
+   juce::Thread::sleep(1);
+  {
+   std::scoped_lock lock(mutex);const auto gen=nextGeneration.fetch_add(1)+1;config=cleanBrainConfig(config);
+   fifo.reset();packets.resize(static_cast<size_t>(capacity));
+   job=std::make_unique<Job>(rate,config,gen);snapshot={};snapshot.phase=BrainPhase::Pending;snapshot.config=config;snapshot.message="Waiting for the analysis worker and DAW audio.";targetSamples.store(job->target);
+   captureState.store(0,std::memory_order_release); // Open only after packet allocation.
+  }
+  // The analysis thread is created on demand, never during plugin prepareToPlay.
+  if(!isThreadRunning()&&!startThread()){
+   std::scoped_lock lock(mutex);snapshot.phase=BrainPhase::Failed;
+   snapshot.message="Could not create analysis worker. No host parameters changed.";
+   releaseCaptureStorage();
+  }
  }
  void cancelRT()noexcept {active.store(0);cancelled.store(nextGeneration.load());}
  void cancelUI(){cancelRT();std::scoped_lock lock(mutex);active.store(0);snapshot.phase=BrainPhase::Cancelled;snapshot.proposal={};snapshot.message="Analysis cancelled. No parameters changed.";}
  // User-initiated NEW/DEFAULT: invalidate proposals without touching the realtime
  // FIFO or requiring a host transport stop. Stored presets remain untouched.
  void clearUI(){
-  cancelRT();std::scoped_lock lock(mutex);
-  active.store(0);
+  cancelRT();
+  if(isThreadRunning())signalThreadShouldExit();
+  notify();
+  if(isThreadRunning()&&!waitForThreadToExit(3000)){
+   std::scoped_lock lock(mutex);snapshot.phase=BrainPhase::Failed;
+   snapshot.message="Analysis worker did not stop. No buffers released; restart the plugin before retrying.";
+   return;
+  }
+  captureState.fetch_or(captureClosed,std::memory_order_acq_rel);
+  while((captureState.load(std::memory_order_acquire)&~captureClosed)!=0)
+   juce::Thread::sleep(1);
+  std::scoped_lock lock(mutex);
+  releaseCaptureStorage();
   snapshot=BrainSnapshot{};
-  snapshot.message="Factory default loaded. Play audio and analyse to create a new proposal.";
+  snapshot.message="Factory default loaded. Play a representative fragment and analyse again.";
  }
 
  void reviseUI(BrainConfig config){
   std::scoped_lock lock(mutex);if(snapshot.phase==BrainPhase::Pending||snapshot.phase==BrainPhase::Analysing||snapshot.phase==BrainPhase::Validating)return;
   config=cleanBrainConfig(config);config.dynamicsMode=snapshot.config.dynamicsMode;config.existingEq=snapshot.config.existingEq;config.existingEqEnabled=snapshot.config.existingEqEnabled;config.hasBaseline=snapshot.config.hasBaseline;config.baseline=snapshot.config.baseline;
   const bool durationChanged=config.seconds!=snapshot.config.seconds;snapshot.config=config;
-  if(job&&snapshot.phase==BrainPhase::Ready&&!durationChanged){job->config=config;snapshot.proposal={};snapshot.phase=BrainPhase::Validating;snapshot.message="Rechecking the captured fragment through DSP.";}
-  else {snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Settings changed. Analyse a new fragment.";}
+  (void)durationChanged;
+  snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};
+  snapshot.message="Settings changed. Analyse a fresh representative fragment.";
  }
  BrainSnapshot readUI(){std::scoped_lock lock(mutex);return snapshot;}
  bool selectVariantUI(int index){
@@ -164,15 +249,24 @@ public:
  void markAppliedUI(){std::scoped_lock lock(mutex);snapshot.phase=BrainPhase::Applied;snapshot.message="Applied as one Undo transaction. Measure and audition the full processed song.";}
  // Single audio producer. No locks, wake-up signals, allocation or FFT here.
  void capture(const float* left,const float* right,int length)noexcept {
-  const auto gen=active.load();if(gen==0)return;if(audioGeneration!=gen){audioGeneration=gen;audioCount=0;}
+  auto state=captureState.load(std::memory_order_relaxed);
+  for(;;){
+   if((state&captureClosed)!=0)return;
+   if(captureState.compare_exchange_weak(state,state+1,
+        std::memory_order_acquire,std::memory_order_relaxed))break;
+  }
+  const auto gen=active.load();
+  if(gen==0){captureState.fetch_sub(1,std::memory_order_release);return;}
+  if(audioGeneration!=gen){audioGeneration=gen;audioCount=0;}
   const auto target=targetSamples.load();
   for(int offset=0;offset<length&&audioCount<target;){
    int first,n,first2,n2;fifo.prepareToWrite(1,first,n,first2,n2);
-   if(n+n2==0){dropped.store(gen);auto expected=gen;active.compare_exchange_strong(expected,0);return;}
+   if(n+n2==0){dropped.store(gen);auto expected=gen;active.compare_exchange_strong(expected,0);captureState.fetch_sub(1,std::memory_order_release);return;}
    auto& packet=packets[static_cast<size_t>(n?first:first2)];packet.generation=gen;packet.firstSample=audioCount;packet.length=static_cast<int>(std::min<std::uint64_t>(std::min(128,length-offset),target-audioCount));
    for(int i=0;i<packet.length;++i){packet.left[i]=clean(left[offset+i]);packet.right[i]=clean(right[offset+i]);}audioCount+=packet.length;offset+=packet.length;fifo.finishedWrite(n+n2);
   }
   if(audioCount>=target){auto expected=gen;active.compare_exchange_strong(expected,0);}
+  captureState.fetch_sub(1,std::memory_order_release);
  }
 };
 }
