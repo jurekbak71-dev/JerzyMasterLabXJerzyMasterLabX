@@ -315,7 +315,7 @@ class GuiSmoke final : private juce::Timer {
         }
         auto* brain=dynamic_cast<juce::Button*>(editor->findChildWithID("view-brain"));auto* apply=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-apply"));auto* report=dynamic_cast<juce::TextEditor*>(editor->findChildWithID("brain-report"));
         if(!brain||!apply||!report)return false;brain->onClick();
-        if(!apply->isEnabled()||!report->getText().contains("PROPOSED EQ")||!report->getText().contains("TONAL ENERGY %")){std::cerr<<report->getText()<<'\n';return false;}
+        if(!apply->isEnabled()||!report->getText().contains("AUTOMATIC GOALS")||!report->getText().contains("MEASURED DSP OUTPUT")){std::cerr<<report->getText()<<'\n';return false;}
         for(int i=0;i<processor.getParameters().size();++i)if(processor.getParameters()[i]->getValue()!=brainBefore[static_cast<size_t>(i)])return false;
         for(auto size:{juce::Point<int>(750,550),juce::Point<int>(1000,700),juce::Point<int>(2000,1400)}){
             editor->setSize(size.x,size.y);if(!controlsFit())return false;auto image=editor->createComponentSnapshot(editor->getLocalBounds());if(!image.isValid())return false;
@@ -323,21 +323,13 @@ class GuiSmoke final : private juce::Timer {
         }
         auto* a=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-audition-a"));
         auto* b=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-audition-b"));
-        if(!a||!b||!a->isVisible()||!b->isVisible()||!a->isEnabled()||!b->isEnabled()){
-            std::cerr<<"Brain GUI A/B control state failed: A "<<(a&&a->isVisible())<<"/"<<(a&&a->isEnabled())
-                     <<" B "<<(b&&b->isVisible())<<"/"<<(b&&b->isEnabled())
-                     <<"\n"<<report->getText()<<"\n";return false;
-        }
-        a->onClick();
-        if(!report->getText().contains("Audition A is live")){
-            std::cerr<<"Brain GUI Audition A failed: "<<report->getText()<<"\n";return false;
-        }
-        b->onClick();
-        if(!report->getText().contains("Audition B is live")||!apply->isEnabled()){
-            std::cerr<<"Brain GUI Audition B failed: "<<report->getText()<<"\n";return false;
+        auto* genre=editor->findChildWithID("brain-genre");
+        auto* style=editor->findChildWithID("brain-style");
+        if(!a||!b||a->isVisible()||b->isVisible()||!genre||!genre->isVisible()||!style||!style->isVisible()){
+            std::cerr<<"Guided Brain must show genre/style and hide alternate audition controls\\n";return false;
         }
         apply->onClick();
-        if(!report->getText().contains("APPLIED")||apply->isEnabled()){
+        if(!report->getText().contains("Applied")||apply->isEnabled()){
             std::cerr<<"Brain GUI Apply failed: "<<report->getText()<<"\n";return false;
         }
         dynamic_cast<juce::Button*>(editor->findChildWithID("undo"))->onClick();

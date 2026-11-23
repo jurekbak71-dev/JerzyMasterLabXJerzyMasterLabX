@@ -1,4 +1,5 @@
 #include "Processor.h"
-#include "Editor.h"
-juce::AudioProcessorEditor* Processor::createEditor(){return new Editor(*this);}
+
+juce::AudioProcessorEditor* createMasterLabEditor(Processor&);
+juce::AudioProcessorEditor* Processor::createEditor(){return createMasterLabEditor(*this);}
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter(){return new Processor;}

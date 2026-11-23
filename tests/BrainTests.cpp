@@ -13,6 +13,70 @@ masterlab::BrainSnapshot wait(Processor& p,masterlab::BrainPhase phase){
  for(int i=0;i<15000;++i){auto snapshot=p.brain.readUI();if(snapshot.phase==phase)return snapshot;if(snapshot.phase==masterlab::BrainPhase::Failed){std::cerr<<snapshot.message<<'\n';std::exit(1);}std::this_thread::sleep_for(std::chrono::milliseconds(2));}check(false,"analysis timeout");return {};
 }
 int main(){
+ // Brain must bound analysis input independently of the GUI selection.
+ masterlab::BrainConfig bound;
+ for(int requested:{30,60,120,180,300,600}){
+  bound.seconds=requested;
+  check(masterlab::cleanBrainConfig(bound).seconds<=20,"Brain accepted an analysis interval above 20 seconds");
+ }
+ bound.seconds=20;
+ check(masterlab::cleanBrainConfig(bound).seconds==20,"Brain rejected the 20-second interval");
+ // Exercise a real 20-second capture at 8 kHz, not just config clamping.
+ {
+  masterlab::MasterBrain full20;
+  full20.prepare(8000);
+  masterlab::BrainConfig length20;length20.seconds=20;
+  full20.startUI(length20);
+  for(int retry=0;retry<2000&&full20.readUI().phase!=masterlab::BrainPhase::Analysing;++retry)
+   std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  check(full20.readUI().phase==masterlab::BrainPhase::Analysing,"20-second worker did not start");
+  std::array<float,128> wave{};
+  for(int packet=0;packet<1250;++packet){
+   for(int i=0;i<128;++i)wave[static_cast<size_t>(i)]=.1f*std::sin((packet*128+i)*.04f);
+   full20.capture(wave.data(),wave.data(),128);
+   std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  masterlab::BrainSnapshot twenty;
+  for(int retry=0;retry<10000;++retry){
+   twenty=full20.readUI();
+   if(twenty.phase==masterlab::BrainPhase::Ready||twenty.phase==masterlab::BrainPhase::Failed)break;
+   std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }
+  check(twenty.phase==masterlab::BrainPhase::Ready&&
+        std::abs(twenty.features.seconds-20.)<1.e-6,"full 20-second capture failed");
+  for(int retry=0;retry<2000&&full20.resourcesUI().workerRunning;++retry)
+   std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  check(!full20.resourcesUI().workerRunning&&full20.resourcesUI().packetBytes==0,
+        "20-second job retained resources");
+ }
+ // Real producer/consumer race: repeatedly close and reopen the capture gate
+ // while the audio callback is actively offering packets on another thread.
+ // The test is intended to catch use-after-free during cancel/clear/prepare.
+ {
+  masterlab::MasterBrain gate(256);
+  gate.prepare(48000);
+  std::atomic<bool> stopProducer{false};
+  std::array<float,128> input{};
+  std::thread producer([&]{
+   while(!stopProducer.load(std::memory_order_relaxed)){
+    gate.capture(input.data(),input.data(),static_cast<int>(input.size()));
+    std::this_thread::yield();
+   }
+  });
+  masterlab::BrainConfig shortConfig;
+  for(int cycle=0;cycle<16;++cycle){
+   gate.startUI(shortConfig);
+   for(int spin=0;spin<20;++spin)std::this_thread::yield();
+   gate.cancelUI();
+   gate.clearUI();
+   gate.prepare(48000);
+   auto resources=gate.resourcesUI();
+   check(!resources.workerRunning&&!resources.jobAllocated&&resources.packetBytes==0,
+         "concurrent capture retained analysis resources");
+  }
+  stopProducer.store(true,std::memory_order_relaxed);
+  producer.join();
+ }
  Processor p;p.prepareToPlay(48000,256);auto* gain=p.state.getParameter("gain");gain->setValueNotifyingHost(gain->convertTo0to1(2));auto before=values(p);
  masterlab::BrainConfig config;p.startBrainUI(config);wait(p,masterlab::BrainPhase::Analysing);
  juce::AudioBuffer<float> buffer(2,256);juce::MidiBuffer midi;int sample=0;
@@ -20,10 +84,24 @@ int main(){
  // background analyzer on fast CI CPUs and tests queue overflow instead of capture.
  auto feed=[&](bool silent){for(int block=0;block<1500;++block){for(int i=0;i<256;++i,++sample){float x=silent?0.f:.15f*std::sin(juce::MathConstants<double>::twoPi*1000*sample/48000);buffer.setSample(0,i,x);buffer.setSample(1,i,x);}audit=true;p.processBlock(buffer,midi);audit=false;std::this_thread::sleep_for(std::chrono::milliseconds(1));}};
  feed(false);auto result=wait(p,masterlab::BrainPhase::Ready);
- check(allocations==0,"audio capture allocated C++ heap memory");check(result.proposal.previewVerified&&result.proposal.previewPasses>=1,"proposal skipped actual DSP verification");check(result.proposal.valid&&std::abs(result.features.seconds-8)<1e-6&&result.progress==1,"capture result or duration incorrect");
+ check(allocations==0,"audio capture allocated C++ heap memory");check(result.config.useTruePeak&&result.config.targetLufs>=-20.f&&result.config.targetLufs<=-9.f&&result.config.ceiling<=-1.f,"adaptive mastering targets were not calculated");
+ const auto measuredInput=*std::max_element(result.features.inputPreviewEnvelope.begin(),
+     result.features.inputPreviewEnvelope.end());
+ const auto measuredOutput=*std::max_element(result.proposal.previewOutputEnvelope.begin(),
+     result.proposal.previewOutputEnvelope.end());
+ check(measuredInput>.05f&&measuredOutput>.01f&&std::isfinite(measuredOutput),
+       "real input/output waveform envelopes were not captured from DSP");
+ check(std::isfinite(result.proposal.previewTruePeakDb),"preview true-peak measurement unavailable");check(result.proposal.previewVerified&&result.proposal.previewPasses>=1,"proposal skipped actual DSP verification");check(result.proposal.valid&&std::abs(result.features.seconds-8)<1e-6&&result.progress==1,"capture result or duration incorrect");
+ for(int retry=0;retry<2000&&p.brain.resourcesUI().workerRunning;++retry)
+  std::this_thread::sleep_for(std::chrono::milliseconds(1));
+ const auto idleResources=p.brain.resourcesUI();
+ check(!idleResources.workerRunning&&!idleResources.jobAllocated&&idleResources.packetBytes==0,
+       "Brain retained worker, audio buffers or FFT after completion");
  check(std::abs(result.features.integrated-(-16.48f))<.15f&&result.features.correlation>.999f,"captured audio measurements incorrect");check(values(p)==before,"analysis changed parameters without approval");
- auto revised=config;revised.genre=4;revised.intensity=.5f;p.brain.reviseUI(revised);wait(p,masterlab::BrainPhase::Ready);check(p.brain.readUI().phase==masterlab::BrainPhase::Ready&&values(p)==before,"revision changed audio or discarded capture");
- p.brain.reviseUI(revised);p.brain.cancelRT();wait(p,masterlab::BrainPhase::Cancelled);check(values(p)==before,"cancel during verification changed parameters");
+ auto revised=config;revised.genre=4;revised.intensity=.5f;p.brain.reviseUI(revised);
+ check(p.brain.readUI().phase==masterlab::BrainPhase::Idle&&values(p)==before,"revision must request new capture after PCM is released");
+ p.startBrainUI(revised);wait(p,masterlab::BrainPhase::Analysing);p.brain.cancelRT();wait(p,masterlab::BrainPhase::Cancelled);
+ check(values(p)==before,"cancel changed host parameters");
  p.startBrainUI(config);wait(p,masterlab::BrainPhase::Analysing);feed(false);wait(p,masterlab::BrainPhase::Ready);
  gain->setValueNotifyingHost(gain->convertTo0to1(3));auto manual=values(p);check(p.brainStaleUI()&&!p.applyBrainUI()&&values(p)==manual,"stale proposal overwrote manual settings");gain->setValueNotifyingHost(gain->convertTo0to1(2));
  check(p.applyBrainUI()&&values(p)!=before,"approved proposal not applied");for(const char* id:{"stereoPresent","dynamicsPresent","dynamicEqPresent"}){float proposed=-1;for(const auto& change:p.brain.readUI().proposal.changes)if(change.first==id)proposed=change.second;check(p.state.getRawParameterValue(id)->load()==proposed,"Brain did not apply its selected module presence");}check(p.undo()&&values(p)==before,"proposal is not one Undo transaction");check(!p.applyBrainUI(),"applied proposal applied twice");
@@ -55,6 +133,10 @@ int main(){
  check(std::abs(actual.read().integrated-preview.lufs)<.02f&&std::abs(peak-preview.peak)<.002f,"preview differs from actual Processor");
  check(!masterlab::renderBrainPreview(testLeft,testRight,48000,settings,[]{return true;}).complete,"preview ignored cancellation");buffer.setSize(2,256);
  p.startBrainUI(config);wait(p,masterlab::BrainPhase::Analysing);feed(true);auto silence=wait(p,masterlab::BrainPhase::Ready);check(!silence.proposal.valid&&!p.applyBrainUI()&&values(p)==before,"silence generated or applied a proposal");
+ for(int retry=0;retry<2000&&p.brain.resourcesUI().workerRunning;++retry)
+  std::this_thread::sleep_for(std::chrono::milliseconds(1));
+ check(!p.brain.resourcesUI().jobAllocated&&p.brain.resourcesUI().packetBytes==0,
+       "silent input retained analysis buffers");
  p.startBrainUI(config);p.brain.cancelRT();for(int i=0;i<200&&p.brain.readUI().phase!=masterlab::BrainPhase::Cancelled;++i)std::this_thread::sleep_for(std::chrono::milliseconds(2));check(p.brain.readUI().phase==masterlab::BrainPhase::Cancelled,"pending analysis did not cancel");
  // Deliberately undersized queue: data loss must invalidate the entire analysis.
  masterlab::MasterBrain tiny(2);tiny.prepare(48000);tiny.startUI(config);for(int i=0;i<200&&tiny.readUI().phase!=masterlab::BrainPhase::Analysing;++i)std::this_thread::sleep_for(std::chrono::milliseconds(2));

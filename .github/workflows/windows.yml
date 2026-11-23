@@ -17,7 +17,16 @@ jobs:
         shell: pwsh
         run: |
           $py = python -c "import sys; print(sys.executable)"
-          cmake -S . -B build -A x64 "-DPython3_EXECUTABLE=$py"
+          # MSVC 14.44 repeatedly crashes in c2.dll (0xc0000005) on Plugin.cpp.
+          # ClangCL keeps x64/MSVC ABI and Release optimisations without that backend.
+          $clang = Get-Command clang-cl.exe -ErrorAction SilentlyContinue
+          if ($null -eq $clang) {
+            Write-Output "clang-cl not in PATH; installed toolsets:"
+            Get-ChildItem "$env:ProgramFiles/Microsoft Visual Studio/2022/Enterprise/VC/Tools/Llvm" -ErrorAction SilentlyContinue
+            throw "clang-cl unavailable; avoid shipping a non-optimised DSP build"
+          }
+          Write-Output "Using clang-cl: $($clang.Source)"
+          cmake -S . -B build -A x64 -T ClangCL "-DPython3_EXECUTABLE=$py"
       - name: Build Release
         run: cmake --build build --config Release --parallel 1
       - name: Diagnose MSVC child-process failure

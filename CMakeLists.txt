@@ -256,7 +256,13 @@ if(MASTERLAB_PLUGIN)
  target_link_libraries(JerzyMasterLabX PUBLIC MasterLabFonts MasterLabGuiAssets)
  add_test(NAME concept_c_asset_pack
    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/gui_assets/validate_concept_c.py" "${MASTERLAB_GUI_ASSET_DIR}")
- target_sources(JerzyMasterLabX PRIVATE Source/Plugin.cpp)
+ target_sources(JerzyMasterLabX PRIVATE Source/Plugin.cpp Source/EditorFactory.cpp)
+ # MSVC c2.dll repeatedly crashed while optimising the monolithic Plugin.cpp.
+ # Keep realtime Processor/DSP at Release optimisation; compile only the
+ # non-realtime GUI factory separately without the problematic optimiser pass.
+ if(MSVC)
+   set_source_files_properties(Source/EditorFactory.cpp PROPERTIES COMPILE_OPTIONS "/Od")
+ endif()
  target_link_libraries(JerzyMasterLabX PRIVATE masterlab juce::juce_audio_utils juce::juce_dsp PUBLIC juce::juce_recommended_config_flags)
  if(MASTERLAB_LIVE_STEM_PLUGIN)
    target_link_libraries(JerzyMasterLabX PRIVATE masterlab_stemgenrt)
