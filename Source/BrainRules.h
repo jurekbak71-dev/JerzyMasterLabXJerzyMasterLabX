@@ -20,9 +20,11 @@ struct BrainConfig {
 struct BrainFeatures {
  BrainDetail detail;double rate=48000,seconds=0;float integrated=-120,peak=0,rms=0,correlation=0;
  std::array<double,5> energy{};std::array<float,4> bandCorrelation{},bandWidth{};bool stereoAnalysed=false;std::uint64_t clips=0;
+ std::array<float,128> inputPreviewEnvelope{};
 };
 struct BrainProposal {
- bool previewVerified=false;float previewLufs=-120,previewPeak=0,previewSectionSpread=0,previewGr95=0;int previewPasses=0;
+ bool previewVerified=false;float previewLufs=-120,previewPeak=0,previewTruePeakDb=-120,previewSectionSpread=0,previewGr95=0,previewCorrelation=0,previewCrestDb=0;int previewPasses=0;
+ std::array<float,128> previewOutputEnvelope{};
  bool valid=false;std::vector<std::pair<std::string,float>> changes;
  std::array<float,5> gains{},shares{},targetShares{},estimatedShares{};float drive=0,eqEstimate=0;
  std::vector<std::string> reasons,warnings;
@@ -31,10 +33,27 @@ inline constexpr std::array<const char*,9> brainGenres{"Rock","Punk","Post-Punk"
 inline constexpr std::array<const char*,4> brainStyles{"Transparent","Analog","Aggressive","Atmospheric"};
 inline BrainConfig cleanBrainConfig(BrainConfig c){
  c.genre=std::clamp(c.genre,0,8);c.style=std::clamp(c.style,0,3);
- // Long-form sectional analysis, bounded to ten minutes of continuous DAW input.
- if(c.seconds!=8&&c.seconds!=16&&c.seconds!=30&&c.seconds!=60&&
-    c.seconds!=120&&c.seconds!=180&&c.seconds!=300&&c.seconds!=600)c.seconds=8;
+ // Brain analyses no more than 20 seconds of representative playback.
+ if(c.seconds!=8&&c.seconds!=16&&c.seconds!=20)c.seconds=20;
  c.targetLufs=std::clamp(clean(c.targetLufs),-24.f,-8.f);c.ceiling=std::clamp(clean(c.ceiling),-6.f,-.1f);c.intensity=std::clamp(clean(c.intensity),.25f,1.5f);return c;
+}
+inline BrainConfig automaticBrainTargets(const BrainFeatures& f, BrainConfig c){
+ c=cleanBrainConfig(c);
+ const float crest=20.f*std::log10(std::max(f.peak,1.e-6f)/std::max(f.rms,1.e-6f));
+ const float sectionSpread=f.detail.analysed?std::max(0.f,f.detail.sectionSpreadDb):0.f;
+ // Genre gives a modest bias; actual crest and dynamic contrast dominate.
+ constexpr std::array<float,9> biases{0.f,.4f,-.3f,-.6f,.3f,.6f,-1.2f,.2f,-1.f};
+ const float dynamicAllowance=std::clamp((crest-10.f)*.35f, -2.4f, 2.6f)
+                              +std::clamp(sectionSpread*.11f,0.f,1.3f);
+ const float styleBias=std::array<float,4>{-.5f,-.35f,.4f,-.8f}[c.style];
+ float goal=-13.f + biases[static_cast<size_t>(c.genre)] + styleBias - dynamicAllowance;
+ // Never request a large upward jump when the input is already heavily limited.
+ if(crest<7.f)goal=std::min(goal, f.integrated+2.f);
+ c.targetLufs=std::clamp(goal,-20.f,-9.f);
+ // Output is governed by the Final True-Peak stage, not only the sample limiter.
+ c.ceiling=(crest>15.f||sectionSpread>10.f)?-1.3f:-1.f;
+ c.useTruePeak=true;
+ return c;
 }
 inline void refineDetailedProposal(BrainProposal&,const BrainFeatures&,const BrainConfig&);
 inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config){
@@ -99,7 +118,7 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
  if(f.clips)p.warnings.push_back("Input samples exceeded 0 dBFS. Reduce upstream level; lost transients cannot be recovered by these rules.");
  p.warnings.push_back("Genre/style profiles are explicit DSP heuristics, not a trained AI model. Analog selects gentle settings and Analog compressor when selected; no standalone Analog Laboratory is added.");
  p.warnings.push_back("Limiter loudness estimate excludes compressor, Dynamic EQ, Stabilizer and stereo changes. Their interaction requires a full output measurement after Apply.");
- p.warnings.push_back("LUFS and EQ predictions describe this fragment only. Re-measure the full processed song. Ceiling is sample peak, not True Peak.");
+ p.warnings.push_back(c.useTruePeak?"Fragment LUFS and four-times-oversampled peak are provisional. Independently measure the final export.":"Fragment LUFS and EQ estimates are provisional; a sample limiter alone does not guarantee true peak.");
  if(c.useStereo){
   add("stereoPresent",1);add("stereoOn",1);const auto correlation=f.stereoAnalysed?f.bandCorrelation:std::array<float,4>{f.correlation,f.correlation,f.correlation,f.correlation};add("stereoLowWidth",correlation[0]<.2f?.65f:1.f);add("stereoMidWidth",correlation[1]<.2f?.85f:1.f);add("stereoHighWidth",correlation[2]<.2f?.9f:1.f);add("stereoLowSplit",140);add("stereoHighSplit",2500);add("stereoMonoBass",correlation[0]<0?1.f:0.f);add("stereoMono",0);add("stereoBalance",0);add("stereoAirWidth",correlation[3]<.2f?.9f:1.f);add("stereoTopSplit",8000);for(int band=1;band<=4;++band){add("stereoBandOn"+std::to_string(band),1);add("stereoSolo"+std::to_string(band),0);}add("stereoAmount",1);add("stereoDelta",0);
   p.reasons.push_back("Stereo: preserve width when correlated; narrow conservatively for low/negative measured band correlation (broadband fallback if band data is unavailable). No artificial widening. Inspect per-band correlation and mono after Apply.");
