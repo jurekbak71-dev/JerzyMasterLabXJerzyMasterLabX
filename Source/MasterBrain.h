@@ -129,7 +129,13 @@ class MasterBrain final : private juce::Thread {
        const float tpExcess=std::max(0.f,p.previewTruePeakDb-verification->config.ceiling);
        const float loudnessError=std::abs(p.previewLufs-verification->config.targetLufs);
        const float grExcess=std::max(0.f,p.previewGr95-4.f);
+       const float inputCrest=20.f*std::log10(std::max(1.e-9f,verification->features.peak)/
+                                             std::max(1.e-9f,verification->features.rms));
+       const float crestLoss=std::max(0.f,inputCrest-p.previewCrestDb-3.f);
+       const float stereoPenalty=std::max(0.f,-p.previewCorrelation)*5.f+
+                                 std::max(0.f,verification->features.correlation-p.previewCorrelation-.4f);
        return 20.f*tpExcess+2.f*loudnessError+1.5f*grExcess+
+              1.2f*crestLoss+stereoPenalty+
               .08f*std::max(0.f,p.previewSectionSpread-8.f);
       };
       const float scoreA=score(snapshot.proposal),scoreB=score(snapshot.alternateProposal);
