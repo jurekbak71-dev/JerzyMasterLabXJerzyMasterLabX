@@ -22,7 +22,7 @@ struct BrainFeatures {
  std::array<double,5> energy{};std::array<float,4> bandCorrelation{},bandWidth{};bool stereoAnalysed=false;std::uint64_t clips=0;
 };
 struct BrainProposal {
- bool previewVerified=false;float previewLufs=-120,previewPeak=0,previewTruePeakDb=-120,previewSectionSpread=0,previewGr95=0;int previewPasses=0;
+ bool previewVerified=false;float previewLufs=-120,previewPeak=0,previewTruePeakDb=-120,previewSectionSpread=0,previewGr95=0,previewCorrelation=0,previewCrestDb=0;int previewPasses=0;
  bool valid=false;std::vector<std::pair<std::string,float>> changes;
  std::array<float,5> gains{},shares{},targetShares{},estimatedShares{};float drive=0,eqEstimate=0;
  std::vector<std::string> reasons,warnings;
@@ -115,7 +115,7 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
  if(f.clips)p.warnings.push_back("Input samples exceeded 0 dBFS. Reduce upstream level; lost transients cannot be recovered by these rules.");
  p.warnings.push_back("Genre/style profiles are explicit DSP heuristics, not a trained AI model. Analog selects gentle settings and Analog compressor when selected; no standalone Analog Laboratory is added.");
  p.warnings.push_back("Limiter loudness estimate excludes compressor, Dynamic EQ, Stabilizer and stereo changes. Their interaction requires a full output measurement after Apply.");
- p.warnings.push_back("LUFS and EQ predictions describe this fragment only. Re-measure the full processed song. Ceiling is sample peak, not True Peak.");
+ p.warnings.push_back(c.useTruePeak?"Fragment LUFS and four-times-oversampled peak are provisional. Verify true peak independently on the exported full song.":"Fragment LUFS and EQ predictions are provisional. The sample limiter alone does not guarantee true peak.");
  if(c.useStereo){
   add("stereoPresent",1);add("stereoOn",1);const auto correlation=f.stereoAnalysed?f.bandCorrelation:std::array<float,4>{f.correlation,f.correlation,f.correlation,f.correlation};add("stereoLowWidth",correlation[0]<.2f?.65f:1.f);add("stereoMidWidth",correlation[1]<.2f?.85f:1.f);add("stereoHighWidth",correlation[2]<.2f?.9f:1.f);add("stereoLowSplit",140);add("stereoHighSplit",2500);add("stereoMonoBass",correlation[0]<0?1.f:0.f);add("stereoMono",0);add("stereoBalance",0);add("stereoAirWidth",correlation[3]<.2f?.9f:1.f);add("stereoTopSplit",8000);for(int band=1;band<=4;++band){add("stereoBandOn"+std::to_string(band),1);add("stereoSolo"+std::to_string(band),0);}add("stereoAmount",1);add("stereoDelta",0);
   p.reasons.push_back("Stereo: preserve width when correlated; narrow conservatively for low/negative measured band correlation (broadband fallback if band data is unavailable). No artificial widening. Inspect per-band correlation and mono after Apply.");
