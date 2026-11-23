@@ -670,7 +670,7 @@ public:
  }
  bool applyBrainUI(){
   auto result=brain.readUI();
-  if(result.phase!=masterlab::BrainPhase::Ready||!result.proposal.valid){
+  if(result.phase!=masterlab::BrainPhase::Ready||!result.proposal.valid||!result.proposal.previewVerified){
    brainActionMessage="Apply blocked: no valid ready proposal. Analyse first.";return false;
   }
   if(brainStaleUI()){
