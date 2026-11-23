@@ -22,7 +22,7 @@ struct BrainFeatures {
  std::array<double,5> energy{};std::array<float,4> bandCorrelation{},bandWidth{};bool stereoAnalysed=false;std::uint64_t clips=0;
 };
 struct BrainProposal {
- bool previewVerified=false;float previewLufs=-120,previewPeak=0,previewSectionSpread=0,previewGr95=0;int previewPasses=0;
+ bool previewVerified=false;float previewLufs=-120,previewPeak=0,previewTruePeakDb=-120,previewSectionSpread=0,previewGr95=0;int previewPasses=0;
  bool valid=false;std::vector<std::pair<std::string,float>> changes;
  std::array<float,5> gains{},shares{},targetShares{},estimatedShares{};float drive=0,eqEstimate=0;
  std::vector<std::string> reasons,warnings;
