@@ -125,11 +125,15 @@ public:
   active.store(0);nextGeneration.fetch_add(1);{
    std::scoped_lock lock(mutex);rate=std::isfinite(sampleRate)&&sampleRate>=8000&&sampleRate<=384000?sampleRate:48000;
    packets.resize(static_cast<size_t>(capacity));fifo.reset();job.reset();snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Play the full track from the beginning. No parameters change before Apply.";audioGeneration=audioCount=0;
-  }if(!isThreadRunning())startThread();
+  }
  }
  void startUI(BrainConfig config){
-  std::scoped_lock lock(mutex);active.store(0);const auto gen=nextGeneration.fetch_add(1)+1;config=cleanBrainConfig(config);
-  job=std::make_unique<Job>(rate,config,gen);snapshot={};snapshot.phase=BrainPhase::Pending;snapshot.config=config;snapshot.message="Waiting for the analysis worker and DAW audio.";targetSamples.store(job->target);
+  {
+   std::scoped_lock lock(mutex);active.store(0);const auto gen=nextGeneration.fetch_add(1)+1;config=cleanBrainConfig(config);
+   job=std::make_unique<Job>(rate,config,gen);snapshot={};snapshot.phase=BrainPhase::Pending;snapshot.config=config;snapshot.message="Waiting for the analysis worker and DAW audio.";targetSamples.store(job->target);
+  }
+  // The analysis thread is created on demand, never during plugin prepareToPlay.
+  if(!isThreadRunning())startThread();
  }
  void cancelRT()noexcept {active.store(0);cancelled.store(nextGeneration.load());}
  void cancelUI(){cancelRT();std::scoped_lock lock(mutex);active.store(0);snapshot.phase=BrainPhase::Cancelled;snapshot.proposal={};snapshot.message="Analysis cancelled. No parameters changed.";}
