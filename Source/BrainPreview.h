@@ -9,7 +9,11 @@ struct BrainPreviewResult {float lufs=-120,peak=0,truePeakDb=-120,spread=0,gr95=
 template<class Cancel> BrainPreviewResult renderBrainPreview(const std::vector<float>& left,const std::vector<float>& right,double rate,const std::array<float,parameterCount>& values,Cancel cancel){
  SerialGraph graph;auto get=[&](size_t i){return values[i];};configureGraph(graph,get);graph.prepare(rate,values[6]>.5f,static_cast<int>(values[138]));
  LoudnessMeter loudness;loudness.prepare(rate);BrainDetailAnalyzer dynamics;dynamics.prepare(rate,left.size()/rate);
- FinalTruePeak truePeakMeter;truePeakMeter.prepare(rate);truePeakMeter.settings({false,-1.f,120.f,0.f});float oversampledPeak=0;
+ // A disabled FinalTruePeak bypasses convolution and zeros its reading.
+ // This independent meter MUST be enabled: it only analyses a throwaway
+ // copy after loudness/crest have been accumulated from the real render.
+ FinalTruePeak truePeakMeter;truePeakMeter.prepare(rate);
+ truePeakMeter.settings({true,-.1f,120.f,0.f});float oversampledPeak=0;
  std::array<float,128> l{},r{},trace{};std::vector<float> reductions;reductions.reserve(left.size()/128+2);BrainPreviewResult out;
  double ll=0.,rr=0.,lr=0.;std::uint64_t measured=0;
  const size_t latency=static_cast<size_t>(graph.latency()),total=left.size()+latency;
