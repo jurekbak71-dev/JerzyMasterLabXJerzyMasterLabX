@@ -31,9 +31,8 @@ inline constexpr std::array<const char*,9> brainGenres{"Rock","Punk","Post-Punk"
 inline constexpr std::array<const char*,4> brainStyles{"Transparent","Analog","Aggressive","Atmospheric"};
 inline BrainConfig cleanBrainConfig(BrainConfig c){
  c.genre=std::clamp(c.genre,0,8);c.style=std::clamp(c.style,0,3);
- // Long-form sectional analysis, bounded to ten minutes of continuous DAW input.
- if(c.seconds!=8&&c.seconds!=16&&c.seconds!=30&&c.seconds!=60&&
-    c.seconds!=120&&c.seconds!=180&&c.seconds!=300&&c.seconds!=600)c.seconds=8;
+ // Analyse at most 20 seconds of representative DAW playback.
+ if(c.seconds!=8&&c.seconds!=16&&c.seconds!=20)c.seconds=20;
  c.targetLufs=std::clamp(clean(c.targetLufs),-24.f,-8.f);c.ceiling=std::clamp(clean(c.ceiling),-6.f,-.1f);c.intensity=std::clamp(clean(c.intensity),.25f,1.5f);return c;
 }
 inline void refineDetailedProposal(BrainProposal&,const BrainFeatures&,const BrainConfig&);
