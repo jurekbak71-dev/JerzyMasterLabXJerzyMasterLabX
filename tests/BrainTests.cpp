@@ -68,6 +68,12 @@ int main(){
  // The preceding Undo restored the baseline: verify that state, including existing EQ.
  std::vector<float> testLeft(48000),testRight(48000);for(size_t i=0;i<testLeft.size();++i)testLeft[i]=testRight[i]=static_cast<float>(.1*std::sin(i*.13));
  auto preview=masterlab::renderBrainPreview(testLeft,testRight,48000,settings,[]{return false;});check(preview.complete,"actual DSP preview failed");
+ // Independently measured 4x reconstructed peak cannot be zero for
+ // non-silent output. The old preview disabled its detector entirely.
+ const float measuredSampleDb=20.f*std::log10(std::max(1.e-9f,preview.peak));
+ check(preview.truePeakDb>-35.f&&
+       std::abs(preview.truePeakDb-measuredSampleDb)<3.f,
+       "Brain true-peak detector reported a false zero instead of actual audio");
  // Isolate final-stage gain from the legacy masked limiter drive. This
  // catches the original regression: Master Brain changed the wrong parameter.
  auto lowFinal=settings;lowFinal[221]=1.f;lowFinal[222]=1.f;lowFinal[223]=-1.f;lowFinal[225]=0.f;
