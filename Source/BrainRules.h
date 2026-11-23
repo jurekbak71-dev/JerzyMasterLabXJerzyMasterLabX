@@ -35,6 +35,26 @@ inline BrainConfig cleanBrainConfig(BrainConfig c){
  if(c.seconds!=8&&c.seconds!=16&&c.seconds!=20)c.seconds=20;
  c.targetLufs=std::clamp(clean(c.targetLufs),-24.f,-8.f);c.ceiling=std::clamp(clean(c.ceiling),-6.f,-.1f);c.intensity=std::clamp(clean(c.intensity),.25f,1.5f);return c;
 }
+// Targets are derived from the measured fragment, not a fixed per-genre LUFS table.
+// They are provisional; output true peak must be checked by oversampled rendering.
+inline BrainConfig automaticBrainTargets(const BrainFeatures& f, BrainConfig c){
+ c=cleanBrainConfig(c);
+ const float crest=20.f*std::log10(std::max(f.peak,1.e-6f)/std::max(f.rms,1.e-6f));
+ const float sectionSpread=f.detail.analysed?std::max(0.f,f.detail.sectionSpreadDb):0.f;
+ // Genre gives a modest bias; actual crest and dynamic contrast dominate.
+ constexpr std::array<float,9> biases{0.f,.4f,-.3f,-.6f,.3f,.6f,-1.2f,.2f,-1.f};
+ const float dynamicAllowance=std::clamp((crest-10.f)*.35f, -2.4f, 2.6f)
+                              +std::clamp(sectionSpread*.11f,0.f,1.3f);
+ const float styleBias=std::array<float,4>{-.5f,-.35f,.4f,-.8f}[c.style];
+ float goal=-13.f + biases[static_cast<size_t>(c.genre)] + styleBias - dynamicAllowance;
+ // Never request a large upward jump when the input is already heavily limited.
+ if(crest<7.f)goal=std::min(goal, f.integrated+2.f);
+ c.targetLufs=std::clamp(goal,-20.f,-9.f);
+ // Output is governed by the Final True-Peak stage, not only the sample limiter.
+ c.ceiling=(crest>15.f||sectionSpread>10.f)?-1.3f:-1.f;
+ c.useTruePeak=true;
+ return c;
+}
 inline void refineDetailedProposal(BrainProposal&,const BrainFeatures&,const BrainConfig&);
 inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config){
  const auto c=cleanBrainConfig(config);BrainProposal p;
