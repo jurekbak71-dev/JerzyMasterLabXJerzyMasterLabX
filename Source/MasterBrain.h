@@ -67,7 +67,15 @@ class MasterBrain final : private juce::Thread {
  juce::AbstractFifo fifo;std::vector<Packet> packets;
  std::mutex mutex;std::unique_ptr<Job> job;BrainSnapshot snapshot;
  std::atomic<std::uint64_t> active{0},dropped{0},cancelled{0},nextGeneration{0},targetSamples{0};
+ std::atomic<unsigned> capturesInFlight{0};
  std::uint64_t audioGeneration=0,audioCount=0;double rate=48000;const int capacity;
+ void releaseCaptureStorage(){
+  active.store(0);
+  // The last producer may have read the old generation. Never free FIFO
+  // storage until that audio callback has left capture(). No RT waiting.
+  while(capturesInFlight.load()!=0)juce::Thread::sleep(1);
+  job.reset();packets.clear();packets.shrink_to_fit();fifo.reset();
+ }
  void fail(const std::string& message){snapshot.phase=BrainPhase::Failed;snapshot.message=message;snapshot.proposal={};if(job){auto expected=job->generation;active.compare_exchange_strong(expected,0);}}
  void run()override{
   while(!threadShouldExit()){
@@ -85,8 +93,9 @@ class MasterBrain final : private juce::Thread {
     }};consume(start,n);consume(start2,n2);fifo.finishedRead(n+n2);
     if(job&&snapshot.phase==BrainPhase::Pending){snapshot.phase=BrainPhase::Analysing;snapshot.message="Listening to input before processing. Play audio in the DAW.";active.store(job->generation);}
     if(job&&snapshot.phase==BrainPhase::Validating)verification=std::move(job);
-    if(snapshot.phase==BrainPhase::Cancelled||snapshot.phase==BrainPhase::Failed){
-     job.reset();return; // Retain FIFO backing until producer is quiescent.
+    if(snapshot.phase==BrainPhase::Cancelled||snapshot.phase==BrainPhase::Failed||
+       (snapshot.phase==BrainPhase::Ready&&!snapshot.proposal.valid)){
+     releaseCaptureStorage();return;
     }
    }
    if(verification){
@@ -132,8 +141,7 @@ class MasterBrain final : private juce::Thread {
       snapshot.message=snapshot.proposal.previewVerified?
         "Best measured full-chain candidate selected. Review and Apply.":
         "DSP verification unavailable. Apply is disabled.";
-      job.reset();
-      packets.clear();packets.shrink_to_fit();fifo.reset();active.store(0);
+      releaseCaptureStorage();
       return; // No idle polling, no retained PCM or FFT.
     }
    }
@@ -144,14 +152,17 @@ public:
  explicit MasterBrain(int packetCapacity=1024):Thread("MasterLab analysis"),fifo(std::max(2,packetCapacity)),capacity(std::max(2,packetCapacity)){}
  ~MasterBrain()override{active.store(0);stopThread(3000);}
  void prepare(double sampleRate){
-  active.store(0);nextGeneration.fetch_add(1);{
-   std::scoped_lock lock(mutex);rate=std::isfinite(sampleRate)&&sampleRate>=8000&&sampleRate<=384000?sampleRate:48000;
-   packets.resize(static_cast<size_t>(capacity));fifo.reset();job.reset();snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Play the full track from the beginning. No parameters change before Apply.";audioGeneration=audioCount=0;
+  active.store(0);nextGeneration.fetch_add(1);
+  if(isThreadRunning())stopThread(3000);
+  while(capturesInFlight.load()!=0)juce::Thread::sleep(1);
+  {std::scoped_lock lock(mutex);rate=std::isfinite(sampleRate)&&sampleRate>=8000&&sampleRate<=384000?sampleRate:48000;
+   packets.clear();packets.shrink_to_fit();fifo.reset();job.reset();snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Play a representative loud fragment, up to 20 seconds. Avoid intro or breakdown.";audioGeneration=audioCount=0;
   }
  }
  void startUI(BrainConfig config){
   active.store(0);
   if(isThreadRunning())stopThread(3000);
+  while(capturesInFlight.load()!=0)juce::Thread::sleep(1);
   {
    std::scoped_lock lock(mutex);const auto gen=nextGeneration.fetch_add(1)+1;config=cleanBrainConfig(config);
    fifo.reset();packets.resize(static_cast<size_t>(capacity));
@@ -194,15 +205,20 @@ public:
  void markAppliedUI(){std::scoped_lock lock(mutex);snapshot.phase=BrainPhase::Applied;snapshot.message="Applied as one Undo transaction. Measure and audition the full processed song.";}
  // Single audio producer. No locks, wake-up signals, allocation or FFT here.
  void capture(const float* left,const float* right,int length)noexcept {
-  const auto gen=active.load();if(gen==0)return;if(audioGeneration!=gen){audioGeneration=gen;audioCount=0;}
+  if(active.load()==0)return;
+  capturesInFlight.fetch_add(1);
+  const auto gen=active.load();
+  if(gen==0){capturesInFlight.fetch_sub(1);return;}
+  if(audioGeneration!=gen){audioGeneration=gen;audioCount=0;}
   const auto target=targetSamples.load();
   for(int offset=0;offset<length&&audioCount<target;){
    int first,n,first2,n2;fifo.prepareToWrite(1,first,n,first2,n2);
-   if(n+n2==0){dropped.store(gen);auto expected=gen;active.compare_exchange_strong(expected,0);return;}
+   if(n+n2==0){dropped.store(gen);auto expected=gen;active.compare_exchange_strong(expected,0);capturesInFlight.fetch_sub(1);return;}
    auto& packet=packets[static_cast<size_t>(n?first:first2)];packet.generation=gen;packet.firstSample=audioCount;packet.length=static_cast<int>(std::min<std::uint64_t>(std::min(128,length-offset),target-audioCount));
    for(int i=0;i<packet.length;++i){packet.left[i]=clean(left[offset+i]);packet.right[i]=clean(right[offset+i]);}audioCount+=packet.length;offset+=packet.length;fifo.finishedWrite(n+n2);
   }
   if(audioCount>=target){auto expected=gen;active.compare_exchange_strong(expected,0);}
+  capturesInFlight.fetch_sub(1);
  }
 };
 }
