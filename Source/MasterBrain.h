@@ -67,13 +67,15 @@ class MasterBrain final : private juce::Thread {
  juce::AbstractFifo fifo;std::vector<Packet> packets;
  std::mutex mutex;std::unique_ptr<Job> job;BrainSnapshot snapshot;
  std::atomic<std::uint64_t> active{0},dropped{0},cancelled{0},nextGeneration{0},targetSamples{0};
- std::atomic<unsigned> capturesInFlight{0};
+ static constexpr std::uint32_t captureClosed=0x80000000u;
+ // The high bit closes the gate; lower bits count in-flight callbacks.
+ std::atomic<std::uint32_t> captureState{captureClosed};
  std::uint64_t audioGeneration=0,audioCount=0;double rate=48000;const int capacity;
  void releaseCaptureStorage(){
   active.store(0);
-  // The last producer may have read the old generation. Never free FIFO
-  // storage until that audio callback has left capture(). No RT waiting.
-  while(capturesInFlight.load()!=0)juce::Thread::sleep(1);
+  captureState.fetch_or(captureClosed,std::memory_order_acq_rel);
+  while((captureState.load(std::memory_order_acquire)&~captureClosed)!=0)
+   juce::Thread::sleep(1);
   job.reset();std::vector<Packet>().swap(packets);fifo.reset();
  }
  void fail(const std::string& message){snapshot.phase=BrainPhase::Failed;snapshot.message=message;snapshot.proposal={};if(job){auto expected=job->generation;active.compare_exchange_strong(expected,0);}}
@@ -163,7 +165,9 @@ public:
    signalThreadShouldExit();notify();
    if(!waitForThreadToExit(3000))return; // Never destroy a live worker or its FIFO.
   }
-  while(capturesInFlight.load()!=0)juce::Thread::sleep(1);
+  captureState.fetch_or(captureClosed,std::memory_order_acq_rel);
+  while((captureState.load(std::memory_order_acquire)&~captureClosed)!=0)
+   juce::Thread::sleep(1);
   {std::scoped_lock lock(mutex);rate=std::isfinite(sampleRate)&&sampleRate>=8000&&sampleRate<=384000?sampleRate:48000;
    std::vector<Packet>().swap(packets);fifo.reset();job.reset();snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Play a representative loud fragment, up to 20 seconds. Avoid intro or breakdown.";audioGeneration=audioCount=0;
   }
@@ -176,11 +180,14 @@ public:
    std::scoped_lock lock(mutex);snapshot.phase=BrainPhase::Failed;
    snapshot.message="Previous analysis worker could not stop.";return;
   }
-  while(capturesInFlight.load()!=0)juce::Thread::sleep(1);
+  captureState.fetch_or(captureClosed,std::memory_order_acq_rel);
+  while((captureState.load(std::memory_order_acquire)&~captureClosed)!=0)
+   juce::Thread::sleep(1);
   {
    std::scoped_lock lock(mutex);const auto gen=nextGeneration.fetch_add(1)+1;config=cleanBrainConfig(config);
    fifo.reset();packets.resize(static_cast<size_t>(capacity));
    job=std::make_unique<Job>(rate,config,gen);snapshot={};snapshot.phase=BrainPhase::Pending;snapshot.config=config;snapshot.message="Waiting for the analysis worker and DAW audio.";targetSamples.store(job->target);
+   captureState.store(0,std::memory_order_release); // Open only after packet allocation.
   }
   // The analysis thread is created on demand, never during plugin prepareToPlay.
   if(!isThreadRunning()&&!startThread()){
@@ -202,7 +209,9 @@ public:
    snapshot.message="Analysis worker did not stop. No buffers released; restart the plugin before retrying.";
    return;
   }
-  while(capturesInFlight.load()!=0)juce::Thread::sleep(1);
+  captureState.fetch_or(captureClosed,std::memory_order_acq_rel);
+  while((captureState.load(std::memory_order_acquire)&~captureClosed)!=0)
+   juce::Thread::sleep(1);
   std::scoped_lock lock(mutex);
   releaseCaptureStorage();
   snapshot=BrainSnapshot{};
@@ -232,20 +241,24 @@ public:
  void markAppliedUI(){std::scoped_lock lock(mutex);snapshot.phase=BrainPhase::Applied;snapshot.message="Applied as one Undo transaction. Measure and audition the full processed song.";}
  // Single audio producer. No locks, wake-up signals, allocation or FFT here.
  void capture(const float* left,const float* right,int length)noexcept {
-  if(active.load()==0)return;
-  capturesInFlight.fetch_add(1);
+  auto state=captureState.load(std::memory_order_relaxed);
+  for(;;){
+   if((state&captureClosed)!=0)return;
+   if(captureState.compare_exchange_weak(state,state+1,
+        std::memory_order_acquire,std::memory_order_relaxed))break;
+  }
   const auto gen=active.load();
-  if(gen==0){capturesInFlight.fetch_sub(1);return;}
+  if(gen==0){captureState.fetch_sub(1,std::memory_order_release);return;}
   if(audioGeneration!=gen){audioGeneration=gen;audioCount=0;}
   const auto target=targetSamples.load();
   for(int offset=0;offset<length&&audioCount<target;){
    int first,n,first2,n2;fifo.prepareToWrite(1,first,n,first2,n2);
-   if(n+n2==0){dropped.store(gen);auto expected=gen;active.compare_exchange_strong(expected,0);capturesInFlight.fetch_sub(1);return;}
+   if(n+n2==0){dropped.store(gen);auto expected=gen;active.compare_exchange_strong(expected,0);captureState.fetch_sub(1,std::memory_order_release);return;}
    auto& packet=packets[static_cast<size_t>(n?first:first2)];packet.generation=gen;packet.firstSample=audioCount;packet.length=static_cast<int>(std::min<std::uint64_t>(std::min(128,length-offset),target-audioCount));
    for(int i=0;i<packet.length;++i){packet.left[i]=clean(left[offset+i]);packet.right[i]=clean(right[offset+i]);}audioCount+=packet.length;offset+=packet.length;fifo.finishedWrite(n+n2);
   }
   if(audioCount>=target){auto expected=gen;active.compare_exchange_strong(expected,0);}
-  capturesInFlight.fetch_sub(1);
+  captureState.fetch_sub(1,std::memory_order_release);
  }
 };
 }
