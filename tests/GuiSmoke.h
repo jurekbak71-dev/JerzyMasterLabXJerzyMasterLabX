@@ -170,6 +170,21 @@ class GuiSmoke final : private juce::Timer {
             if(editor->findChildWithID("view-stem-brain")||editor->findChildWithID("stem-brain-panel")){
                 std::cerr<<"Removed STEMS GUI is still present\n";return captureError(__LINE__);
             }
+            // Guard against packaging an obsolete STEMS branch as the current MasterLabX.
+            // The approved Analog Exciter combines Harmonic Exciter with Tube/FET/Tape.
+            auto* analogExciter=editor->findChildWithID("analogizer-panel");
+            auto* excite=analogExciter?
+                dynamic_cast<juce::Slider*>(analogExciter->findChildWithID("analog-excite")):nullptr;
+            auto* model=analogExciter?
+                dynamic_cast<juce::ComboBox*>(analogExciter->findChildWithID("analogizer-model")):nullptr;
+            if(!analogExciter||!excite||!model||model->getNumItems()!=3||
+               !parameter("analogExcite")||!parameter("analogizerMode")){
+                std::cerr<<"Regression: unified Analog Exciter EXCITE or Tube/FET/Tape missing\n";
+                return captureError(__LINE__);
+            }
+            if(!editor->findChildWithID("restoration-panel")){
+                std::cerr<<"Regression: restoration panel missing\n";return captureError(__LINE__);
+            }
             editor->setSize(1000,700);
             auto* console=dynamic_cast<juce::Button*>(editor->findChildWithID("view-console"));
             if(!console){std::cerr<<"Concept C console navigation missing\n";return captureError(__LINE__);}
