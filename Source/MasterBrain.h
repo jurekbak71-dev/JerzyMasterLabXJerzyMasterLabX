@@ -74,7 +74,7 @@ class MasterBrain final : private juce::Thread {
   // The last producer may have read the old generation. Never free FIFO
   // storage until that audio callback has left capture(). No RT waiting.
   while(capturesInFlight.load()!=0)juce::Thread::sleep(1);
-  job.reset();packets.clear();packets.shrink_to_fit();fifo.reset();
+  job.reset();std::vector<Packet>().swap(packets);fifo.reset();
  }
  void fail(const std::string& message){snapshot.phase=BrainPhase::Failed;snapshot.message=message;snapshot.proposal={};if(job){auto expected=job->generation;active.compare_exchange_strong(expected,0);}}
  void run()override{
@@ -149,6 +149,8 @@ class MasterBrain final : private juce::Thread {
   }
  }
 public:
+ struct ResourceInfo {bool workerRunning=false,jobAllocated=false;size_t packetBytes=0;};
+ ResourceInfo resourcesUI(){std::scoped_lock lock(mutex);return {isThreadRunning(),job!=nullptr,packets.capacity()*sizeof(Packet)};}
  explicit MasterBrain(int packetCapacity=1024):Thread("MasterLab analysis"),fifo(std::max(2,packetCapacity)),capacity(std::max(2,packetCapacity)){}
  ~MasterBrain()override{active.store(0);stopThread(3000);}
  void prepare(double sampleRate){
@@ -156,7 +158,7 @@ public:
   if(isThreadRunning())stopThread(3000);
   while(capturesInFlight.load()!=0)juce::Thread::sleep(1);
   {std::scoped_lock lock(mutex);rate=std::isfinite(sampleRate)&&sampleRate>=8000&&sampleRate<=384000?sampleRate:48000;
-   packets.clear();packets.shrink_to_fit();fifo.reset();job.reset();snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Play a representative loud fragment, up to 20 seconds. Avoid intro or breakdown.";audioGeneration=audioCount=0;
+   std::vector<Packet>().swap(packets);fifo.reset();job.reset();snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Play a representative loud fragment, up to 20 seconds. Avoid intro or breakdown.";audioGeneration=audioCount=0;
   }
  }
  void startUI(BrainConfig config){
