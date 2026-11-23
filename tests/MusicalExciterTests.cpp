@@ -64,10 +64,20 @@ int main(){
    const double inputRms=.18/std::sqrt(2.);
    require(rms>inputRms*.40&&rms<inputRms*2.,"EXCITE changes loudness excessively");
    require(maxPeak<.85,"EXCITE unexpectedly overdrives a moderate source");
-   const double harmonic=component(modes[static_cast<size_t>(mode)],rate,2,4096);
-   require(std::isfinite(harmonic),"EXCITE generated nonfinite H2 estimate");
-   std::printf("%.0f Hz model %d: RMS %.6f H2 %.6f peak %.6f\n",
-               rate,mode,rms,harmonic,maxPeak);
+   const auto& audio=modes[static_cast<size_t>(mode)];
+   const double fundamental=component(audio,rate,1,4096);
+   double harmonicPower=0.;
+   std::array<double,4> harmonics{};
+   for(int h=2;h<=5;++h){
+    harmonics[static_cast<size_t>(h-2)]=component(audio,rate,h,4096);
+    harmonicPower+=harmonics[static_cast<size_t>(h-2)]*harmonics[static_cast<size_t>(h-2)];
+   }
+   const double thd5=std::sqrt(harmonicPower)/std::max(1.e-8,fundamental);
+   require(std::isfinite(thd5)&&thd5<.25,
+           "EXCITE adds excessive H2-H5 distortion at moderate input");
+   std::printf("%.0f Hz model %d: RMS %.6f peak %.6f H2 %.6f H3 %.6f H4 %.6f H5 %.6f THD5 %.3f%%\n",
+               rate,mode,rms,maxPeak,harmonics[0],harmonics[1],
+               harmonics[2],harmonics[3],thd5*100.);
   }
   for(int a=0;a<3;++a)for(int b=a+1;b<3;++b){
    double delta=0.;
