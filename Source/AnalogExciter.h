@@ -22,11 +22,17 @@ class AnalogExciter {
   const float excite=std::clamp(excitement_,0.f,1.f);
   const bool colourActive=modernColour_.enabled||legacyColour_.enabled;
   harmonics.enabled=harmonics.enabled||(excite>1.e-5f&&colourActive);
-  for(auto& band:harmonics.amount)band=std::clamp(band+(1.f-band)*.65f*excite,0.f,1.f);
-  harmonics.impact=std::clamp(harmonics.impact+.45f*excite,0.f,1.f);
-  harmonics.driveDb=std::clamp(harmonics.driveDb+10.f*excite,0.f,24.f);
-  harmonics.even=std::clamp(harmonics.even+.25f*excite,0.f,1.f);
-  harmonics.odd=std::clamp(harmonics.odd+.25f*excite,0.f,1.f);
+  // Level-matched mastering coloration: emphasize presence and air, not a
+  // full-band distortion chain. Honour all manual band controls at EXCITE=0.
+  constexpr std::array<float,4> colourWeights{.06f,.12f,.20f,.14f};
+  for(size_t band=0;band<harmonics.amount.size();++band)
+   harmonics.amount[band]=std::clamp(harmonics.amount[band]+
+       (1.f-harmonics.amount[band])*colourWeights[band]*excite,0.f,1.f);
+  harmonics.mix=std::clamp(harmonics.mix*(1.f-.40f*excite),0.f,1.f);
+  harmonics.impact=std::clamp(harmonics.impact+.045f*excite,0.f,1.f);
+  harmonics.driveDb=std::clamp(harmonics.driveDb+2.5f*excite,0.f,24.f);
+  harmonics.even=std::clamp(harmonics.even+.14f*excite,0.f,1.f);
+  harmonics.odd=std::clamp(harmonics.odd+.055f*excite,0.f,1.f);
   harmonic_.settings(harmonics);
   auto settings=modernColour_;
   settings.enabled=modernColour_.enabled||legacyColour_.enabled;
@@ -38,12 +44,13 @@ class AnalogExciter {
    settings.mix=legacyColour_.mix;
    settings.outputDb=legacyColour_.outputDb;
   }
-  settings.driveDb=std::clamp(settings.driveDb+9.f*excite,0.f,18.f);
+  settings.driveDb=std::clamp(settings.driveDb+2.7f*excite,0.f,18.f);
+  settings.mix=std::clamp(settings.mix*(1.f-.25f*excite),0.f,1.f);
   settings.bias=legacyColour_.bias;
   settings.tone=legacyColour_.tone;
   settings.dynamics=legacyColour_.dynamics;
   settings.autoGain=legacyColour_.autoGain;
-  settings.impact=std::clamp(legacyColour_.impact+.26f*excite,0.f,1.f);
+  settings.impact=std::clamp(legacyColour_.impact+.045f*excite,0.f,1.f);
   colour_.settings(settings);
  }
 public:

@@ -83,6 +83,14 @@ int main(){
   s.driveDb=0.f;
   const auto quiet=render(sr,s,257);
   check(amplitude(quiet,sr,991.)>.2,"quiet signal passes");
+  // Optional soft clip must not color a low-level sine below its knee.
+  // Any H2/H3 there would be avoidable saturation, not peak management.
+  s.softClip=1.f;
+  const auto belowKnee=render(sr,s,257);
+  for(size_t i=0;i<quiet.size();++i)
+   check(std::abs(belowKnee[i]-quiet[i])<1.e-6f,
+         "soft clip introduces nonlinear distortion below its knee");
+  s.softClip=0.f;
   std::printf("%.0f true-peak prototype: fixed latency, finite, peak bound, partition tests pass\n",sr);
  }
  // Expanded Maximizer controls must change the real signal but preserve

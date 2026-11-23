@@ -35,7 +35,11 @@ template<class Getter> void configureGraph(SerialGraph& engine,Getter v) noexcep
  engine.limiterParameters(finalOn && v(221)>.5f?0.f:v(52),finalOn && v(221)>.5f?v(224):v(53));
  engine.parameters(v(0),v(1),v(2),v(221)>.5f&&v(222)>.5f?v(223):v(3),
                    v(4)>.5f&&v(86)>.5f,
-                   finalOn||(v(5)>.5f&&v(87)>.5f));
+                   // Never stack the legacy 5ms sample-peak compressor in
+                   // front of the dedicated 4x True-Peak Maximizer. Engine
+                   // still carries its fixed 5ms PDC while its mix is OFF.
+                   // This preserves older projects when TP is absent.
+                   !(v(221)>.5f&&v(222)>.5f)&&(v(5)>.5f&&v(87)>.5f));
  for(size_t k=1;k<16;++k){size_t i=7+(k-1)*3;engine.setBand(k,v(i),v(i+1),v(i+2));}
  for(size_t k=0;k<16;++k)engine.setBandMode(k,static_cast<FilterType>(static_cast<int>(v(54+k*2))),v(55+k*2)>.5f);
 }

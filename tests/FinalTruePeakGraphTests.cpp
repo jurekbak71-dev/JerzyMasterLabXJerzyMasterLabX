@@ -29,6 +29,29 @@ static double difference(const std::vector<float>& a,const std::vector<float>& b
  double sum=0;for(size_t i=4096;i<a.size();++i){double d=a[i]-b[i];sum+=d*d;}return std::sqrt(sum/(a.size()-4096));
 }
 int main(){
+ // A dedicated True-Peak Maximizer must not serially trigger the masked
+ // historical sample-peak limiter. The older engine still supplies PDC.
+ {
+  std::array<float,parameterCount> params{};
+  params[5]=params[87]=1.f; // old limiter ON in an existing session
+  params[221]=params[222]=1.f;
+  params[223]=-6.f;params[225]=12.f;
+  params[161]=0.f; // validated full serial routing, TP fixed last
+  SerialGraph graph;
+  configureGraph(graph,[&](size_t i){return params[i];});
+  graph.prepare(48000);
+  std::array<float,128> left{},right{},trace{};
+  for(int block=0;block<120;++block){
+   for(size_t i=0;i<left.size();++i){
+    const float x=.8f*static_cast<float>(std::sin(2*pi*997.*(block*128+i)/48000.));
+    left[i]=right[i]=x;trace[i]=0.f;
+   }
+   graph.process(left.data(),right.data(),128,false,trace.data());
+   if(block>20)for(float gain:trace)
+    check(std::abs(gain-1.f)<1.e-4f,
+          "legacy limiter still compresses ahead of dedicated Maximizer");
+  }
+ }
  for(int rate:{44100,48000,96000,192000})for(bool parallel:{false,true}){
   const auto off=render(false,parallel,257,rate),on=render(true,parallel,257,rate);
   check(difference(off,on)>.03,"final limiter changes graph output audibly");

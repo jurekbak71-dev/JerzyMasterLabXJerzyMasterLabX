@@ -13,6 +13,15 @@ int main(){
   for(const auto& change:p.changes)check(ids.insert(change.first).second&&std::isfinite(change.second),"duplicate or non-finite proposed setting");
   for(float gain:p.gains)check(std::abs(gain)<=3,"EQ exceeds correction cap");check(p.drive>=0&&p.drive<=12&&value(p,"order")==0,"unsafe drive or chain order");
  }
+ // A guided mastering proposal must drive the *dedicated final maximizer*,
+ // not the historical limiter whose drive is masked by GraphConfiguration.
+ c={};c.useTruePeak=true;c.targetLufs=-14.f;c.ceiling=-1.f;
+ const auto finalProposal=masterlab::proposeMastering(f,c);
+ check(finalProposal.valid&&value(finalProposal,"truePeakOn")==1.f&&
+       value(finalProposal,"truePeakDrive")>1.f&&
+       value(finalProposal,"truePeakAutoRelease")==1.f&&
+       value(finalProposal,"truePeakSoftClip")==0.f,
+       "Brain uses no real final maximizer drive or sets unwanted clipping");
  c={};c.useLimiter=false;auto eq=masterlab::proposeMastering(f,c);check(eq.valid&&value(eq,"limiterDrive")==-999&&value(eq,"order")==-999,"excluded limiter was changed");
  c.useLimiter=true;c.useEq=false;c.intensity=.25f;auto quiet=masterlab::proposeMastering(f,c);c.intensity=1.5f;auto strong=masterlab::proposeMastering(f,c);check(quiet.drive==strong.drive&&value(strong,"gain")==-999,"intensity scales loudness or excluded EQ changed");
  c.useLimiter=false;c.useStabilizer=c.useStereo=c.useDynamics=c.useDynamicEq=false;auto none=masterlab::proposeMastering(f,c);check(!none.valid&&none.changes.empty(),"empty selection can be applied");
