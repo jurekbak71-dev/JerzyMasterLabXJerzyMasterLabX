@@ -134,8 +134,10 @@ class Editor final : public juce::AudioProcessorEditor,
     void showParallel(){showInspector();resetMetersButton.setVisible(false);showingInspector=false;inspectorView.setToggleState(false,juce::dontSendNotification);showingParallel=true;parallelPanel.setVisible(true);repaint();}
     void setBrainVisible(bool visible){
         showingBrain=visible;brainView.setToggleState(visible,juce::dontSendNotification);
-        for(auto* component:std::initializer_list<juce::Component*>{&brainGenre,&brainStyle,&brainDuration,&brainTarget,&brainCeiling,&brainIntensity,&brainModulesButton,&brainAnalyse,&brainApply,&brainAuditionA,&brainAuditionB,&brainReport})component->setVisible(visible);
-        for(auto& label:brainLabels)label.setVisible(visible);
+        for(auto* component:std::initializer_list<juce::Component*>{&brainGenre,&brainStyle,&brainAnalyse,&brainApply,&brainReport})component->setVisible(visible);
+        // Simple guided Brain: only genre and character are selected by the user.
+        for(auto* component:std::initializer_list<juce::Component*>{&brainDuration,&brainTarget,&brainCeiling,&brainIntensity,&brainModulesButton,&brainAuditionA,&brainAuditionB})component->setVisible(false);
+        for(size_t i=0;i<brainLabels.size();++i)brainLabels[i].setVisible(visible&&i<2);
     }
     void reflectFactoryBrainControls(){
         const masterlab::BrainConfig defaults{};
@@ -174,58 +176,49 @@ class Editor final : public juce::AudioProcessorEditor,
         brainAuditionA.setToggleState(snapshot.selectedVariant==0&&canAudition,juce::dontSendNotification);
         brainAuditionB.setToggleState(snapshot.selectedVariant==1&&canAudition,juce::dontSendNotification);
         brainApply.setEnabled(snapshot.phase==masterlab::BrainPhase::Ready&&snapshot.proposal.valid&&!stale);
-        juce::String report=juce::String(snapshot.message)+"\n"+
-                            "ACTION: "+processor.brainActionMessage+"\n";
-        if(snapshot.alternateReady&&snapshot.phase==masterlab::BrainPhase::Ready){
-            const auto& alt=snapshot.alternateProposal;
-            report+="A/B: selected "+juce::String(snapshot.selectedVariant==0?"A":"B")+
-                    " | A style "+juce::String(masterlab::brainStyles[snapshot.config.style])+
-                    " / B style "+juce::String(masterlab::brainStyles[snapshot.config.style==2?0:2])+
-                    " | current "+juce::String(snapshot.proposal.previewLufs,1)+
-                    " LUFS, GR "+juce::String(snapshot.proposal.previewGr95,1)+
-                    " dB | alternate "+juce::String(alt.previewLufs,1)+
-                    " LUFS, GR "+juce::String(alt.previewGr95,1)+
-                    " dB. Click Audition A/B to hear changes through the real DSP.\n";
-        }
-        if(active)report+="Audio captured: "+juce::String(snapshot.progress*snapshot.config.seconds,1)+" / "+juce::String(snapshot.config.seconds)+" s. If playback stops, analysis waits.\n";
+        juce::String report=juce::String(snapshot.message)+"\\n";
+        if(active)report+="Capturing "+juce::String(snapshot.progress*snapshot.config.seconds,1)+
+                          " / "+juce::String(snapshot.config.seconds)+" seconds.\\n";
         if(snapshot.phase==masterlab::BrainPhase::Ready||snapshot.phase==masterlab::BrainPhase::Applied){
             const auto& f=snapshot.features;const auto& p=snapshot.proposal;
-            report+="\nINPUT: "+lufsText(f.integrated)+" LUFS-I   |   peak "+dbText(f.peak)+" dBFS   |   correlation "+juce::String(f.correlation,3)+"\n";
-            report+="Captured "+juce::String(f.seconds,1)+" s. Target "+juce::String(snapshot.config.targetLufs,1)+" LUFS.\n";
-            if(!f.detail.sectionLevelsDb.empty()){
-                report+="\nWHOLE-TRACK SECTIONS (chronological 3-second RMS, dBFS):\n";
-                for(size_t section=0;section<f.detail.sectionLevelsDb.size();++section){
-                    const int from=static_cast<int>(section)*3;
-                    report+=juce::String(from)+"-"+juce::String(juce::jmin(from+3,static_cast<int>(f.seconds)))+
-                            "s: "+juce::String(f.detail.sectionLevelsDb[section],1)+" dBFS";
-                    report+=(section%3==2?"\n":"  |  ");
-                }
-                report+="\nLarge differences between sections can be intentional arrangements, not automatic errors.\n";
-            }
-            if(p.previewVerified)report+="\nDSP PREVIEW: "+juce::String(p.previewLufs,1)+" LUFS | Peak "+juce::String(20*std::log10(std::max(1e-9f,p.previewPeak)),1)+" dBFS | section spread "+juce::String(p.previewSectionSpread,1)+" dB | limiter GR p95 "+juce::String(p.previewGr95,1)+" dB\n";
-            if(p.valid){report+="\nPROPOSED EQ (low to high): ";for(float gain:p.gains)report+=juce::String(gain,1)+" dB   ";report+="\nLimiter drive: "+juce::String(p.drive,1)+" dB. Estimated EQ level change: "+juce::String(p.eqEstimate,1)+" dB.\n";}
-            if(p.targetShares[0]>0){
-                report+="\nTONAL ENERGY %: input / genre target / EQ estimate\n";
-                constexpr std::array<const char*,5> regions{"20-80 Hz","80-250 Hz","250 Hz-2 kHz","2-6 kHz","6-20 kHz"};
-                for(size_t i=0;i<5;++i)report+=juce::String(regions[i])+": "+juce::String(100*p.shares[i],1)+" / "+juce::String(100*p.targetShares[i],1)+" / "+juce::String(100*p.estimatedShares[i],1)+"\n";
-                report+="Static EQ estimate integrates 60 spectral bands; DSP PREVIEW measures the full chain separately. Genre target is a heuristic, not a quality standard.\n";
+            report+="\\nINPUT\\n"+juce::String(f.integrated,1)+" LUFS  |  peak "+
+                    dbText(f.peak)+" dBFS  |  correlation "+juce::String(f.correlation,2)+"\\n";
+            report+="\\nAUTOMATIC GOALS\\n"+juce::String(snapshot.config.targetLufs,1)+
+                    " LUFS  |  ceiling "+juce::String(snapshot.config.ceiling,1)+" dBTP\\n";
+            if(p.previewVerified){
+                report+="\\nMEASURED DSP OUTPUT\\n"+juce::String(p.previewLufs,1)+
+                        " LUFS  |  4x true peak "+juce::String(p.previewTruePeakDb,1)+
+                        " dBTP  |  reduction p95 "+juce::String(p.previewGr95,1)+" dB\\n";
+                report+="Trial renders: "+juce::String(p.previewPasses)+
+                        "  |  chosen by loudness, overshoot and dynamics penalties\\n";
             }
             auto proposed=[&](const std::string& id){for(const auto& change:p.changes)if(change.first==id)return change.second;return 0.f;};
-            if(p.valid){report+="\nPROPOSED CHAIN: ";int number=0;for(auto entry:std::array<std::pair<const char*,const char*>,6>{{{"stabilizerPresent","Stabilizer"},{"dynamicEqPresent","Dynamic EQ"},{"dynamicsPresent","Dynamics"},{"stereoPresent","Imager"},{"eqPresent","EQ"},{"limPresent","Limiter"}}})if(proposed(entry.first)>.5f){if(number++)report+=" > ";report+=entry.second;}if(!number)report+="No additional processing needed";report+="\n";}
-            if(p.valid&&snapshot.config.useStereo){report+="\nSTEREO PROPOSAL: widths (low/mid/high/air) ";for(const char* id:{"stereoLowWidth","stereoMidWidth","stereoHighWidth","stereoAirWidth"})report+=juce::String(proposed(id),2)+" x  ";report+="\nMono bass: "+juce::String(proposed("stereoMonoBass")>.5f?"on":"off")+". Low split: "+juce::String(proposed("stereoLowSplit"),0)+" Hz.\nMeasured band correlation: ";for(float correlation:f.bandCorrelation)report+=juce::String(correlation,2)+"  ";report+="\n";}
-            if(p.valid&&snapshot.config.useDynamics)report+="\nCOMPRESSOR PROPOSAL: "+juce::String(proposed("dynamicsMode")>.5f?"Analog":"Digital")+"; threshold "+juce::String(proposed("dynThreshold"),1)+" dBFS; ratio "+juce::String(proposed("dynRatio"),2)+":1; attack "+juce::String(proposed("dynAttack"),0)+" ms; release "+juce::String(proposed("dynRelease"),0)+" ms.\nUpward max "+juce::String(proposed("upwardAmount"),1)+" dB below "+juce::String(proposed("upwardThreshold"),1)+" dBFS; knee 6 dB; makeup "+juce::String(proposed("dynMakeup"),1)+" dB; wet 100%.\n";
-            if(p.valid&&snapshot.config.useDynamicEq){report+="\nDYNAMIC EQ PROPOSAL: adaptive frequency, Q and detector threshold.\n";for(int band=1;band<=3;++band){auto suffix=std::to_string(band);report+=juce::String(proposed("deqFreq"+suffix),0)+" Hz: range "+juce::String(proposed("deqRange"+suffix),1)+" dB; Q "+juce::String(proposed("deqQ"+suffix),2)+"; threshold "+juce::String(proposed("deqThreshold"+suffix),1)+" dBFS.\n";}}
-            for(const auto& line:p.reasons)report+="\n"+juce::String(line)+"\n";
-            for(const auto& line:p.warnings)report+="\nNOTE: "+juce::String(line)+"\n";
-            if(stale&&snapshot.phase==masterlab::BrainPhase::Ready)report="SETTINGS CHANGED: "+processor.brainStaleReasonUI()+
-                                   "\nReanalyse before Apply.\n\n"+report;
+            if(p.valid){
+                report+="\\nPROCESSING CHAIN\\n";int used=0;
+                for(auto entry:std::array<std::pair<const char*,const char*>,7>{{{"stabilizerPresent","Stabilizer"},{"dynamicEqPresent","Dynamic EQ"},{"dynamicsPresent","Dynamics"},{"stereoPresent","Stereo"},{"eqPresent","Spectral EQ"},{"limPresent","Limiter"},{"truePeakPresent","True Peak"}}})
+                    if(proposed(entry.first)>.5f){if(used++)report+="  >  ";report+=entry.second;}
+                if(!used)report+="No additional processing";
+                report+="\\n\\nApply commits this proposal; Undo restores the previous settings.\\n";
+            }
+            int shown=0;for(const auto& warning:p.warnings){if(shown++>=4)break;report+="\\nCAUTION: "+juce::String(warning);}
+            if(stale&&snapshot.phase==masterlab::BrainPhase::Ready)
+                report="SETTINGS CHANGED: "+processor.brainStaleReasonUI()+"\\nReanalyse before Apply.\\n\\n"+report;
         }
         if(report!=previousBrainReport){brainReport.setText(report,false);previousBrainReport=report;}
     }
     void paintBrain(juce::Graphics& g){
         g.setColour(background);g.fillRect(0,134,getWidth(),getHeight()-134);
         g.setColour(panel);g.fillRoundedRectangle(24.f,154.f,getWidth()-48.f,178.f,18);
-        g.setColour(juce::Colour(0xff284760));g.setFont(theme.font(14));g.drawText("Master Brain  /  Guided mastering",40,134,getWidth()-80,20,juce::Justification::left);
+        g.setColour(juce::Colour(0xff284760));g.setFont(theme.font(14));g.drawText("Master Brain  /  20-second intelligent mastering",40,134,getWidth()-80,20,juce::Justification::left);
+        const int cell=(getWidth()-80)/4;
+        g.setColour(muted);g.setFont(theme.font(11));
+        g.drawText("AUTO LOUDNESS",40+2*cell,166,cell-12,20,juce::Justification::left);
+        g.drawText("AUTO TRUE-PEAK CEILING",40+3*cell,166,cell-12,20,juce::Justification::left);
+        g.setColour(accent);g.setFont(theme.font(23));
+        const bool measured=brainSnapshot.phase==masterlab::BrainPhase::Ready||brainSnapshot.phase==masterlab::BrainPhase::Applied;
+        g.drawText(measured?juce::String(brainSnapshot.config.targetLufs,1)+" LUFS":"AUTO",40+2*cell,190,cell-12,30,juce::Justification::left);
+        g.drawText(measured?juce::String(brainSnapshot.config.ceiling,1)+" dBTP":"AUTO",40+3*cell,190,cell-12,30,juce::Justification::left);
+        g.setColour(muted);g.setFont(theme.font(11));g.drawText("Play a representative loud section. Intro/breakdown can mislead the analysis.",40,252,3*cell-12,28,juce::Justification::centredLeft);
         g.setColour(juce::Colour(0xff0a1119));g.fillRoundedRectangle(40.f,294.f,getWidth()-80.f,18.f,4.f);
         if(brainProgress>0){g.setColour(accent.withAlpha(.35f));g.fillRoundedRectangle(40.f,294.f,static_cast<float>((getWidth()-80)*brainProgress),18.f,4.f);}
         g.setColour(juce::Colours::whitesmoke);g.setFont(theme.font(11));g.drawText(brainProgressText,40,294,getWidth()-80,18,juce::Justification::centred);
@@ -676,7 +669,7 @@ public:
         for(int i=0;i<4;++i)brainLabels[static_cast<size_t>(i)].setBounds(40+i*brainCell,166,brainCell-12,20);
         brainGenre.setBounds(40,190,brainCell-12,28);brainStyle.setBounds(40+brainCell,190,brainCell-12,28);brainTarget.setBounds(40+2*brainCell,190,brainCell-12,28);brainCeiling.setBounds(40+3*brainCell,190,brainCell-12,28);
         brainLabels[4].setBounds(40,226,brainCell-12,20);brainLabels[5].setBounds(40+brainCell,226,brainCell-12,20);brainDuration.setBounds(40,248,brainCell-12,28);brainIntensity.setBounds(40+brainCell,248,brainCell-12,28);
-        brainModulesButton.setBounds(40+2*brainCell,248,brainCell-12,28);brainAnalyse.setBounds(40+3*brainCell,242,brainCell-12,34);const int resultWidth=std::clamp(getWidth()/2-48,300,600);brainReport.setBounds(36+resultWidth,342,getWidth()-60-resultWidth,getHeight()-426);brainApply.setBounds(getWidth()-210,getHeight()-66,186,34);
+        brainModulesButton.setBounds(40+2*brainCell,248,brainCell-12,28);brainAnalyse.setBounds(40+3*brainCell,248,brainCell-12,34);const int resultWidth=std::clamp(getWidth()/2-48,300,600);brainReport.setBounds(36+resultWidth,342,getWidth()-60-resultWidth,getHeight()-426);brainApply.setBounds(getWidth()-210,getHeight()-66,186,34);
         brainAuditionA.setBounds(40,315,138,24);brainAuditionB.setBounds(185,315,138,24);
         const int top=getHeight()-163,width=(getWidth()-64)/4;
         for(int i=0;i<4;++i){auto* label=std::array<juce::Label*,4>{&frequencyLabel,&gainLabel,&qualityLabel,&ceilingLabel}[i];auto* slider=std::array<juce::Slider*,4>{&frequency,&gain,&quality,&ceiling}[i];label->setBounds(32+i*width,top,width-12,22);slider->setBounds(32+i*width,top+22,width-16,113);}
