@@ -100,12 +100,10 @@ class MasterBrain final : private juce::Thread {
    }
    if(verification){
     auto proposal=proposeMastering(verification->features,verification->config);
-    // Two independently verified options from exactly the same captured audio.
-    // B is an alternate mastering character, not a copy of the A controls.
+    // Explore a second intensity of the *selected* character, never override
+    // the genre/style explicitly chosen by the user.
     BrainConfig alternativeConfig=verification->config;
-    alternativeConfig.style=verification->config.style==2?0:2;
-    alternativeConfig.intensity=std::clamp(verification->config.intensity*
-                                          (alternativeConfig.style==2?1.15f:.8f),.25f,1.5f);
+    alternativeConfig.intensity=std::clamp(verification->config.intensity*.72f,.25f,1.5f);
     auto alternative=proposeMastering(verification->features,alternativeConfig);
     const auto generation=verification->generation;
     auto abort=[&]{return threadShouldExit()||nextGeneration.load()!=generation||cancelled.load()==generation;};
