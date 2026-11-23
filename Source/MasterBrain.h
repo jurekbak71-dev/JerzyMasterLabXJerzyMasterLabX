@@ -156,10 +156,13 @@ public:
  struct ResourceInfo {bool workerRunning=false,jobAllocated=false;size_t packetBytes=0;};
  ResourceInfo resourcesUI(){std::scoped_lock lock(mutex);return {isThreadRunning(),job!=nullptr,packets.capacity()*sizeof(Packet)};}
  explicit MasterBrain(int packetCapacity=1024):Thread("MasterLab analysis"),fifo(std::max(2,packetCapacity)),capacity(std::max(2,packetCapacity)){}
- ~MasterBrain()override{active.store(0);stopThread(3000);}
+ ~MasterBrain()override{active.store(0);signalThreadShouldExit();notify();waitForThreadToExit();}
  void prepare(double sampleRate){
   active.store(0);nextGeneration.fetch_add(1);
-  if(isThreadRunning())stopThread(3000);
+  if(isThreadRunning()){
+   signalThreadShouldExit();notify();
+   if(!waitForThreadToExit(3000))return; // Never destroy a live worker or its FIFO.
+  }
   while(capturesInFlight.load()!=0)juce::Thread::sleep(1);
   {std::scoped_lock lock(mutex);rate=std::isfinite(sampleRate)&&sampleRate>=8000&&sampleRate<=384000?sampleRate:48000;
    std::vector<Packet>().swap(packets);fifo.reset();job.reset();snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Play a representative loud fragment, up to 20 seconds. Avoid intro or breakdown.";audioGeneration=audioCount=0;
@@ -167,7 +170,9 @@ public:
  }
  void startUI(BrainConfig config){
   active.store(0);
-  if(isThreadRunning()&&!stopThread(3000)){
+  if(isThreadRunning())signalThreadShouldExit();
+  notify();
+  if(isThreadRunning()&&!waitForThreadToExit(3000)){
    std::scoped_lock lock(mutex);snapshot.phase=BrainPhase::Failed;
    snapshot.message="Previous analysis worker could not stop.";return;
   }
@@ -178,7 +183,11 @@ public:
    job=std::make_unique<Job>(rate,config,gen);snapshot={};snapshot.phase=BrainPhase::Pending;snapshot.config=config;snapshot.message="Waiting for the analysis worker and DAW audio.";targetSamples.store(job->target);
   }
   // The analysis thread is created on demand, never during plugin prepareToPlay.
-  if(!isThreadRunning())startThread();
+  if(!isThreadRunning()&&!startThread()){
+   std::scoped_lock lock(mutex);snapshot.phase=BrainPhase::Failed;
+   snapshot.message="Could not create analysis worker. No host parameters changed.";
+   releaseCaptureStorage();
+  }
  }
  void cancelRT()noexcept {active.store(0);cancelled.store(nextGeneration.load());}
  void cancelUI(){cancelRT();std::scoped_lock lock(mutex);active.store(0);snapshot.phase=BrainPhase::Cancelled;snapshot.proposal={};snapshot.message="Analysis cancelled. No parameters changed.";}
@@ -186,7 +195,9 @@ public:
  // FIFO or requiring a host transport stop. Stored presets remain untouched.
  void clearUI(){
   cancelRT();
-  if(isThreadRunning()&&!stopThread(3000)){
+  if(isThreadRunning())signalThreadShouldExit();
+  notify();
+  if(isThreadRunning()&&!waitForThreadToExit(3000)){
    std::scoped_lock lock(mutex);snapshot.phase=BrainPhase::Failed;
    snapshot.message="Analysis worker did not stop. No buffers released; restart the plugin before retrying.";
    return;
