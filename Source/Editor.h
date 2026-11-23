@@ -176,33 +176,33 @@ class Editor final : public juce::AudioProcessorEditor,
         brainAuditionA.setToggleState(snapshot.selectedVariant==0&&canAudition,juce::dontSendNotification);
         brainAuditionB.setToggleState(snapshot.selectedVariant==1&&canAudition,juce::dontSendNotification);
         brainApply.setEnabled(snapshot.phase==masterlab::BrainPhase::Ready&&snapshot.proposal.valid&&!stale);
-        juce::String report=juce::String(snapshot.message)+"\\n";
+        juce::String report=juce::String(snapshot.message)+"\n";
         if(active)report+="Capturing "+juce::String(snapshot.progress*snapshot.config.seconds,1)+
-                          " / "+juce::String(snapshot.config.seconds)+" seconds.\\n";
+                          " / "+juce::String(snapshot.config.seconds)+" seconds.\n";
         if(snapshot.phase==masterlab::BrainPhase::Ready||snapshot.phase==masterlab::BrainPhase::Applied){
             const auto& f=snapshot.features;const auto& p=snapshot.proposal;
-            report+="\\nINPUT\\n"+juce::String(f.integrated,1)+" LUFS  |  peak "+
-                    dbText(f.peak)+" dBFS  |  correlation "+juce::String(f.correlation,2)+"\\n";
-            report+="\\nAUTOMATIC GOALS\\n"+juce::String(snapshot.config.targetLufs,1)+
-                    " LUFS  |  ceiling "+juce::String(snapshot.config.ceiling,1)+" dBTP\\n";
+            report+="\nINPUT\n"+juce::String(f.integrated,1)+" LUFS  |  peak "+
+                    dbText(f.peak)+" dBFS  |  correlation "+juce::String(f.correlation,2)+"\n";
+            report+="\nAUTOMATIC GOALS\n"+juce::String(snapshot.config.targetLufs,1)+
+                    " LUFS  |  ceiling "+juce::String(snapshot.config.ceiling,1)+" dBTP\n";
             if(p.previewVerified){
-                report+="\\nMEASURED DSP OUTPUT\\n"+juce::String(p.previewLufs,1)+
+                report+="\nMEASURED DSP OUTPUT\n"+juce::String(p.previewLufs,1)+
                         " LUFS  |  4x true peak "+juce::String(p.previewTruePeakDb,1)+
-                        " dBTP  |  reduction p95 "+juce::String(p.previewGr95,1)+" dB\\n";
+                        " dBTP  |  reduction p95 "+juce::String(p.previewGr95,1)+" dB\n";
                 report+="Trial renders: "+juce::String(p.previewPasses)+
-                        "  |  chosen by loudness, overshoot and dynamics penalties\\n";
+                        "  |  chosen by loudness, overshoot and dynamics penalties\n";
             }
             auto proposed=[&](const std::string& id){for(const auto& change:p.changes)if(change.first==id)return change.second;return 0.f;};
             if(p.valid){
-                report+="\\nPROCESSING CHAIN\\n";int used=0;
+                report+="\nPROCESSING CHAIN\n";int used=0;
                 for(auto entry:std::array<std::pair<const char*,const char*>,7>{{{"stabilizerPresent","Stabilizer"},{"dynamicEqPresent","Dynamic EQ"},{"dynamicsPresent","Dynamics"},{"stereoPresent","Stereo"},{"eqPresent","Spectral EQ"},{"limPresent","Limiter"},{"truePeakPresent","True Peak"}}})
                     if(proposed(entry.first)>.5f){if(used++)report+="  >  ";report+=entry.second;}
                 if(!used)report+="No additional processing";
-                report+="\\n\\nApply commits this proposal; Undo restores the previous settings.\\n";
+                report+="\n\nApply commits this proposal; Undo restores the previous settings.\n";
             }
-            int shown=0;for(const auto& warning:p.warnings){if(shown++>=4)break;report+="\\nCAUTION: "+juce::String(warning);}
+            int shown=0;for(const auto& warning:p.warnings){if(shown++>=4)break;report+="\nCAUTION: "+juce::String(warning);}
             if(stale&&snapshot.phase==masterlab::BrainPhase::Ready)
-                report="SETTINGS CHANGED: "+processor.brainStaleReasonUI()+"\\nReanalyse before Apply.\\n\\n"+report;
+                report="SETTINGS CHANGED: "+processor.brainStaleReasonUI()+"\nReanalyse before Apply.\n\n"+report;
         }
         if(report!=previousBrainReport){brainReport.setText(report,false);previousBrainReport=report;}
     }
