@@ -85,6 +85,12 @@ int main(){
  auto feed=[&](bool silent){for(int block=0;block<1500;++block){for(int i=0;i<256;++i,++sample){float x=silent?0.f:.15f*std::sin(juce::MathConstants<double>::twoPi*1000*sample/48000);buffer.setSample(0,i,x);buffer.setSample(1,i,x);}audit=true;p.processBlock(buffer,midi);audit=false;std::this_thread::sleep_for(std::chrono::milliseconds(1));}};
  feed(false);auto result=wait(p,masterlab::BrainPhase::Ready);
  check(allocations==0,"audio capture allocated C++ heap memory");check(result.config.useTruePeak&&result.config.targetLufs>=-20.f&&result.config.targetLufs<=-9.f&&result.config.ceiling<=-1.f,"adaptive mastering targets were not calculated");
+ const auto measuredInput=*std::max_element(result.features.inputPreviewEnvelope.begin(),
+     result.features.inputPreviewEnvelope.end());
+ const auto measuredOutput=*std::max_element(result.proposal.previewOutputEnvelope.begin(),
+     result.proposal.previewOutputEnvelope.end());
+ check(measuredInput>.05f&&measuredOutput>.01f&&std::isfinite(measuredOutput),
+       "real input/output waveform envelopes were not captured from DSP");
  check(std::isfinite(result.proposal.previewTruePeakDb),"preview true-peak measurement unavailable");check(result.proposal.previewVerified&&result.proposal.previewPasses>=1,"proposal skipped actual DSP verification");check(result.proposal.valid&&std::abs(result.features.seconds-8)<1e-6&&result.progress==1,"capture result or duration incorrect");
  for(int retry=0;retry<2000&&p.brain.resourcesUI().workerRunning;++retry)
   std::this_thread::sleep_for(std::chrono::milliseconds(1));
