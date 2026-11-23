@@ -156,7 +156,7 @@ public:
  struct ResourceInfo {bool workerRunning=false,jobAllocated=false;size_t packetBytes=0;};
  ResourceInfo resourcesUI(){std::scoped_lock lock(mutex);return {isThreadRunning(),job!=nullptr,packets.capacity()*sizeof(Packet)};}
  explicit MasterBrain(int packetCapacity=1024):Thread("MasterLab analysis"),fifo(std::max(2,packetCapacity)),capacity(std::max(2,packetCapacity)){}
- ~MasterBrain()override{active.store(0);signalThreadShouldExit();notify();waitForThreadToExit();}
+ ~MasterBrain()override{active.store(0);signalThreadShouldExit();notify();waitForThreadToExit(-1);}
  void prepare(double sampleRate){
   active.store(0);nextGeneration.fetch_add(1);
   if(isThreadRunning()){
