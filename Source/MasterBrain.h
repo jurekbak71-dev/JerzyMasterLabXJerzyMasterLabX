@@ -5,6 +5,7 @@
 #include "LoudnessMeter.h"
 #include "ModularDsp.h"
 #include <mutex>
+#include <limits>
 namespace masterlab {
 enum class BrainPhase { Idle, Pending, Analysing, Validating, Ready, Failed, Cancelled, Applied };
 struct BrainSnapshot {
@@ -112,10 +113,25 @@ class MasterBrain final : private juce::Thread {
     if(!abort()&&snapshot.phase==BrainPhase::Validating){snapshot.proposal=std::move(proposal);
       snapshot.alternateReady=alternative.valid&&alternative.previewVerified;
       snapshot.alternateProposal=std::move(alternative);snapshot.selectedVariant=0;
+      // Rank genuine offline renders. A TP overshoot has much higher cost than
+      // missing the loudness goal; avoid chasing LUFS by flattening dynamics.
+      auto score=[&](const BrainProposal& p){
+       if(!p.valid||!p.previewVerified)return std::numeric_limits<float>::infinity();
+       const float tpExcess=std::max(0.f,p.previewTruePeakDb-verification->config.ceiling);
+       const float loudnessError=std::abs(p.previewLufs-verification->config.targetLufs);
+       const float grExcess=std::max(0.f,p.previewGr95-4.f);
+       return 20.f*tpExcess+2.f*loudnessError+1.5f*grExcess+
+              .08f*std::max(0.f,p.previewSectionSpread-8.f);
+      };
+      const float scoreA=score(snapshot.proposal),scoreB=score(snapshot.alternateProposal);
+      if(scoreB<scoreA){
+       std::swap(snapshot.proposal,snapshot.alternateProposal);
+       snapshot.selectedVariant=1;
+      }
       snapshot.phase=BrainPhase::Ready;
       snapshot.message=snapshot.proposal.previewVerified?
-        "A/B proposals verified through actual DSP. Audition A or B, then Apply.":
-        "Analysis complete. Review before Apply.";
+        "Best measured full-chain candidate selected. Review and Apply.":
+        "DSP verification unavailable. Apply is disabled.";
       job.reset();
       packets.clear();packets.shrink_to_fit();fifo.reset();active.store(0);
       return; // No idle polling, no retained PCM or FFT.
