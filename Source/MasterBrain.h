@@ -84,6 +84,9 @@ class MasterBrain final : private juce::Thread {
     }};consume(start,n);consume(start2,n2);fifo.finishedRead(n+n2);
     if(job&&snapshot.phase==BrainPhase::Pending){snapshot.phase=BrainPhase::Analysing;snapshot.message="Listening to input before processing. Play audio in the DAW.";active.store(job->generation);}
     if(job&&snapshot.phase==BrainPhase::Validating)verification=std::move(job);
+    if(snapshot.phase==BrainPhase::Cancelled||snapshot.phase==BrainPhase::Failed){
+     job.reset();return; // Retain FIFO backing until producer is quiescent.
+    }
    }
    if(verification){
     auto proposal=proposeMastering(verification->features,verification->config);
@@ -113,7 +116,10 @@ class MasterBrain final : private juce::Thread {
       snapshot.message=snapshot.proposal.previewVerified?
         "A/B proposals verified through actual DSP. Audition A or B, then Apply.":
         "Analysis complete. Review before Apply.";
-      job=std::move(verification);}
+      job.reset();
+      packets.clear();packets.shrink_to_fit();fifo.reset();active.store(0);
+      return; // No idle polling, no retained PCM or FFT.
+    }
    }
    wait(10);
   }
@@ -128,8 +134,11 @@ public:
   }
  }
  void startUI(BrainConfig config){
+  active.store(0);
+  if(isThreadRunning())stopThread(3000);
   {
-   std::scoped_lock lock(mutex);active.store(0);const auto gen=nextGeneration.fetch_add(1)+1;config=cleanBrainConfig(config);
+   std::scoped_lock lock(mutex);const auto gen=nextGeneration.fetch_add(1)+1;config=cleanBrainConfig(config);
+   fifo.reset();packets.resize(static_cast<size_t>(capacity));
    job=std::make_unique<Job>(rate,config,gen);snapshot={};snapshot.phase=BrainPhase::Pending;snapshot.config=config;snapshot.message="Waiting for the analysis worker and DAW audio.";targetSamples.store(job->target);
   }
   // The analysis thread is created on demand, never during plugin prepareToPlay.
@@ -150,8 +159,9 @@ public:
   std::scoped_lock lock(mutex);if(snapshot.phase==BrainPhase::Pending||snapshot.phase==BrainPhase::Analysing||snapshot.phase==BrainPhase::Validating)return;
   config=cleanBrainConfig(config);config.dynamicsMode=snapshot.config.dynamicsMode;config.existingEq=snapshot.config.existingEq;config.existingEqEnabled=snapshot.config.existingEqEnabled;config.hasBaseline=snapshot.config.hasBaseline;config.baseline=snapshot.config.baseline;
   const bool durationChanged=config.seconds!=snapshot.config.seconds;snapshot.config=config;
-  if(job&&snapshot.phase==BrainPhase::Ready&&!durationChanged){job->config=config;snapshot.proposal={};snapshot.phase=BrainPhase::Validating;snapshot.message="Rechecking the captured fragment through DSP.";}
-  else {snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};snapshot.message="Settings changed. Analyse a new fragment.";}
+  (void)durationChanged;
+  snapshot.phase=BrainPhase::Idle;snapshot.progress=0;snapshot.proposal={};
+  snapshot.message="Settings changed. Analyse a fresh representative fragment.";
  }
  BrainSnapshot readUI(){std::scoped_lock lock(mutex);return snapshot;}
  bool selectVariantUI(int index){
