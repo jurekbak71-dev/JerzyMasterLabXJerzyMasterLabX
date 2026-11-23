@@ -182,7 +182,7 @@ class GuiSmoke final : private juce::Timer {
                 std::cerr<<"Regression: unified Analog Exciter EXCITE or Tube/FET/Tape missing\n";
                 return captureError(__LINE__);
             }
-            if(!editor->findChildWithID("restoration-panel")){
+            if(!editor->findChildWithID("audio-restoration-panel")){
                 std::cerr<<"Regression: restoration panel missing\n";return captureError(__LINE__);
             }
             editor->setSize(1000,700);
