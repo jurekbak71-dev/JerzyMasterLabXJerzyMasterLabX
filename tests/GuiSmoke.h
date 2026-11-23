@@ -182,9 +182,18 @@ class GuiSmoke final : private juce::Timer {
                 std::cerr<<"Regression: unified Analog Exciter EXCITE or Tube/FET/Tape missing\n";
                 return captureError(__LINE__);
             }
-            auto* renderedExciter=dynamic_cast<AnalogizerPanel*>(analogExciter);
-            if(!renderedExciter||!renderedExciter->has3DExciteAssets()){
-                std::cerr<<"Regression: Concept C rendered 3D EXCITE or LED atlas not loaded\\n";
+            // No dependency on the Editor-private AnalogizerPanel type:
+            // verify that the exact 101-frame render pack used by EXCITE is
+            // actually decodable. The visible panel is rendered below.
+            const auto metal=juce::ImageCache::getFromMemory(
+                MasterLabGuiAssets::knob_160_atlas_png,
+                MasterLabGuiAssets::knob_160_atlas_pngSize);
+            const auto leds=juce::ImageCache::getFromMemory(
+                MasterLabGuiAssets::led_wreath_160_atlas_png,
+                MasterLabGuiAssets::led_wreath_160_atlas_pngSize);
+            if(metal.isNull()||leds.isNull()||metal.getWidth()<1760||
+               metal.getHeight()<1600||leds.getWidth()<1760||leds.getHeight()<1600){
+                std::cerr<<"Regression: rendered 101-frame Concept C knob or ring atlas invalid\\n";
                 return captureError(__LINE__);
             }
             if(!editor->findChildWithID("audio-restoration-panel")){
