@@ -4,7 +4,8 @@
 #include "LoudnessMeter.h"
 #include "FinalTruePeak.h"
 namespace masterlab {
-struct BrainPreviewResult {float lufs=-120,peak=0,truePeakDb=-120,spread=0,gr95=0,correlation=0,crestDb=0;bool complete=false;};
+struct BrainPreviewResult {float lufs=-120,peak=0,truePeakDb=-120,spread=0,gr95=0,correlation=0,crestDb=0;bool complete=false;
+ std::array<float,128> outputEnvelope{};};
 template<class Cancel> BrainPreviewResult renderBrainPreview(const std::vector<float>& left,const std::vector<float>& right,double rate,const std::array<float,parameterCount>& values,Cancel cancel){
  SerialGraph graph;auto get=[&](size_t i){return values[i];};configureGraph(graph,get);graph.prepare(rate,values[6]>.5f,static_cast<int>(values[138]));
  LoudnessMeter loudness;loudness.prepare(rate);BrainDetailAnalyzer dynamics;dynamics.prepare(rate,left.size()/rate);
@@ -15,7 +16,11 @@ template<class Cancel> BrainPreviewResult renderBrainPreview(const std::vector<f
  for(size_t offset=0;offset<total;offset+=128){if(cancel())return out;int count=static_cast<int>(std::min(size_t{128},total-offset));for(int i=0;i<count;++i){size_t index=offset+i;l[i]=index<left.size()?left[index]:0;r[i]=index<right.size()?right[index]:0;}
   graph.process(l.data(),r.data(),count,values[6]>.5f,trace.data());
   for(int i=0;i<count;++i)if(offset+i>=latency){if(!std::isfinite(l[i])||!std::isfinite(r[i]))return out;loudness.push(l[i],r[i]);dynamics.push(l[i],r[i]);out.peak=std::max(out.peak,std::max(std::abs(l[i]),std::abs(r[i])));
-   ll+=static_cast<double>(l[i])*l[i];rr+=static_cast<double>(r[i])*r[i];lr+=static_cast<double>(l[i])*r[i];++measured;}
+   ll+=static_cast<double>(l[i])*l[i];rr+=static_cast<double>(r[i])*r[i];lr+=static_cast<double>(l[i])*r[i];
+   const auto time=offset+static_cast<size_t>(i)-latency;
+   const size_t bin=std::min<size_t>(127,time*128/left.size());
+   out.outputEnvelope[bin]=std::max(out.outputEnvelope[bin],std::max(std::abs(l[i]),std::abs(r[i])));
+   ++measured;}
   // Meter sees the rendered audio but does not affect the values sent to loudness.
   truePeakMeter.process(l.data(),r.data(),count);
   oversampledPeak=std::max(oversampledPeak,truePeakMeter.reading().detectedTruePeak);
@@ -48,7 +53,7 @@ template<class Cancel> void verifyBrainProposal(BrainProposal& proposal,const Br
   }}
  if(cancel())return;
  for(auto& change:proposal.changes)for(size_t i=0;i<ids.size();++i)if(change.first==ids[i])change.second=values[i];
- proposal.drive=values[52];proposal.previewVerified=true;proposal.previewLufs=best.lufs;proposal.previewPeak=best.peak;proposal.previewTruePeakDb=best.truePeakDb;proposal.previewCorrelation=best.correlation;proposal.previewCrestDb=best.crestDb;proposal.previewSectionSpread=best.spread;proposal.previewGr95=best.gr95;
+ proposal.drive=values[52];proposal.previewVerified=true;proposal.previewLufs=best.lufs;proposal.previewPeak=best.peak;proposal.previewTruePeakDb=best.truePeakDb;proposal.previewCorrelation=best.correlation;proposal.previewOutputEnvelope=best.outputEnvelope;proposal.previewCrestDb=best.crestDb;proposal.previewSectionSpread=best.spread;proposal.previewGr95=best.gr95;
  proposal.reasons.push_back("Measured full-chain DSP preview: "+std::to_string(best.lufs)+" LUFS; section spread "+std::to_string(best.spread)+" dB; limiter reduction p95 "+std::to_string(best.gr95)+" dB. No host parameters were changed during verification.");
  if(best.truePeakDb>config.ceiling+.1f){proposal.valid=false;proposal.warnings.push_back("4x true-peak overshoot: candidate rejected. Do not Apply.");}
  if(std::abs(best.lufs-config.targetLufs)>1)proposal.warnings.push_back("Requested loudness was not reached within the limiting budget. The measured preview value takes precedence over the target.");
