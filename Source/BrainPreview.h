@@ -24,7 +24,12 @@ template<class Cancel> BrainPreviewResult renderBrainPreview(const std::vector<f
   // Meter sees the rendered audio but does not affect the values sent to loudness.
   truePeakMeter.process(l.data(),r.data(),count);
   oversampledPeak=std::max(oversampledPeak,truePeakMeter.reading().detectedTruePeak);
-  reductions.push_back(std::max(0.f,-20*std::log10(std::max(1e-9f,*std::min_element(trace.begin(),trace.begin()+count)))));
+  // The fixed final stage performs gain reduction independently of the
+  // historical limiter trace. Score what the listener actually hears.
+  const auto tpReduction=graph.finalTruePeakRead().gainReductionDb;
+  reductions.push_back(values[221]>.5f&&values[222]>.5f?
+      std::max(0.f,tpReduction):
+      std::max(0.f,-20*std::log10(std::max(1e-9f,*std::min_element(trace.begin(),trace.begin()+count)))));
  }
  out.correlation=ll*rr>1.e-20?static_cast<float>(std::clamp(lr/std::sqrt(ll*rr),-1.,1.)):0.f;
  const float outputRms=measured?static_cast<float>(std::sqrt((ll+rr)/(2.*measured))):0.f;
@@ -46,14 +51,40 @@ template<class Cancel> void verifyBrainProposal(BrainProposal& proposal,const Br
   if(std::abs(result.lufs-config.targetLufs)<std::abs(best.lufs-config.targetLufs)){values=candidate;best=result;proposal.reasons.push_back("Measured input was above the loudness target. Visible compressor makeup supplies attenuation; no hidden post-render gain is used.");}
  }
  const float budget=std::array<float,4>{4,5,7,3}[config.style];
- if(config.useLimiter){for(int pass=0;pass<3;++pass){float correction=config.targetLufs-best.lufs;if(best.gr95>budget)correction=std::min(correction,budget-best.gr95);if(std::abs(correction)<.35f)break;auto candidate=values;candidate[52]=std::clamp(values[52]+correction,0.f,24.f);candidate[87]=1;
-   if(candidate[52]==values[52])break;auto result=render(candidate);if(!result.complete)return;
-   // Prefer the target only within the reduction budget; otherwise relieve limiting.
-   if((best.gr95>budget&&result.gr95<best.gr95)||(result.gr95<=budget+.25f&&std::abs(result.lufs-config.targetLufs)<std::abs(best.lufs-config.targetLufs))){values=candidate;best=result;}else break;
-  }}
+ // When the dedicated True-Peak Maximizer is active, legacy limiterDrive
+ // is deliberately ignored by configureGraph. Optimise the REAL parameter.
+ const bool dedicatedFinal=values[221]>.5f&&values[222]>.5f;
+ const size_t driveIndex=dedicatedFinal?225u:52u;
+ const float driveMax=dedicatedFinal?18.f:24.f;
+ if(config.useLimiter||config.useTruePeak){
+  for(int pass=0;pass<5;++pass){
+   float correction=std::clamp(config.targetLufs-best.lufs,-3.f,3.f);
+   if(best.gr95>budget)correction=std::min(correction,-.75f);
+   if(std::abs(correction)<.2f)break;
+   auto candidate=values;
+   candidate[driveIndex]=std::clamp(values[driveIndex]+correction,0.f,driveMax);
+   if(candidate[driveIndex]==values[driveIndex])break;
+   auto result=render(candidate);
+   if(!result.complete)return;
+   // Preserve musical transients: never accept excess TP or extra gain
+   // reduction simply to chase an unattainable LUFS target.
+   const bool peakSafe=result.truePeakDb<=config.ceiling+.1f;
+   const bool dynamicsSafe=result.gr95<=budget+.25f;
+   const bool loudnessBetter=std::abs(result.lufs-config.targetLufs)+.1f<
+                             std::abs(best.lufs-config.targetLufs);
+   if(peakSafe&&((dynamicsSafe&&loudnessBetter)||
+      (best.gr95>budget&&result.gr95<best.gr95-.2f))){
+     values=candidate;best=result;
+   }else break;
+  }
+ }
  if(cancel())return;
- for(auto& change:proposal.changes)for(size_t i=0;i<ids.size();++i)if(change.first==ids[i])change.second=values[i];
- proposal.drive=values[52];proposal.previewVerified=true;proposal.previewLufs=best.lufs;proposal.previewPeak=best.peak;proposal.previewTruePeakDb=best.truePeakDb;proposal.previewCorrelation=best.correlation;proposal.previewOutputEnvelope=best.outputEnvelope;proposal.previewCrestDb=best.crestDb;proposal.previewSectionSpread=best.spread;proposal.previewGr95=best.gr95;
+ bool driveChanged=false;
+ for(auto& change:proposal.changes)for(size_t i=0;i<ids.size();++i)
+  if(change.first==ids[i]){change.second=values[i];if(i==driveIndex)driveChanged=true;}
+ if(!driveChanged&&(config.useLimiter||config.useTruePeak))
+  proposal.changes.emplace_back(ids[driveIndex],values[driveIndex]);
+ proposal.drive=values[driveIndex];proposal.previewVerified=true;proposal.previewLufs=best.lufs;proposal.previewPeak=best.peak;proposal.previewTruePeakDb=best.truePeakDb;proposal.previewCorrelation=best.correlation;proposal.previewOutputEnvelope=best.outputEnvelope;proposal.previewCrestDb=best.crestDb;proposal.previewSectionSpread=best.spread;proposal.previewGr95=best.gr95;
  proposal.reasons.push_back("Measured full-chain DSP preview: "+std::to_string(best.lufs)+" LUFS; section spread "+std::to_string(best.spread)+" dB; limiter reduction p95 "+std::to_string(best.gr95)+" dB. No host parameters were changed during verification.");
  if(best.truePeakDb>config.ceiling+.1f){proposal.valid=false;proposal.warnings.push_back("4x true-peak overshoot: candidate rejected. Do not Apply.");}
  if(std::abs(best.lufs-config.targetLufs)>1)proposal.warnings.push_back("Requested loudness was not reached within the limiting budget. The measured preview value takes precedence over the target.");
