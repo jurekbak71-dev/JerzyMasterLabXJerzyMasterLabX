@@ -269,7 +269,7 @@ class Editor final : public juce::AudioProcessorEditor,
         juce::String report=juce::String(snapshot.message)+"\n"+
                             "ACTION: "+processor.brainActionMessage+"\n";
         if(snapshot.phase==masterlab::BrainPhase::Ready||snapshot.phase==masterlab::BrainPhase::Applied)
-            report+="AUTO: "+juce::String(snapshot.config.targetLufs,1)+" LUFS | "+juce::String(snapshot.config.ceiling,1)+" dBTP\\n";
+            report+="AUTO: "+juce::String(snapshot.config.targetLufs,1)+" LUFS | "+juce::String(snapshot.config.ceiling,1)+" dBTP\n";
         if(active)report+="Audio captured: "+juce::String(snapshot.progress*snapshot.config.seconds,1)+" / "+juce::String(snapshot.config.seconds)+" s. If playback stops, analysis waits.\n";
         if(snapshot.phase==masterlab::BrainPhase::Ready||snapshot.phase==masterlab::BrainPhase::Applied){
             const auto& f=snapshot.features;const auto& p=snapshot.proposal;
