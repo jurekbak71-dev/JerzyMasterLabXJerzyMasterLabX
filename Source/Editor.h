@@ -225,12 +225,44 @@ class Editor final : public juce::AudioProcessorEditor,
         const int cardWidth=std::clamp(getWidth()/2-48,300,600),cardHeight=getHeight()-426;
         g.setColour(panel);g.fillRoundedRectangle(24.f,342.f,static_cast<float>(cardWidth),static_cast<float>(cardHeight),18.f);
         g.setColour(panel);g.fillRoundedRectangle(36.f+cardWidth,342.f,getWidth()-60.f-cardWidth,static_cast<float>(cardHeight),18.f);
-        g.setColour(muted);g.setFont(theme.font(11));g.drawText("Tonal balance  /  dB from target",36,350,cardWidth-24,18,juce::Justification::left);
+        g.setColour(muted);g.setFont(theme.font(11));
+        g.drawText("CAPTURED INPUT  /  PROCESSED OUTPUT",40,349,cardWidth-24,18,juce::Justification::left);
         const bool valid=(brainSnapshot.phase==masterlab::BrainPhase::Ready||brainSnapshot.phase==masterlab::BrainPhase::Applied)&&brainSnapshot.proposal.targetShares[0]>0;
         if(valid){
-            g.setColour(juce::Colours::whitesmoke);g.drawText("INPUT",36,370,54,16,juce::Justification::left);
-            g.setColour(accent);g.drawText("EQ ESTIMATE",92,370,94,16,juce::Justification::left);
-            const float left=60.f,right=cardWidth+8.f,top=398.f,bottom=342.f+cardHeight-32.f;
+            const auto& inputWave=brainSnapshot.features.inputPreviewEnvelope;
+            const auto& outputWave=brainSnapshot.proposal.previewOutputEnvelope;
+            float waveMax=.05f;
+            for(size_t i=0;i<128;++i)
+             waveMax=std::max(waveMax,std::max(inputWave[i],outputWave[i]));
+            const float waveMiddle=416.f,waveHeight=34.f;
+            const float waveLeft=48.f,waveWidth=static_cast<float>(cardWidth)-54.f;
+            g.setColour(juce::Colour(0xff122432));
+            g.fillRoundedRectangle(waveLeft,376.f,waveWidth,81.f,6.f);
+            g.setColour(muted.withAlpha(.25f));
+            g.drawLine(waveLeft,waveMiddle,waveLeft+waveWidth,waveMiddle);
+            auto drawEnvelope=[&](const std::array<float,128>& envelope,juce::Colour color){
+             juce::Path upper,lower;
+             for(size_t i=0;i<envelope.size();++i){
+              const float x=waveLeft+waveWidth*static_cast<float>(i)/127.f;
+              const float magnitude=std::clamp(envelope[i]/waveMax,0.f,1.f)*waveHeight;
+              if(i==0){upper.startNewSubPath(x,waveMiddle-magnitude);
+                        lower.startNewSubPath(x,waveMiddle+magnitude);}
+              else{upper.lineTo(x,waveMiddle-magnitude);
+                   lower.lineTo(x,waveMiddle+magnitude);}
+             }
+             g.setColour(color);
+             g.strokePath(upper,juce::PathStrokeType(1.2f));
+             g.strokePath(lower,juce::PathStrokeType(1.2f));
+            };
+            drawEnvelope(inputWave,juce::Colours::whitesmoke.withAlpha(.65f));
+            drawEnvelope(outputWave,accent);
+            g.setColour(muted);g.setFont(theme.font(10));
+            g.drawText("White: input    Blue: verified DSP    /    representative windows",
+                       48,456,cardWidth-46,18,juce::Justification::left);
+            g.drawText("TONAL BALANCE  /  dB vs genre",40,476,cardWidth-24,18,juce::Justification::left);
+            g.setColour(juce::Colours::whitesmoke);g.drawText("INPUT",42,493,54,14,juce::Justification::left);
+            g.setColour(accent);g.drawText("EQ ESTIMATE",98,493,94,14,juce::Justification::left);
+            const float left=60.f,right=cardWidth+8.f,top=516.f,bottom=342.f+cardHeight-32.f;
             auto yFor=[&](double db){return juce::jmap(static_cast<float>(std::clamp(db,-18.,18.)), -18.f,18.f,bottom,top);};
             for(int db:{-18,-9,0,9,18}){const float y=yFor(db);g.setColour(db==0?accent.withAlpha(.45f):muted.withAlpha(.15f));g.drawLine(left,y,right,y);g.setColour(muted);g.drawText(juce::String(db),30,static_cast<int>(y)-7,26,14,juce::Justification::right);}
             juce::Path measured,estimated;
@@ -245,7 +277,7 @@ class Editor final : public juce::AudioProcessorEditor,
             g.setColour(juce::Colours::whitesmoke);g.strokePath(measured,juce::PathStrokeType(1.5f));g.setColour(accent);g.strokePath(estimated,juce::PathStrokeType(1.8f));
         }else{g.setColour(muted);g.drawFittedText("Play audio and analyse to measure five frequency regions.",36,382,cardWidth-24,cardHeight-48,juce::Justification::centred,3);}
         g.setColour(juce::Colour(0xff3c5265));g.setFont(theme.font(13));g.drawText("Review all selected processors. Apply can replace settings; one Undo restores them.",40,getHeight()-66,getWidth()-280,36,juce::Justification::left);
-        g.setColour(juce::Colour(0xff435769));g.setFont(theme.font(12));g.drawText("Explicit DSP rules / no trained AI model / sample-peak limiter",24,getHeight()-25,getWidth()-48,18,juce::Justification::left);
+        g.setColour(juce::Colour(0xff435769));g.setFont(theme.font(12));g.drawText("Rule-based DSP / true-peak stage / verify the exported full song",24,getHeight()-25,getWidth()-48,18,juce::Justification::left);
     }
     juce::String dbText(float level) const {return level>1e-10f?juce::String(juce::Decibels::gainToDecibels(level),1):juce::String("--");}
     juce::String lufsText(float value) const {return value>-119?juce::String(value,1):juce::String("--");}
