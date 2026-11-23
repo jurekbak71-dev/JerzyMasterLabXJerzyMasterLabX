@@ -3,37 +3,60 @@
 #include <memory>
 #include <vector>
 class AnalogizerPanel final : public juce::Component {
+ // Uses the actual pre-rendered Concept C metal and LED atlases. The
+ // 101 frames map directly to the APVTS-backed analogExcite parameter.
  class ExciteKnob final : public juce::Slider {
-  public:
-   ExciteKnob(){setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);setTextBoxStyle(juce::Slider::TextBoxBelow,false,100,26);}
-   void paint(juce::Graphics& g)override {
-    const float w=static_cast<float>(getWidth()),diameter=std::min(w,static_cast<float>(getHeight())-34.f);
-    const float cx=w*.5f,cy=diameter*.5f+3.f,r=std::max(12.f,diameter*.46f);
-    g.setColour(juce::Colour(0xff060c11));g.fillEllipse(cx-r-9,cy-r-9,2*r+18,2*r+18);
-    g.setGradientFill(juce::ColourGradient(juce::Colour(0xff697780),cx-r,cy-r,juce::Colour(0xff080d12),cx+r,cy+r,false));
-    g.fillEllipse(cx-r,cy-r,2*r,2*r);
-    const float value=juce::jlimit(0.f,1.f,static_cast<float>(getValue()));
-    for(int i=0;i<61;++i){
-     const float angle=(-2.35f+4.70f*i/60.f);
-     const float inner=r*.81f,outer=r*.93f;
-     const auto colour=i<=static_cast<int>(value*60.f)?
-       juce::Colour(0xffffb969):juce::Colour(0xff495d67);
-     g.setColour(colour);
-     g.drawLine(cx+std::sin(angle)*inner,cy-std::cos(angle)*inner,
-                cx+std::sin(angle)*outer,cy-std::cos(angle)*outer,1.6f);
-    }
-    const float disc=r*.73f;
-    g.setGradientFill(juce::ColourGradient(juce::Colour(0xffc7cbd0),cx-disc,cy-disc,
-                                          juce::Colour(0xff222c34),cx+disc,cy+disc,false));
-    g.fillEllipse(cx-disc,cy-disc,disc*2,disc*2);
-    g.setColour(juce::Colour(0xff10171e).withAlpha(.4f));g.drawEllipse(cx-disc,cy-disc,disc*2,disc*2,3.f);
-    const float angle=-2.35f+4.70f*value;
-    g.setColour(juce::Colour(0xffffbc70));g.drawLine(cx+std::sin(angle)*disc*.54f,cy-std::cos(angle)*disc*.54f,cx+std::sin(angle)*disc*.86f,cy-std::cos(angle)*disc*.86f,4.f);
-    g.setFont(juce::Font(juce::FontOptions(15.f).withStyle("bold")));
-    g.setColour(juce::Colour(0xff151e26));g.drawText("EXCITE",static_cast<int>(cx-disc),static_cast<int>(cy-12),static_cast<int>(disc*2),24,juce::Justification::centred);
-    g.setColour(juce::Colour(0xffffd59e));g.setFont(15.f);
-    g.drawText(juce::String(static_cast<int>(value*100.f))+"%",0,static_cast<int>(diameter)+5,getWidth(),24,juce::Justification::centred);
+  static constexpr int frameSize=160;
+  juce::Image metal_{juce::ImageCache::getFromMemory(
+      MasterLabGuiAssets::knob_160_atlas_png,MasterLabGuiAssets::knob_160_atlas_pngSize)};
+  juce::Image ring_{juce::ImageCache::getFromMemory(
+      MasterLabGuiAssets::led_wreath_160_atlas_png,MasterLabGuiAssets::led_wreath_160_atlas_pngSize)};
+ public:
+  ExciteKnob(){
+   setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+   setTextBoxStyle(juce::Slider::TextBoxBelow,false,100,26);
+  }
+  bool renderedAssetsReady()const noexcept{
+   return !metal_.isNull()&&!ring_.isNull()&&
+          metal_.getWidth()>=11*frameSize&&metal_.getHeight()>=10*frameSize&&
+          ring_.getWidth()>=11*frameSize&&ring_.getHeight()>=10*frameSize;
+  }
+  void paint(juce::Graphics& g)override{
+   const float w=static_cast<float>(getWidth());
+   const float diameter=std::max(1.f,std::min(w,static_cast<float>(getHeight())-34.f));
+   const float cy=diameter*.5f+3.f,cx=w*.5f;
+   const float value=juce::jlimit(0.f,1.f,static_cast<float>(getNormalisableRange().convertTo0to1(getValue())));
+   const int frame=juce::jlimit(0,100,juce::roundToInt(value*100.f));
+   const int srcX=(frame%11)*frameSize,srcY=(frame/11)*frameSize;
+   const int ringFrame=isEnabled()?frame:0;
+   const int ringX=(ringFrame%11)*frameSize,ringY=(ringFrame/11)*frameSize;
+   const float shown=diameter*.91f;
+   const int dx=juce::roundToInt(cx-shown*.5f);
+   const int dy=juce::roundToInt(cy-shown*.5f);
+   const int size=juce::roundToInt(shown);
+   if(renderedAssetsReady()){
+    g.setOpacity(isEnabled()?1.f:.42f);
+    g.drawImage(metal_,dx,dy,size,size,srcX,srcY,frameSize,frameSize);
+    g.drawImage(ring_,dx,dy,size,size,ringX,ringY,frameSize,frameSize);
+    g.setOpacity(1.f);
+   }else{
+    // A missing render is a packaging error, never a substitute fake meter.
+    g.setColour(juce::Colours::darkred);
+    g.drawEllipse(dx,dy,size,size,2.f);
+    g.setColour(juce::Colours::lightgrey);
+    g.drawFittedText("MISSING GUI ASSETS",getLocalBounds().reduced(10),juce::Justification::centred,2);
+    return;
    }
+   // Legible engraving over the metal centre; no independent animation.
+   g.setFont(juce::Font(juce::FontOptions(14.f).withStyle("bold")));
+   g.setColour(juce::Colour(0xff141d27));
+   g.drawText("EXCITE",juce::roundToInt(cx-shown*.27f),juce::roundToInt(cy-12.f),
+              juce::roundToInt(shown*.54f),24,juce::Justification::centred);
+   if(hasKeyboardFocus(true)){
+    g.setColour(juce::Colour(0xff087bff).withAlpha(.85f));
+    g.drawEllipse(juce::Rectangle<float>(dx,dy,size,size).expanded(1.f),1.5f);
+   }
+  }
  };
  Processor& processor_;StudioTheme& theme_;
  ExciteKnob excite_;
@@ -84,6 +107,7 @@ public:
   add("Dynamics","analogDynamics");add("Impact","analogImpact");
  }
  ~AnalogizerPanel()override{setLookAndFeel(nullptr);}
+ bool has3DExciteAssets()const noexcept{return excite_.renderedAssetsReady();}
  void update(const Processor::ResponseFrame& frame){reading_=frame.analogizer;harmonicReading_=frame.exciter;repaint();}
  void resized()override{
   const bool compactWidth=getWidth()<850;

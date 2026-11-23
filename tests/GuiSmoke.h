@@ -170,6 +170,35 @@ class GuiSmoke final : private juce::Timer {
             if(editor->findChildWithID("view-stem-brain")||editor->findChildWithID("stem-brain-panel")){
                 std::cerr<<"Removed STEMS GUI is still present\n";return captureError(__LINE__);
             }
+            // Guard against packaging an obsolete STEMS branch as the current MasterLabX.
+            // The approved Analog Exciter combines Harmonic Exciter with Tube/FET/Tape.
+            auto* analogExciter=editor->findChildWithID("analogizer-panel");
+            auto* excite=analogExciter?
+                dynamic_cast<juce::Slider*>(analogExciter->findChildWithID("analog-excite")):nullptr;
+            auto* model=analogExciter?
+                dynamic_cast<juce::ComboBox*>(analogExciter->findChildWithID("analogizer-model")):nullptr;
+            if(!analogExciter||!excite||!model||model->getNumItems()!=3||
+               !parameter("analogExcite")||!parameter("analogizerMode")){
+                std::cerr<<"Regression: unified Analog Exciter EXCITE or Tube/FET/Tape missing\n";
+                return captureError(__LINE__);
+            }
+            // No dependency on the Editor-private AnalogizerPanel type:
+            // verify that the exact 101-frame render pack used by EXCITE is
+            // actually decodable. The visible panel is rendered below.
+            const auto metal=juce::ImageCache::getFromMemory(
+                MasterLabGuiAssets::knob_160_atlas_png,
+                MasterLabGuiAssets::knob_160_atlas_pngSize);
+            const auto leds=juce::ImageCache::getFromMemory(
+                MasterLabGuiAssets::led_wreath_160_atlas_png,
+                MasterLabGuiAssets::led_wreath_160_atlas_pngSize);
+            if(metal.isNull()||leds.isNull()||metal.getWidth()<1760||
+               metal.getHeight()<1600||leds.getWidth()<1760||leds.getHeight()<1600){
+                std::cerr<<"Regression: rendered 101-frame Concept C knob or ring atlas invalid\\n";
+                return captureError(__LINE__);
+            }
+            if(!editor->findChildWithID("audio-restoration-panel")){
+                std::cerr<<"Regression: restoration panel missing\n";return captureError(__LINE__);
+            }
             editor->setSize(1000,700);
             auto* console=dynamic_cast<juce::Button*>(editor->findChildWithID("view-console"));
             if(!console){std::cerr<<"Concept C console navigation missing\n";return captureError(__LINE__);}
@@ -237,6 +266,25 @@ class GuiSmoke final : private juce::Timer {
                 console->onClick();
                 if(!overview->isVisible())return captureError(__LINE__);
             }
+            // This screenshot is of the real JUCE Analog Exciter, not a mockup.
+            // Rendering must work at all three supported GUI sizes.
+            overview->onOpen(4);
+            if(!analogExciter->isVisible()){
+                std::cerr<<"Analog Exciter console navigation failed\\n";
+                return captureError(__LINE__);
+            }
+            for(const auto dim:{juce::Point<int>{750,550},juce::Point<int>{1000,700},juce::Point<int>{1400,1000}}){
+                editor->setSize(dim.x,dim.y);
+                if(!controlsFit())return captureError(__LINE__);
+                auto visual=editor->createComponentSnapshot(editor->getLocalBounds());
+                if(!visual.isValid())return captureError(__LINE__);
+                const auto file=juce::File::getCurrentWorkingDirectory().getChildFile(
+                    "build-plugin/analog-exciter-"+juce::String(dim.x)+"x"+juce::String(dim.y)+".png");
+                juce::FileOutputStream out(file);out.truncate();
+                if(!juce::PNGImageFormat{}.writeImageToStream(visual,out))return captureError(__LINE__);
+            }
+            console->onClick();
+            editor->setSize(1000,700);
             auto* eq=dynamic_cast<juce::Button*>(editor->findChildWithID("view-eq"));
             if(!eq)return captureError(__LINE__);eq->onClick();
         }
@@ -336,18 +384,11 @@ class GuiSmoke final : private juce::Timer {
         }
         auto* a=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-audition-a"));
         auto* b=dynamic_cast<juce::Button*>(editor->findChildWithID("brain-audition-b"));
-        if(!a||!b||!a->isVisible()||!b->isVisible()||!a->isEnabled()||!b->isEnabled()){
-            std::cerr<<"Brain GUI A/B control state failed: A "<<(a&&a->isVisible())<<"/"<<(a&&a->isEnabled())
-                     <<" B "<<(b&&b->isVisible())<<"/"<<(b&&b->isEnabled())
-                     <<"\n"<<report->getText()<<"\n";return captureError(__LINE__);
-        }
-        a->onClick();
-        if(!report->getText().contains("Audition A is live")){
-            std::cerr<<"Brain GUI Audition A failed: "<<report->getText()<<"\n";return captureError(__LINE__);
-        }
-        b->onClick();
-        if(!report->getText().contains("Audition B is live")||!apply->isEnabled()){
-            std::cerr<<"Brain GUI Audition B failed: "<<report->getText()<<"\n";return captureError(__LINE__);
+        auto* genre=editor->findChildWithID("brain-genre");
+        auto* style=editor->findChildWithID("brain-style");
+        if(!a||!b||a->isVisible()||b->isVisible()||!genre||!genre->isVisible()||!style||!style->isVisible()){
+            std::cerr<<"Brain UI regression: guided genre/style must be visible, A/B hidden\n";
+            return captureError(__LINE__);
         }
         apply->onClick();
         if(!report->getText().contains("APPLIED")||apply->isEnabled()){

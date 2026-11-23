@@ -13,6 +13,14 @@ masterlab::BrainSnapshot wait(Processor& p,masterlab::BrainPhase phase){
  for(int i=0;i<15000;++i){auto snapshot=p.brain.readUI();if(snapshot.phase==phase)return snapshot;if(snapshot.phase==masterlab::BrainPhase::Failed){std::cerr<<snapshot.message<<'\n';std::exit(1);}std::this_thread::sleep_for(std::chrono::milliseconds(2));}check(false,"analysis timeout");return {};
 }
 int main(){
+ // The model and GUI must never accept a capture longer than twenty seconds.
+ masterlab::BrainConfig bound;
+ for(int requested:{30,60,120,180,300,600}){
+  bound.seconds=requested;
+  check(masterlab::cleanBrainConfig(bound).seconds<=20,"Analysis length above 20 seconds accepted");
+ }
+ bound.seconds=20;
+ check(masterlab::cleanBrainConfig(bound).seconds==20,"Twenty-second capture rejected");
  Processor p;p.prepareToPlay(48000,256);auto* gain=p.state.getParameter("gain");gain->setValueNotifyingHost(gain->convertTo0to1(2));auto before=values(p);
  masterlab::BrainConfig config;p.startBrainUI(config);wait(p,masterlab::BrainPhase::Analysing);
  juce::AudioBuffer<float> buffer(2,256);juce::MidiBuffer midi;int sample=0;
@@ -20,10 +28,15 @@ int main(){
  // background analyzer on fast CI CPUs and tests queue overflow instead of capture.
  auto feed=[&](bool silent){for(int block=0;block<1500;++block){for(int i=0;i<256;++i,++sample){float x=silent?0.f:.15f*std::sin(juce::MathConstants<double>::twoPi*1000*sample/48000);buffer.setSample(0,i,x);buffer.setSample(1,i,x);}audit=true;p.processBlock(buffer,midi);audit=false;std::this_thread::sleep_for(std::chrono::milliseconds(1));}};
  feed(false);auto result=wait(p,masterlab::BrainPhase::Ready);
- check(allocations==0,"audio capture allocated C++ heap memory");check(result.proposal.previewVerified&&result.proposal.previewPasses>=1,"proposal skipped actual DSP verification");check(result.proposal.valid&&std::abs(result.features.seconds-8)<1e-6&&result.progress==1,"capture result or duration incorrect");
+ check(allocations==0,"audio capture allocated C++ heap memory");
+ check(result.config.useTruePeak&&result.config.targetLufs>=-20.f&&result.config.targetLufs<=-9.f&&result.config.ceiling<=-1.f,"Automatic LUFS/TP goals missing");
+ check(std::isfinite(result.proposal.previewTruePeakDb),"4x true peak was not measured");check(result.proposal.previewVerified&&result.proposal.previewPasses>=1,"proposal skipped actual DSP verification");check(result.proposal.valid&&std::abs(result.features.seconds-8)<1e-6&&result.progress==1,"capture result or duration incorrect");
+ for(int i=0;i<2000&&p.brain.resourcesUI().workerRunning;++i)std::this_thread::sleep_for(std::chrono::milliseconds(1));
+ check(!p.brain.resourcesUI().workerRunning&&!p.brain.resourcesUI().jobAllocated&&p.brain.resourcesUI().packetBytes==0,"Brain kept worker or PCM/FFT while idle");
  check(std::abs(result.features.integrated-(-16.48f))<.15f&&result.features.correlation>.999f,"captured audio measurements incorrect");check(values(p)==before,"analysis changed parameters without approval");
- auto revised=config;revised.genre=4;revised.intensity=.5f;p.brain.reviseUI(revised);wait(p,masterlab::BrainPhase::Ready);check(p.brain.readUI().phase==masterlab::BrainPhase::Ready&&values(p)==before,"revision changed audio or discarded capture");
- p.brain.reviseUI(revised);p.brain.cancelRT();wait(p,masterlab::BrainPhase::Cancelled);check(values(p)==before,"cancel during verification changed parameters");
+ auto revised=config;revised.genre=4;revised.intensity=.5f;p.brain.reviseUI(revised);
+ check(p.brain.readUI().phase==masterlab::BrainPhase::Idle&&values(p)==before,"Changed settings should request fresh capture");
+ p.startBrainUI(revised);wait(p,masterlab::BrainPhase::Analysing);p.brain.cancelRT();wait(p,masterlab::BrainPhase::Cancelled);check(values(p)==before,"Cancellation changed parameters");
  p.startBrainUI(config);wait(p,masterlab::BrainPhase::Analysing);feed(false);wait(p,masterlab::BrainPhase::Ready);
  gain->setValueNotifyingHost(gain->convertTo0to1(3));auto manual=values(p);check(p.brainStaleUI()&&!p.applyBrainUI()&&values(p)==manual,"stale proposal overwrote manual settings");gain->setValueNotifyingHost(gain->convertTo0to1(2));
  check(p.applyBrainUI()&&values(p)!=before,"approved proposal not applied");for(const char* id:{"stereoPresent","dynamicsPresent","dynamicEqPresent"}){float proposed=-1;for(const auto& change:p.brain.readUI().proposal.changes)if(change.first==id)proposed=change.second;check(p.state.getRawParameterValue(id)->load()==proposed,"Brain did not apply its selected module presence");}check(p.undo()&&values(p)==before,"proposal is not one Undo transaction");check(!p.applyBrainUI(),"applied proposal applied twice");
