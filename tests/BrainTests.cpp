@@ -30,7 +30,12 @@ int main(){
  feed(false);auto result=wait(p,masterlab::BrainPhase::Ready);
  check(allocations==0,"audio capture allocated C++ heap memory");
  check(result.config.useTruePeak&&result.config.targetLufs>=-20.f&&result.config.targetLufs<=-9.f&&result.config.ceiling<=-1.f,"Automatic LUFS/TP goals missing");
- check(std::isfinite(result.proposal.previewTruePeakDb),"4x true peak was not measured");check(result.proposal.previewVerified&&result.proposal.previewPasses>=1,"proposal skipped actual DSP verification");check(result.proposal.valid&&std::abs(result.features.seconds-8)<1e-6&&result.progress==1,"capture result or duration incorrect");
+ check(std::isfinite(result.proposal.previewTruePeakDb),"4x true peak was not measured");
+ float proposedFinalDrive=-1.f;
+ for(const auto& change:result.proposal.changes)
+  if(change.first=="truePeakDrive")proposedFinalDrive=change.second;
+ check(proposedFinalDrive>=0.f&&proposedFinalDrive<=18.f,
+       "Brain proposal does not address the actual Final Maximizer input drive");check(result.proposal.previewVerified&&result.proposal.previewPasses>=1,"proposal skipped actual DSP verification");check(result.proposal.valid&&std::abs(result.features.seconds-8)<1e-6&&result.progress==1,"capture result or duration incorrect");
  for(int i=0;i<2000&&p.brain.resourcesUI().workerRunning;++i)std::this_thread::sleep_for(std::chrono::milliseconds(1));
  check(!p.brain.resourcesUI().workerRunning&&!p.brain.resourcesUI().jobAllocated&&p.brain.resourcesUI().packetBytes==0,"Brain kept worker or PCM/FFT while idle");
  check(std::abs(result.features.integrated-(-16.48f))<.15f&&result.features.correlation>.999f,"captured audio measurements incorrect");check(values(p)==before,"analysis changed parameters without approval");
@@ -63,6 +68,17 @@ int main(){
  // The preceding Undo restored the baseline: verify that state, including existing EQ.
  std::vector<float> testLeft(48000),testRight(48000);for(size_t i=0;i<testLeft.size();++i)testLeft[i]=testRight[i]=static_cast<float>(.1*std::sin(i*.13));
  auto preview=masterlab::renderBrainPreview(testLeft,testRight,48000,settings,[]{return false;});check(preview.complete,"actual DSP preview failed");
+ // Isolate final-stage gain from the legacy masked limiter drive. This
+ // catches the original regression: Master Brain changed the wrong parameter.
+ auto lowFinal=settings;lowFinal[221]=1.f;lowFinal[222]=1.f;lowFinal[223]=-1.f;lowFinal[225]=0.f;
+ auto highFinal=lowFinal;highFinal[225]=6.f;
+ const auto lowPreview=masterlab::renderBrainPreview(testLeft,testRight,48000,lowFinal,[]{return false;});
+ const auto highPreview=masterlab::renderBrainPreview(testLeft,testRight,48000,highFinal,[]{return false;});
+ check(lowPreview.complete&&highPreview.complete&&
+       highPreview.lufs>lowPreview.lufs+4.5f,
+       "Final Maximizer gain did not change measured mastering loudness");
+ check(highPreview.truePeakDb<=-.85f,
+       "Final Maximizer gain produced a true-peak overshoot");
  p.prepareToPlay(48000,256);masterlab::LoudnessMeter actual;actual.prepare(48000);float peak=0;const size_t latency=static_cast<size_t>(p.getLatencySamples());
  for(size_t offset=0;offset<testLeft.size()+latency;offset+=128){int n=static_cast<int>(std::min(size_t{128},testLeft.size()+latency-offset));buffer.setSize(2,n);for(int i=0;i<n;++i){float x=offset+i<testLeft.size()?testLeft[offset+i]:0;buffer.setSample(0,i,x);buffer.setSample(1,i,x);}p.processBlock(buffer,midi);for(int i=0;i<n;++i)if(offset+i>=latency){actual.push(buffer.getSample(0,i),buffer.getSample(1,i));peak=std::max(peak,std::abs(buffer.getSample(0,i)));}}
  check(std::abs(actual.read().integrated-preview.lufs)<.02f&&std::abs(peak-preview.peak)<.002f,"preview differs from actual Processor");
