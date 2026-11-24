@@ -99,10 +99,10 @@ public:
 
   // A red warning light is driven strictly by a measured sample clipping condition.
   // Inter-sample conformity remains separately audited, not inferred here.
-  const bool sampleClip=reading_.active&&reading_.outputTruePeak>1.f;
+  const bool sampleClip=reading_.active&&reading_.outputTruePeak>reading_.ceilingLinear*1.002f;
   theme_.paintStatusLed(g,juce::jmax(24,getWidth()-195),56,25,sampleClip);
   g.setColour(juce::Colour(sampleClip?0xffff5969:0xff63e28d));g.setFont(12.f);
-  g.drawText(!reading_.active?"BYPASSED":(sampleClip?"TP OVER":"TP EST OK"),juce::jmax(24,getWidth()-166),56,130,25,
+  g.drawText(!reading_.active?"BYPASSED":(sampleClip?"CEILING OVER":"TP EST OK"),juce::jmax(24,getWidth()-166),56,130,25,
              juce::Justification::left);
   // Live, mechanically styled gain reduction meter; sourced from DSP
   // telemetry rather than a decorative animation.
