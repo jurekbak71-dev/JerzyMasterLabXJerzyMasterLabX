@@ -73,6 +73,45 @@ public:
          meterBezel_.getWidth()==512&&meterBezel_.getHeight()==396&&
          scopeFrame_.getWidth()==1600&&scopeFrame_.getHeight()==470;
  }
+ bool layoutValidForTest()const noexcept{
+  // Recursive GUI correctness: Editor::controlsFit only checks top-level
+  // components. Also validate child knobs against the real meter/scope areas.
+  const auto inside=getLocalBounds();
+  for(int i=0;i<getNumChildComponents();++i){
+   const auto* c=getChildComponent(i);
+   if(!c||!c->isVisible())continue;
+   if(!inside.contains(c->getBounds()))return false;
+   for(int j=i+1;j<getNumChildComponents();++j){
+    const auto* other=getChildComponent(j);
+    if(other&&other->isVisible()&&c->getBounds().intersects(other->getBounds()))
+     return false;
+   }
+  }
+  const bool compact=getHeight()<430;
+  const bool meter=getWidth()>=870&&!compact;
+  const int knobTop=(compact?109:(getHeight()>=680?133:121))+23;
+  const int knobHeight=compact?91:(getHeight()>=680?155:129);
+  const int knobBottom=knobTop+knobHeight;
+  const int scopeTop=compact?232:std::max(knobBottom+20,
+                            meter?(getHeight()>=680?344:305):knobBottom+20);
+  const int footer=compact?61:(getHeight()>=680?103:91);
+  const int scopeHeight=std::max(43,getHeight()-scopeTop-footer);
+  if(scopeTop<knobBottom+8||scopeTop+scopeHeight+footer>getHeight())return false;
+  const auto scope=juce::Rectangle<int>(26,scopeTop,getWidth()-52,scopeHeight);
+  const auto meterRect=juce::Rectangle<int>(getWidth()-255,109,226,
+                                            getHeight()>=680?211:180);
+  for(const auto& ptr:knobs_){
+   if(!ptr->slider.isVisible())continue;
+   if(ptr->slider.getHeight()<75||ptr->slider.getWidth()<72)return false;
+   if(ptr->slider.getBounds().intersects(scope))return false;
+   if(meter&&(ptr->slider.getBounds().intersects(meterRect)||
+              ptr->name.getBounds().intersects(meterRect)))return false;
+  }
+  if(oversampling_.isVisible()&&
+     (oversampling_.getBounds().intersects(scope)||
+      (meter&&oversampling_.getBounds().intersects(meterRect))))return false;
+  return true;
+ }
  void update(const Processor::ResponseFrame& response){reading_=response.truePeak;repaint();}
  void resized()override{
   const int w=getWidth(),h=getHeight();
