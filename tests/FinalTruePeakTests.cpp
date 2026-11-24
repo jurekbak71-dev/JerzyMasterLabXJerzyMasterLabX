@@ -62,8 +62,9 @@ int main(){
  for(double sr:{44100.,48000.,96000.,192000.}){
   FinalTruePeakSettings s;s.enabled=false;s.driveDb=0;
   const auto delayed=render(sr,s,113);
-  for(size_t i=FinalTruePeak::latencySamples;i<delayed.size();++i)
-   check(std::abs(delayed[i]-.35f*std::sin(2*pi*991.*(i-FinalTruePeak::latencySamples)/sr))<1e-5f,"fixed 128-sample delay");
+  const size_t latency=static_cast<size_t>(std::max(128,static_cast<int>(std::ceil(sr*.010))));
+  for(size_t i=latency;i<delayed.size();++i)
+   check(std::abs(delayed[i]-.35f*std::sin(2*pi*991.*(i-latency)/sr))<1e-5f,"fixed ten-millisecond PDC at sample rate");
   s.enabled=true;s.ceilingDb=-3.f;s.driveDb=12.f;
   const auto strong=render(sr,s,113,true);
   const auto single=render(sr,s,1,true);
