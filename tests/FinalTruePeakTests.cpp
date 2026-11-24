@@ -116,6 +116,42 @@ int main(){
   check(outputTruePeak8x(processed)<=ceiling*1.012,
         "expanded maximizer output violates independently reconstructed 8x ceiling");
  }
+ // True-peak oversampling and programmable lookahead are actual DSP
+ // controls. Host PDC stays fixed at each sample rate while automating them.
+ for(double rate:{44100.,48000.,96000.,192000.}){
+  FinalTruePeak stage;FinalTruePeakSettings settings;
+  settings.enabled=true;settings.ceilingDb=-4.f;settings.driveDb=10.f;
+  stage.prepare(rate);
+  const int unchangedPDC=stage.latency();
+  check(unchangedPDC==std::max(128,static_cast<int>(std::ceil(rate*.010))),
+        "incorrect sample-rate-dependent host latency");
+  for(int factor:{1,2,4,8})for(float lookahead:{1.f,3.f,10.f}){
+   settings.oversamplingFactor=factor;settings.lookaheadMs=lookahead;
+   settings.attackMs=.4f;settings.transientEmphasis=.7f;
+   stage.settings(settings);stage.reset();
+   std::array<float,4096> left{},right{};
+   for(size_t i=0;i<left.size();++i){
+    const float x=.8f*std::sin(2*pi*std::min(13000.,rate*.41)*
+                               static_cast<double>(i)/rate);
+    left[i]=x;right[i]=-x*.85f;
+   }
+   for(size_t i=0;i<left.size();i+=113)
+    stage.process(left.data()+i,right.data()+i,
+                  static_cast<int>(std::min<size_t>(113,left.size()-i)));
+   const auto telemetry=stage.reading();
+   check(telemetry.oversamplingFactor==factor&&
+         telemetry.lookaheadMs>=.5f&&telemetry.lookaheadMs<=10.1f&&
+         stage.latency()==unchangedPDC,
+         "lookahead/oversampling automation changed PDC or was not connected");
+   check(std::isfinite(telemetry.outputTruePeak)&&
+         telemetry.outputTruePeak>=telemetry.outputSamplePeak,
+         "new output TP meter was not driven by actual output samples");
+   const float ceiling=std::pow(10.f,settings.ceilingDb/20.f);
+   for(float sample:left)
+    check(std::isfinite(sample)&&std::abs(sample)<=ceiling+1.e-6f,
+          "Maximizer violates sample ceiling under 1x/2x/4x/8x automation");
+  }
+ }
  FinalTruePeak dsp;FinalTruePeakSettings s;s.enabled=true;
  dsp.settings(s);dsp.prepare(48000);
  std::array<float,512> a{},b{};a[0]=std::numeric_limits<float>::quiet_NaN();
