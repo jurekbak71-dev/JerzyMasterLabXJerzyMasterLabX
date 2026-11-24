@@ -20,6 +20,8 @@ template<class Getter> void configureModules(SerialGraph& engine,Getter v) noexc
   tp.releaseMs=dedicatedTP?v(224):v(53);
   tp.driveDb=dedicatedTP?v(225):0.f;
   tp.character=static_cast<int>(v(312));tp.autoRelease=v(313)>.5f;tp.softClip=v(314);tp.outputDb=v(315);
+  tp.lookaheadMs=v(316);tp.oversamplingFactor=1<<std::clamp(static_cast<int>(v(317)),0,3);
+  tp.attackMs=v(318);tp.transientEmphasis=v(319);
   engine.finalTruePeakSettings(tp);
   engine.routing(static_cast<int>(v(138)),v(6)>.5f);
   FullModuleOrder full{};

@@ -62,8 +62,9 @@ int main(){
  for(double sr:{44100.,48000.,96000.,192000.}){
   FinalTruePeakSettings s;s.enabled=false;s.driveDb=0;
   const auto delayed=render(sr,s,113);
-  for(size_t i=FinalTruePeak::latencySamples;i<delayed.size();++i)
-   check(std::abs(delayed[i]-.35f*std::sin(2*pi*991.*(i-FinalTruePeak::latencySamples)/sr))<1e-5f,"fixed 128-sample delay");
+  const size_t latency=static_cast<size_t>(std::max(128,static_cast<int>(std::ceil(sr*.010))));
+  for(size_t i=latency;i<delayed.size();++i)
+   check(std::abs(delayed[i]-.35f*std::sin(2*pi*991.*(i-latency)/sr))<1e-5f,"fixed ten-millisecond PDC at sample rate");
   s.enabled=true;s.ceilingDb=-3.f;s.driveDb=12.f;
   const auto strong=render(sr,s,113,true);
   const auto single=render(sr,s,1,true);
@@ -115,6 +116,81 @@ int main(){
   check(outputTruePeak8x(processed)<=ceiling*1.012,
         "expanded maximizer output violates independently reconstructed 8x ceiling");
  }
+ // True-peak oversampling and programmable lookahead are actual DSP
+ // controls. Host PDC stays fixed at each sample rate while automating them.
+ for(double rate:{44100.,48000.,96000.,192000.}){
+  FinalTruePeak stage;FinalTruePeakSettings settings;
+  settings.enabled=true;settings.ceilingDb=-4.f;settings.driveDb=10.f;
+  stage.prepare(rate);
+  const int unchangedPDC=stage.latency();
+  check(unchangedPDC==std::max(128,static_cast<int>(std::ceil(rate*.010))),
+        "incorrect sample-rate-dependent host latency");
+  for(int factor:{1,2,4,8})for(float lookahead:{1.f,3.f,10.f}){
+   settings.oversamplingFactor=factor;settings.lookaheadMs=lookahead;
+   settings.attackMs=.4f;settings.transientEmphasis=.7f;
+   stage.settings(settings);stage.reset();
+   std::array<float,4096> left{},right{};
+   for(size_t i=0;i<left.size();++i){
+    const float x=.8f*std::sin(2*pi*std::min(13000.,rate*.41)*
+                               static_cast<double>(i)/rate);
+    left[i]=x;right[i]=-x*.85f;
+   }
+   for(size_t i=0;i<left.size();i+=113)
+    stage.process(left.data()+i,right.data()+i,
+                  static_cast<int>(std::min<size_t>(113,left.size()-i)));
+   const auto telemetry=stage.reading();
+   check(telemetry.oversamplingFactor==factor&&
+         telemetry.lookaheadMs>=.5f&&telemetry.lookaheadMs<=10.1f&&
+         stage.latency()==unchangedPDC,
+         "lookahead/oversampling automation changed PDC or was not connected");
+   check(std::isfinite(telemetry.outputTruePeak)&&
+         telemetry.outputTruePeak>=telemetry.outputSamplePeak,
+         "new output TP meter was not driven by actual output samples");
+   const float ceiling=std::pow(10.f,settings.ceilingDb/20.f);
+   for(float sample:left)
+    check(std::isfinite(sample)&&std::abs(sample)<=ceiling+1.e-6f,
+          "Maximizer violates sample ceiling under 1x/2x/4x/8x automation");
+  }
+ }
+ // Controls must alter the *audible audio*, not merely change the GUI
+ // value or self-reported metering.
+ auto musicalRender=[&](float lookahead,float attack,float emphasis){
+  FinalTruePeak limiter;
+  FinalTruePeakSettings settings;
+  settings.enabled=true;settings.ceilingDb=-6.f;settings.driveDb=14.f;
+  settings.lookaheadMs=lookahead;settings.attackMs=attack;
+  settings.transientEmphasis=emphasis;settings.oversamplingFactor=8;
+  limiter.settings(settings);limiter.prepare(48000.);
+  std::vector<float> left(12000),right(12000);
+  for(int i=0;i<12000;++i){
+   const int p=i%2900;
+   float sample=.08f*std::sin(2*pi*733.*i/48000.);
+   if(p==2500)sample=1.5f;
+   if(p==2530)sample=.35f;
+   if(p==2534)sample=-.31f;
+   left[static_cast<size_t>(i)]=right[static_cast<size_t>(i)]=sample;
+  }
+  for(int i=0;i<12000;i+=128)
+   limiter.process(left.data()+i,right.data()+i,std::min(128,12000-i));
+  return left;
+ };
+ auto effectDistance=[](const auto& lhs,const auto& rhs){
+  double energy=0.;
+  for(size_t i=1500;i<lhs.size();++i){
+   const double d=lhs[i]-rhs[i];energy+=d*d;
+  }
+  return std::sqrt(energy/(lhs.size()-1500));
+ };
+ const auto shortPreview=musicalRender(1.f,.2f,0.f);
+ const auto longPreview=musicalRender(10.f,.2f,0.f);
+ const auto slowAttack=musicalRender(10.f,6.f,0.f);
+ const auto transientBoost=musicalRender(10.f,6.f,1.f);
+ check(effectDistance(shortPreview,longPreview)>1.e-5,
+       "Lookahead changes a label but not the output gain trajectory");
+ check(effectDistance(longPreview,slowAttack)>1.e-5,
+       "Attack changes a knob but not the output gain trajectory");
+ check(effectDistance(slowAttack,transientBoost)>1.e-6,
+       "Transient emphasis did not produce any measurable audio change");
  FinalTruePeak dsp;FinalTruePeakSettings s;s.enabled=true;
  dsp.settings(s);dsp.prepare(48000);
  std::array<float,512> a{},b{};a[0]=std::numeric_limits<float>::quiet_NaN();

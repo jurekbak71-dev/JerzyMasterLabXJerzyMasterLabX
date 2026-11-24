@@ -1,182 +1,279 @@
 #pragma once
-// Phase 5D: 4x bandlimited final-stage detector, stereo linked, fixed host PDC.
-// Monotone sliding-window peak queue replaces a 129-element scan per sample.
-// No heap allocation, locks or system calls in process().
+// Final stereo-linked lookahead maximizer. Independent 1x/2x/4x/8x true-peak
+// detection, fixed (per-sample-rate) host PDC and allocation-free callbacks.
+// Original DSP; neither licensed iZotope IRC code nor an IRC emulation.
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+
 namespace masterlab {
 struct FinalTruePeakSettings {
  bool enabled=false;
  float ceilingDb=-1.f,releaseMs=120.f,driveDb=0.f;
  int character=0;bool autoRelease=false;float softClip=0.f,outputDb=0.f;
+ float attackMs=.25f,lookaheadMs=3.f,transientEmphasis=0.f;
+ int oversamplingFactor=4; // 1, 2, 4 or 8: true-peak FIR reconstruction
 };
 struct FinalTruePeakReading {
  float detectedTruePeak=0.f,outputSamplePeak=0.f,gainReductionDb=0.f;
  std::array<float,64> inputWave{},outputWave{},gainEnvelope{};
+ float outputTruePeak=0.f,lookaheadMs=0.f,ceilingLinear=1.f;
+ bool active=false;
+ int oversamplingFactor=4;
 };
 class FinalTruePeak {
 public:
- static constexpr int detectorTaps=25,oversampling=4,latencySamples=128;
+ static constexpr int detectorTaps=33,maxOversampling=8;
+ static constexpr int maximumDelaySamples=4096;
+ static constexpr int ringCapacity=maximumDelaySamples+1;
+ static constexpr int peakQueueCapacity=maximumDelaySamples+detectorTaps+4;
+ // Old fixed 128-sample PDC is intentionally replaced with ten milliseconds,
+ // evaluated in prepare(rate) and held constant during parameter automation.
+ int latency()const noexcept{return fixedLatencySamples_;}
 private:
- static constexpr double pi=3.14159265358979323846;
- std::array<std::array<double,detectorTaps>,oversampling> kernel_{};
- std::array<std::array<float,detectorTaps>,2> history_{};
- std::array<std::array<float,latencySamples+1>,2> delay_{};
- // Monotone deque: oldest peak at peakHead_, newest at tail-1.
- // Ring capacity exceeds window length by one to distinguish full/empty.
- static constexpr size_t peakQueueCapacity=latencySamples+2;
+ static constexpr double pi=3.141592653589793238462643;
+ std::array<std::array<double,detectorTaps>,maxOversampling> kernel_{};
+ std::array<std::array<float,detectorTaps>,2> history_{},outputHistory_{};
+ std::array<std::array<float,ringCapacity>,2> delay_{};
+ std::array<float,ringCapacity> peakHistory_{},transientHistory_{};
  std::array<float,peakQueueCapacity> peakValues_{};
  std::array<std::uint64_t,peakQueueCapacity> peakStamps_{};
+ int histPosition_=0,outputHistPosition_=0,delayPosition_=0;
+ int fixedLatencySamples_=480,previousLookaheadSamples_=-1;
  size_t peakHead_=0,peakTail_=0;
  std::uint64_t sampleClock_=0;
- int histPosition_=0,delayPosition_=0;
- float gain_=1.f;
+ float gain_=1.f,controlledGain_=1.f,transientEnvelope_=0.f;
  double sampleRate_=48000.;
  FinalTruePeakSettings settings_{};
  FinalTruePeakReading reading_{};
+
  static float sane(float x,float a,float b)noexcept{
   return std::clamp(std::isfinite(x)?x:a,a,b);
  }
+ static int selectedOversampling(int x)noexcept{
+  return x==1||x==2||x==4||x==8?x:4;
+ }
+ static int advance(int index,int capacity)noexcept{
+  return index+1==capacity?0:index+1;
+ }
  void prepareKernel()noexcept{
-  // 4 polyphase fractional-delay FIR kernels, unity response at DC.
-  // Peak estimates refer to the input at a fixed group delay of 12 samples.
-  for(int phase=0;phase<oversampling;++phase){
-   const double fraction=static_cast<double>(phase)/oversampling;
+  // 33-tap fractional-delay polyphase Blackman-windowed sinc. Coefficients
+  // are precomputed (not redesigned in the real-time thread).
+  for(int phase=0;phase<maxOversampling;++phase){
+   const double fraction=static_cast<double>(phase)/maxOversampling;
    double sum=0.;
    for(int tap=0;tap<detectorTaps;++tap){
     const double t=static_cast<double>(tap)-(detectorTaps-1)/2.+fraction;
-    const double sinc=std::abs(t)<1e-12?1.:std::sin(pi*t)/(pi*t);
+    const double sinc=std::abs(t)<1.e-12?1.:std::sin(pi*t)/(pi*t);
     const double blackman=.42-.5*std::cos(2*pi*tap/(detectorTaps-1))
                          +.08*std::cos(4*pi*tap/(detectorTaps-1));
     kernel_[phase][tap]=sinc*blackman;
     sum+=kernel_[phase][tap];
    }
-   if(std::abs(sum)<1e-12)sum=1.;
-   for(auto& coefficient:kernel_[phase])coefficient/=sum;
+   if(std::abs(sum)<1.e-12)sum=1.;
+   for(double& coefficient:kernel_[phase])coefficient/=sum;
   }
+ }
+ float polyphasePeak(const std::array<std::array<float,detectorTaps>,2>& hist,
+                     int nextPosition,int factor)const noexcept{
+  float peak=0.f;
+  for(int c=0;c<2;++c){
+   for(int phase=0;phase<factor;++phase){
+    // Reuse the precomputed 8-phase kernels at 1x, 2x and 4x.
+    const int p=phase*(maxOversampling/factor);
+    double value=0.;
+    int cursor=nextPosition;
+    for(int tap=0;tap<detectorTaps;++tap){
+     cursor=cursor==0?detectorTaps-1:cursor-1;
+     value+=kernel_[p][tap]*hist[c][cursor];
+    }
+    peak=std::max(peak,static_cast<float>(std::abs(value)));
+   }
+  }
+  return peak;
+ }
+ void queuePeak(float value,std::uint64_t stamp)noexcept{
+  // Monotone queue: amortized O(1) per incoming peak, no allocations.
+  while(peakHead_!=peakTail_){
+   const size_t last=(peakTail_+peakQueueCapacity-1)%peakQueueCapacity;
+   if(peakValues_[last]>value)break;
+   peakTail_=last;
+  }
+  peakValues_[peakTail_]=value;
+  peakStamps_[peakTail_]=stamp;
+  peakTail_=(peakTail_+1)%peakQueueCapacity;
  }
 public:
  FinalTruePeak()noexcept{prepareKernel();}
  void settings(FinalTruePeakSettings value)noexcept{settings_=value;}
  void prepare(double rate)noexcept{
   sampleRate_=std::isfinite(rate)&&rate>=8000.&&rate<=384000.?rate:48000.;
+  fixedLatencySamples_=std::clamp(static_cast<int>(std::ceil(sampleRate_*.010)),128,maximumDelaySamples);
   reset();
  }
  void reset()noexcept{
-  history_={};delay_={};peakValues_={};peakStamps_={};
-  histPosition_=delayPosition_=0;peakHead_=peakTail_=0;sampleClock_=0;
-  gain_=1.f;reading_={};
+  history_={};outputHistory_={};delay_={};peakHistory_={};transientHistory_={};
+  peakValues_={};peakStamps_={};
+  histPosition_=outputHistPosition_=delayPosition_=0;
+  previousLookaheadSamples_=-1;peakHead_=peakTail_=0;sampleClock_=0;
+  gain_=controlledGain_=1.f;transientEnvelope_=0.f;reading_={};
  }
  FinalTruePeakReading reading()const noexcept{return reading_;}
  void process(float* left,float* right,int count)noexcept{
   if(!left||!right||count<=0)return;
-  // Inactive stage keeps only its fixed PDC delay. Skip all 4x polyphase
-  // convolution, peak queue updates and gain control to avoid DSP CPU waste.
-  // Delay is still required by the host's constant latency contract.
+  const int factor=selectedOversampling(settings_.oversamplingFactor);
+  const int lookahead=std::clamp(
+    static_cast<int>(std::lround(sampleRate_*.001*sane(settings_.lookaheadMs,.5f,10.f))),
+    detectorTaps/2+2,fixedLatencySamples_);
+  const float actualLookaheadMs=1000.f*lookahead/static_cast<float>(sampleRate_);
+  const int detectorOffset=fixedLatencySamples_-lookahead;
+  // Reconstruct the detector window on automation changes rather than
+  // clearing the prediction for an entire attack period. No allocations.
+  const int queueWindow=lookahead+detectorTaps/2+1;
+  if(previousLookaheadSamples_!=lookahead){
+   peakHead_=peakTail_=0;
+   const int available=static_cast<int>(std::min<std::uint64_t>(
+       sampleClock_,static_cast<std::uint64_t>(queueWindow-1)));
+   for(int age=available;age>0;--age){
+    const int past=(delayPosition_+ringCapacity-detectorOffset-age)%ringCapacity;
+    queuePeak(peakHistory_[past],sampleClock_-static_cast<std::uint64_t>(age));
+   }
+   previousLookaheadSamples_=lookahead;
+  }
   if(!settings_.enabled){
    for(int i=0;i<count;++i){
     delay_[0][delayPosition_]=sane(left[i],-16.f,16.f);
     delay_[1][delayPosition_]=sane(right[i],-16.f,16.f);
-    const int read=(delayPosition_+1)%static_cast<int>(delay_[0].size());
+    const int read=(delayPosition_+ringCapacity-fixedLatencySamples_)%ringCapacity;
     left[i]=delay_[0][read];right[i]=delay_[1][read];
-    delayPosition_=read;
+    delayPosition_=advance(delayPosition_,ringCapacity);
    }
-   history_={};histPosition_=0;peakHead_=peakTail_=0;
-   sampleClock_+=static_cast<std::uint64_t>(count);gain_=1.f;reading_={};
+   history_={};outputHistory_={};peakHistory_={};transientHistory_={};
+   histPosition_=outputHistPosition_=0;peakHead_=peakTail_=0;
+   previousLookaheadSamples_=-1;
+   sampleClock_+=static_cast<std::uint64_t>(count);
+   gain_=controlledGain_=1.f;transientEnvelope_=0.f;reading_={};
    return;
   }
-  // The host's dry bypass path is aligned with latencySamples.
-  const float ceiling=std::pow(10.f,sane(settings_.ceilingDb,-12.f,-.1f)*.05f);
-  const float drive=std::pow(10.f,sane(settings_.driveDb,0.f,18.f)*.05f);
-  const float outputGain=std::pow(10.f,sane(settings_.outputDb,-12.f,6.f)*.05f);
-  const float characterScale=settings_.character==1?1.45f:(settings_.character==2?.52f:1.f);
-  const float release=std::exp(-1.f/(static_cast<float>(sampleRate_)*.001f*
-                                      sane(settings_.releaseMs*characterScale,10.f,1400.f)));
-  const float clip=std::clamp(settings_.softClip,0.f,1.f);
-  // Optional soft clipping must be silent below its knee. The previous
-  // full-range tanh bent even quiet vocal passages and added unwanted THD.
-  // Preserve transients under the knee, shape only strong peaks before the
-  // lookahead true-peak detector; this is NOT an Ozone IRC emulation.
+
+  const float ceiling=std::pow(10.f,.05f*sane(settings_.ceilingDb,-12.f,-.1f));
+  const float drive=std::pow(10.f,.05f*sane(settings_.driveDb,0.f,18.f));
+  const float outputGain=std::pow(10.f,.05f*sane(settings_.outputDb,-12.f,6.f));
+  const float clip=sane(settings_.softClip,0.f,1.f);
+  const float transient=sane(settings_.transientEmphasis,0.f,1.f);
+  const float attackMs=sane(settings_.attackMs,.05f,10.f);
+  const float characterScale=settings_.character==1?1.35f:
+                             (settings_.character==2?.58f:1.f);
+  const float releaseMs=sane(settings_.releaseMs*characterScale,10.f,1400.f);
+  const float attackCoeff=std::exp(-1.f/(static_cast<float>(sampleRate_)*.001f*attackMs));
+  const float envelopeCoeff=std::exp(-1.f/(static_cast<float>(sampleRate_)*.008f));
   const float clipKnee=std::max(.1f,ceiling*.85f);
   const float clipSpan=std::max(.04f,ceiling*.25f);
   auto preShape=[&](float x)noexcept {
-   if(clip<=0.f)return x;
+   if(clip<=0.f||std::abs(x)<=clipKnee)return x;
    const float a=std::abs(x);
-   if(a<=clipKnee)return x;
    const float rounded=clipKnee+clipSpan*std::tanh((a-clipKnee)/clipSpan);
-   const float weight=clip*.40f; // maximum 40% wet clip, then TP protection
-   return std::copysign(a+weight*(rounded-a),x);
+   return std::copysign(a+clip*.40f*(rounded-a),x);
   };
+  const float threshold=ceiling*(factor==1?.82f:.90f)/
+                        std::max(1.e-6f,outputGain);
   std::array<float,64> inputWave{},outputWave{},gainEnvelope{};
-  float detected=0.f,outputPeak=0.f,minGain=1.f;
+  float peakIn=0.f,peakOut=0.f,peakOutTP=0.f,minGain=1.f;
+
   for(int i=0;i<count;++i){
    const float input[2]{
     preShape(sane(left[i],-16.f,16.f)*drive),
     preShape(sane(right[i],-16.f,16.f)*drive)
    };
+   const float amplitude=std::max(std::abs(input[0]),std::abs(input[1]));
+   const float oldEnvelope=transientEnvelope_;
+   transientEnvelope_=envelopeCoeff*transientEnvelope_+
+                      (1.f-envelopeCoeff)*amplitude;
+   // Envelope-ratio transient detector: reject normal sine half-cycles.
+   // Strong new attacks are aligned to the exact delayed output sample.
+   const float onset=amplitude>.25f&&amplitude>1.8f*oldEnvelope?
+       std::clamp((amplitude-1.8f*oldEnvelope)/
+                  (amplitude+.10f),0.f,1.f):0.f;
+   transientHistory_[delayPosition_]=onset;
    for(int c=0;c<2;++c){
     history_[c][histPosition_]=input[c];
     delay_[c][delayPosition_]=input[c];
    }
-   histPosition_=(histPosition_+1)%detectorTaps;
-   float peak=0.f;
-   for(int c=0;c<2;++c)for(int p=0;p<oversampling;++p){
-    double value=0.;
-    int cursor=histPosition_;
-    for(int tap=0;tap<detectorTaps;++tap){
-     cursor=(cursor+detectorTaps-1)%detectorTaps;
-     value+=kernel_[p][tap]*history_[c][cursor];
-    }
-    peak=std::max(peak,static_cast<float>(std::abs(value)));
-   }
-   detected=std::max(detected,peak);
-   const size_t scopeIndex=static_cast<size_t>(i)*64/static_cast<size_t>(count);
-   inputWave[scopeIndex]=.5f*(input[0]+input[1]);
-   // Sliding maximum of the most recent 129 peak estimates.
-   // Equal peaks evict older duplicates. No allocation or linear scan.
-   // Evict expired indices before insertion (inclusive 129-sample window).
-   while(peakHead_!=peakTail_ &&
-         sampleClock_-peakStamps_[peakHead_]>=latencySamples+1)
-    peakHead_=(peakHead_+1)%peakQueueCapacity;
-   while(peakHead_!=peakTail_){
-    const size_t back=(peakTail_+peakQueueCapacity-1)%peakQueueCapacity;
-    if(peakValues_[back]>peak)break;
-    peakTail_=back;
-   }
-   peakValues_[peakTail_]=peak;
-   peakStamps_[peakTail_]=sampleClock_++;
-   peakTail_=(peakTail_+1)%peakQueueCapacity;
-   const float futurePeak=peakValues_[peakHead_];
-   // Conservative true-peak reconstruction safety margin: the 4x input
-   // detector alone cannot bound the interpolated output after gain changes.
-   // Measured independently against 8x / 49-tap reconstruction stress cases.
-   const float threshold=ceiling*.90f/std::max(1.e-6f,outputGain);
+   histPosition_=advance(histPosition_,detectorTaps);
+   const float interpolated=polyphasePeak(history_,histPosition_,factor);
+   const float peak=std::max(amplitude,interpolated);
+   peakIn=std::max(peakIn,peak);
+   peakHistory_[delayPosition_]=peak;
+   const int detectorRead=(delayPosition_+ringCapacity-detectorOffset)%ringCapacity;
+   const float delayedPeak=peakHistory_[detectorRead];
+   while(peakHead_!=peakTail_&&
+         sampleClock_-peakStamps_[peakHead_]>=static_cast<std::uint64_t>(queueWindow))
+     peakHead_=(peakHead_+1)%peakQueueCapacity;
+   queuePeak(delayedPeak,sampleClock_);
+   const float futurePeak=peakHead_!=peakTail_?peakValues_[peakHead_]:delayedPeak;
    const float desired=futurePeak>threshold?threshold/futurePeak:1.f;
-   const float adaptive=settings_.autoRelease?std::clamp((1.f-gain_)*.48f,0.f,.48f):0.f;
-   const float recovery=release+(1.f-release)*adaptive;
-   gain_=desired<gain_?desired:recovery*gain_+(1.f-recovery)*desired;
-   gainEnvelope[scopeIndex]=gain_;
+
+   float recoveryMs=releaseMs;
+   if(settings_.autoRelease){
+    const float reduction=-20.f*std::log10(std::max(.001f,controlledGain_));
+    recoveryMs*=1.f+.12f*std::clamp(reduction,0.f,12.f);
+    // Transient emphasis speeds recovery following a rising percussion hit,
+    // never increases gain above the true-peak safety request.
+   }
+   // Transient emphasis must remain functional even with Auto Release OFF.
+   recoveryMs*=1.f-.48f*transient*onset;
+   const float release=std::exp(-1.f/(static_cast<float>(sampleRate_)*.001f*
+                                      std::max(10.f,recoveryMs)));
+   controlledGain_=desired<controlledGain_?
+     attackCoeff*controlledGain_+(1.f-attackCoeff)*desired:
+     release*controlledGain_+(1.f-release)*desired;
+   // The user-selected attack shapes a predictive gain envelope, while
+   // sample-aligned reconstructed peak detection forms the independent hard
+   // safety gate. This leaves quieter samples ahead of the transient free
+   // to ramp down musically without risking a late overshoot.
+   const int read=(delayPosition_+ringCapacity-fixedLatencySamples_)%ringCapacity;
+   const int peakAtOutput=(read+detectorTaps/2)%ringCapacity;
+   const float atOutput=std::max(peakHistory_[peakAtOutput],
+       std::max(std::abs(delay_[0][read]),std::abs(delay_[1][read])));
+   const float safeGain=atOutput>threshold?threshold/atOutput:1.f;
+   // Restore a little transient-level contrast relative to the sustained
+   // gain-reduction envelope, but NEVER beyond the local TP safety bound.
+   const float transientLift=1.f+.25f*transient*transientHistory_[read];
+   gain_=std::min(controlledGain_*transientLift,safeGain);
    minGain=std::min(minGain,gain_);
-   const int outputPosition=(delayPosition_+1)%static_cast<int>(delay_[0].size());
    const float y[2]{
-    delay_[0][outputPosition]*gain_*outputGain,
-    delay_[1][outputPosition]*gain_*outputGain
+    delay_[0][read]*gain_*outputGain,
+    delay_[1][read]*gain_*outputGain
    };
-   delayPosition_=outputPosition;
-   // This stage is now linear after the detector, preserving the
-   // detector's conservative 8x reconstructed output safety margin.
+   delayPosition_=advance(delayPosition_,ringCapacity);
    left[i]=std::clamp(y[0],-ceiling,ceiling);
    right[i]=std::clamp(y[1],-ceiling,ceiling);
-   outputWave[scopeIndex]=.5f*(left[i]+right[i]);
-   outputPeak=std::max(outputPeak,std::max(std::abs(left[i]),std::abs(right[i])));
+   peakOut=std::max(peakOut,std::max(std::abs(left[i]),std::abs(right[i])));
+   for(int c=0;c<2;++c)
+    outputHistory_[c][outputHistPosition_]=c==0?left[i]:right[i];
+   outputHistPosition_=advance(outputHistPosition_,detectorTaps);
+   peakOutTP=std::max(peakOutTP,
+     std::max(peakOut,polyphasePeak(outputHistory_,outputHistPosition_,factor)));
+   const size_t index=std::min<size_t>(63,static_cast<size_t>(i)*64/
+                                             static_cast<size_t>(count));
+   inputWave[index]=.5f*(input[0]+input[1]);
+   outputWave[index]=.5f*(left[i]+right[i]);
+   gainEnvelope[index]=gain_;
+   ++sampleClock_;
   }
-  reading_.detectedTruePeak=detected;
-  reading_.outputSamplePeak=outputPeak;
-  reading_.gainReductionDb=-20.f*std::log10(std::max(1e-9f,minGain));
-  reading_.inputWave=inputWave;reading_.outputWave=outputWave;reading_.gainEnvelope=gainEnvelope;
+  reading_.detectedTruePeak=peakIn;
+  reading_.outputSamplePeak=peakOut;
+  reading_.outputTruePeak=peakOutTP;
+  reading_.gainReductionDb=-20.f*std::log10(std::max(1.e-9f,minGain));
+  reading_.inputWave=inputWave;
+  reading_.outputWave=outputWave;
+  reading_.gainEnvelope=gainEnvelope;
+  reading_.lookaheadMs=actualLookaheadMs;
+  reading_.oversamplingFactor=factor;
+  reading_.ceilingLinear=ceiling;
+  reading_.active=true;
  }
 };
 }

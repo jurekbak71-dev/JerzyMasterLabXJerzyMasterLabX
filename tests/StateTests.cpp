@@ -18,7 +18,7 @@ int main(){
  // original parameter values and their IDs are preserved byte-for-byte.
  {
   auto legacy=original.createCopy();
-  if(legacy.getNumChildren()!=316){std::cerr<<"unexpected expanded state count";return 1;}
+  if(legacy.getNumChildren()!=320){std::cerr<<"unexpected expanded state count";return 1;}
   // APVTS stores PARAM children in a map/key order, not necessarily in
   // parameter registration order. Remove the twelve new *IDs*, not the
   // last twelve ValueTree children, or this fixture is not a legacy preset.
@@ -38,6 +38,29 @@ int main(){
                             source->getParameters()[i]->getDefaultValue();
    if(std::abs(target->getParameters()[i]->getValue()-expected)>1.e-6f){
     std::cerr<<"legacy state migration mismatch "<<i<<" id="<<dynamic_cast<juce::RangedAudioParameter*>(target->getParameters()[i])->paramID<<" got="<<target->getParameters()[i]->getValue()<<" expected="<<expected<<" source="<<source->getParameters()[i]->getValue()<<" targetDefault="<<target->getParameters()[i]->getDefaultValue();return 1;
+   }
+  }
+  target->setStateInformation(saved.getData(),static_cast<int>(saved.getSize()));
+ }
+ // PR #23 states contain 316 parameters, including EXCITE and final TP
+ // controls, but not the four appended mastering-engine settings.
+ {
+  auto previous=original.createCopy();
+  for(int i=316;i<320;++i){
+   auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(source->getParameters()[i]);
+   auto child=previous.getChildWithProperty("id",parameter->paramID);
+   if(!child.isValid()){std::cerr<<"missing 316-param ID";return 1;}
+   previous.removeChild(child,nullptr);
+  }
+  if(previous.getNumChildren()!=316){std::cerr<<"prior version fixture mismatch";return 1;}
+  auto previousXml=previous.createXml();juce::MemoryBlock previousBlock;
+  juce::AudioProcessor::copyXmlToBinary(*previousXml,previousBlock);
+  target->setStateInformation(previousBlock.getData(),static_cast<int>(previousBlock.getSize()));
+  for(int i=0;i<320;++i){
+   const auto expected=i<316?source->getParameters()[i]->getValue():
+                                      source->getParameters()[i]->getDefaultValue();
+   if(std::abs(target->getParameters()[i]->getValue()-expected)>1.e-6f){
+    std::cerr<<"316 to 320 state migration mismatch "<<i;return 1;
    }
   }
   target->setStateInformation(saved.getData(),static_cast<int>(saved.getSize()));
@@ -89,7 +112,7 @@ int main(){
  for(double rate:{44100.,48000.,96000.,192000.}){
   source->setNonRealtime(false);target->setNonRealtime(true);
   for(auto* processor:{source.get(),target.get()}){processor->setRateAndBufferSizeDetails(rate,32);processor->prepareToPlay(rate,32);}
-  if(source->getLatencySamples()!=static_cast<int>(std::ceil(rate*.005))+masterlab::FinalTruePeak::latencySamples||source->getLatencySamples()!=target->getLatencySamples()){std::cerr<<"restored PDC mismatch";return 1;}
+  if(source->getLatencySamples()!=static_cast<int>(std::ceil(rate*.005))+std::max(128,static_cast<int>(std::ceil(rate*.010)))||source->getLatencySamples()!=target->getLatencySamples()){std::cerr<<"restored PDC mismatch";return 1;}
   for(int size:{1,257,4097}){
    juce::AudioBuffer<float> live(2,size),offline(2,size);
    for(int i=0;i<size;++i){live.setSample(0,i,.02f*std::sin(i*.17f));live.setSample(1,i,.017f*std::cos(i*.11f));}offline.makeCopyOf(live);

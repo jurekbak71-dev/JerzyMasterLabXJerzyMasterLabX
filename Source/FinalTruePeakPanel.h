@@ -6,9 +6,11 @@ class FinalTruePeakPanel final : public juce::Component {
  Processor& processor_;
  StudioTheme& theme_;
  juce::ToggleButton included_{"Fixed slot"},enabled_{"Active"},autoRelease_{"Auto release"};
- juce::ComboBox character_;
+ juce::ComboBox character_,oversampling_;
+ juce::TextButton advancedButton_{"ADVANCED"};
+ bool advancedView_=false;
  std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> includedAttachment_,enabledAttachment_,autoReleaseAttachment_;
- std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> characterAttachment_;
+ std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> characterAttachment_,oversamplingAttachment_;
  struct Knob {juce::Label name;juce::Slider slider;
   std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;};
  std::vector<std::unique_ptr<Knob>> knobs_;
@@ -31,6 +33,13 @@ public:
   enabled_.setComponentID("true-peak-enabled");
   addAndMakeVisible(included_);addAndMakeVisible(enabled_);included_.setEnabled(false);
   addAndMakeVisible(character_);addAndMakeVisible(autoRelease_);
+  addAndMakeVisible(advancedButton_);
+  advancedButton_.setComponentID("maximizer-advanced");
+  advancedButton_.onClick=[this]{advancedView_=!advancedView_;advancedButton_.setButtonText(advancedView_?"CORE":"ADVANCED");resized();repaint();};
+  addAndMakeVisible(oversampling_);
+  oversampling_.setComponentID("true-peak-oversampling");
+  for(const char* title:{"1x (sample)","2x TP","4x TP","8x TP"})oversampling_.addItem(title,oversampling_.getNumItems()+1);
+  oversamplingAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(p.state,"truePeakOversampling",oversampling_);
   character_.setComponentID("true-peak-character");
   for(const char* label:{"Transparent","Punch","Aggressive"})character_.addItem(label,character_.getNumItems()+1);
   characterAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(p.state,"truePeakCharacter",character_);
@@ -43,20 +52,37 @@ public:
   addKnob("Drive dB","truePeakDrive");
   addKnob("Output trim dB","truePeakOutput");
   addKnob("Soft Clip","truePeakSoftClip");
+  addKnob("Lookahead ms","truePeakLookahead");
+  addKnob("Attack ms","truePeakAttack");
+  addKnob("Transient Emphasis","truePeakTransient");
   included_.setTooltip("Final limiter occupies the last slot; Active switches it OFF without changing host PDC.");
+  oversampling_.setTooltip("True-peak interpolation/detection factor. Not oversampling of the entire soft-clip distortion path.");
+  advancedButton_.setTooltip("Switch between core Maximizer controls and advanced lookahead, attack, transient and TP detection settings.");
  }
  ~FinalTruePeakPanel()override{setLookAndFeel(nullptr);}
  void update(const Processor::ResponseFrame& response){reading_=response.truePeak;repaint();}
  void resized()override{
-  included_.setBounds(24,12,130,34);enabled_.setBounds(162,12,116,34);
-  character_.setBounds(295,12,171,32);autoRelease_.setBounds(482,12,142,32);
-  int width=std::min(138,(getWidth()-318)/5);
+  const int width=getWidth(),height=getHeight();
+  included_.setBounds(24,12,130,34);
+  enabled_.setBounds(160,12,112,34);
+  character_.setBounds(280,12,162,32);
+  autoRelease_.setBounds(450,12,125,32);
+  advancedButton_.setBounds(std::max(580,width-132),12,120,32);
+  const bool compact=height<440;
+  const int knobWidth=std::clamp((width-310)/5,68,138);
+  const int labelY=compact?92:108,knobY=compact?115:132,knobH=compact?91:118;
   for(size_t i=0;i<knobs_.size();++i){
-   const int x=24+static_cast<int>(i)*(width+12);
-   const bool compact=getHeight()<440;
-   knobs_[i]->name.setBounds(x,compact?92:108,width,22);
-   knobs_[i]->slider.setBounds(x,compact?115:132,width,compact?91:118);
+   const bool visible=advancedView_?i>=5:i<5;
+   knobs_[i]->name.setVisible(visible);
+   knobs_[i]->slider.setVisible(visible);
+   if(!visible)continue;
+   const size_t index=advancedView_?i-5:i;
+   const int x=24+static_cast<int>(index)*(knobWidth+12);
+   knobs_[i]->name.setBounds(x,labelY,knobWidth,22);
+   knobs_[i]->slider.setBounds(x,knobY,knobWidth,knobH);
   }
+  oversampling_.setVisible(advancedView_);
+  oversampling_.setBounds(24+3*(knobWidth+12),knobY+22,knobWidth+30,32);
  }
  void paint(juce::Graphics& g)override{
   g.fillAll(juce::Colour(0xffedf0f2));
@@ -70,12 +96,13 @@ public:
   g.drawVerticalLine(juce::jmax(10,getWidth()-11),0.f,static_cast<float>(getHeight()));
   g.setColour(juce::Colour(0xffb3e2ce));g.setFont(juce::Font(juce::FontOptions(23.f)));
   g.drawText("FINAL MAXIMIZER / TRUE-PEAK LIMITER",24,56,getWidth()-48,37,juce::Justification::left);
+
   // A red warning light is driven strictly by a measured sample clipping condition.
   // Inter-sample conformity remains separately audited, not inferred here.
-  const bool sampleClip=reading_.outputSamplePeak>1.f;
+  const bool sampleClip=reading_.active&&reading_.outputTruePeak>reading_.ceilingLinear*1.002f;
   theme_.paintStatusLed(g,juce::jmax(24,getWidth()-195),56,25,sampleClip);
   g.setColour(juce::Colour(sampleClip?0xffff5969:0xff63e28d));g.setFont(12.f);
-  g.drawText(sampleClip?"SAMPLE CLIP":"OUTPUT OK",juce::jmax(24,getWidth()-166),56,130,25,
+  g.drawText(!reading_.active?"BYPASSED":(sampleClip?"CEILING OVER":"TP EST OK"),juce::jmax(24,getWidth()-166),56,130,25,
              juce::Justification::left);
   // Live, mechanically styled gain reduction meter; sourced from DSP
   // telemetry rather than a decorative animation.
@@ -128,16 +155,17 @@ public:
   g.drawText("REAL DSP  /  INPUT CYAN   OUTPUT AMBER   GAIN REDUCTION RED",34,static_cast<int>(scopeY)-18,getWidth()-68,18,juce::Justification::left);
   const int y=compact?299:std::max(375,getHeight()-117);
   auto db=[](float x){return juce::String(20.f*std::log10(std::max(1e-9f,x)),2);};
-  g.drawText("INPUT TP ESTIMATE  "+db(reading_.detectedTruePeak)+" dBFS"
-             "     OUTPUT SAMPLE PEAK  "+db(reading_.outputSamplePeak)+" dBFS"
-             "     GAIN REDUCTION  "+juce::String(reading_.gainReductionDb,2)+" dB",
+  g.drawText(juce::String("INPUT TP ")+db(reading_.detectedTruePeak)+" dBFS"+
+             (reading_.oversamplingFactor>1?"     OUTPUT TP EST ":"     OUTPUT SAMPLE ")+
+             db(reading_.outputTruePeak)+" dBFS"+
+             "     GAIN REDUCTION "+juce::String(reading_.gainReductionDb,2)+" dB",
              24,y,getWidth()-48,32,juce::Justification::left);
   if(!compact){g.setColour(juce::Colour(0xff29393a));
   g.fillRoundedRectangle(24.f,static_cast<float>(y+45),static_cast<float>(getWidth()-48),15.f,5.f);
   g.setColour(juce::Colour(0xffb3e2ce));
   g.fillRoundedRectangle(24.f,static_cast<float>(y+45),static_cast<float>(getWidth()-48)*juce::jlimit(0.f,1.f,reading_.gainReductionDb/18.f),15.f,5.f);
   g.setColour(juce::Colour(0xff9dacad));g.setFont(12.f);
-  g.drawText("4x true-peak input detector, 128 samples fixed PDC. Output inter-sample certification still pending.",
+  g.drawText("TP DETECTOR "+juce::String(reading_.oversamplingFactor)+"x   /   LOOKAHEAD "+juce::String(reading_.lookaheadMs,2)+" ms   /   CONSTANT PDC AT THIS SAMPLE RATE   /   INDEPENDENT EXPORT TP CHECK STILL REQUIRED.",
              24,y+83,getWidth()-48,30,juce::Justification::left);}
  }
 };

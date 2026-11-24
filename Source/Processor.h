@@ -103,6 +103,10 @@ public:
  p.add(std::make_unique<juce::AudioParameterBool>("truePeakAutoRelease","Final Maximizer auto release",false));
  p.add(std::make_unique<juce::AudioParameterFloat>("truePeakSoftClip","Final Maximizer soft clip",0.f,1.f,0.f));
  p.add(std::make_unique<juce::AudioParameterFloat>("truePeakOutput","Final Maximizer output trim dB",-12.f,6.f,0.f));
+ p.add(std::make_unique<juce::AudioParameterFloat>("truePeakLookahead","Final Maximizer lookahead ms",juce::NormalisableRange<float>(.5f,10.f,.05f),3.f));
+ p.add(std::make_unique<juce::AudioParameterChoice>("truePeakOversampling","Final Maximizer TP detection",juce::StringArray{"1x","2x","4x","8x"},2));
+ p.add(std::make_unique<juce::AudioParameterFloat>("truePeakAttack","Final Maximizer attack ms",juce::NormalisableRange<float>(.05f,10.f,.05f),.25f));
+ p.add(std::make_unique<juce::AudioParameterFloat>("truePeakTransient","Final Maximizer transient emphasis",0.f,1.f,0.f));
  return p;}
  static void addModuleParameters(juce::AudioProcessorValueTreeState::ParameterLayout& p){
   auto boolean=[&](const char* id,const char* name,bool initial){p.add(std::make_unique<juce::AudioParameterBool>(id,name,initial));};
@@ -283,9 +287,9 @@ public:
    // parameter adapters. Do not change values on a complete current preset.
    const auto xml=getXmlFromBinary(data,size);
    const auto incoming=xml!=nullptr?juce::ValueTree::fromXml(*xml):juce::ValueTree{};
-   const bool legacy304=incoming.getNumChildren()==304;
-   if(legacy304){
-    for(size_t i=304;i<masterlab::parameterCount;++i){
+   const int supplied=incoming.getNumChildren();
+   if(supplied==304||supplied==316){
+    for(size_t i=static_cast<size_t>(supplied);i<masterlab::parameterCount;++i){
      auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(getParameters()[static_cast<int>(i)]);
      if(parameter!=nullptr){
       const auto factoryDefault=parameter->getDefaultValue();

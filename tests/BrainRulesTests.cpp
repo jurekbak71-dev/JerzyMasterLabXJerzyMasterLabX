@@ -18,6 +18,8 @@ int main(){
  c={};c.useTruePeak=true;c.targetLufs=-14.f;c.ceiling=-1.f;
  const auto finalProposal=masterlab::proposeMastering(f,c);
  check(finalProposal.valid&&value(finalProposal,"truePeakOn")==1.f&&
+       value(finalProposal,"truePeakOversampling")==2.f&&
+       value(finalProposal,"truePeakLookahead")>=3.f&&
        value(finalProposal,"truePeakDrive")>1.f&&
        value(finalProposal,"truePeakAutoRelease")==1.f&&
        value(finalProposal,"truePeakSoftClip")==0.f,

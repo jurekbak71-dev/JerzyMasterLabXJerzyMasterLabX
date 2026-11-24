@@ -343,6 +343,55 @@ class GuiSmoke final : private juce::Timer {
                 if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return captureError(__LINE__);
             }
         }
+        // Exercise the real Advanced Maximizer APVTS widgets in the plugin,
+        // not a static design screenshot or an unconnected prototype.
+        editor->setSize(1000,700);
+        auto* advanced=dynamic_cast<juce::Button*>(finalPanel->findChildWithID("maximizer-advanced"));
+        auto* lookahead=dynamic_cast<juce::Slider*>(finalPanel->findChildWithID("truePeakLookahead"));
+        auto* attack=dynamic_cast<juce::Slider*>(finalPanel->findChildWithID("truePeakAttack"));
+        auto* transient=dynamic_cast<juce::Slider*>(finalPanel->findChildWithID("truePeakTransient"));
+        auto* os=dynamic_cast<juce::ComboBox*>(finalPanel->findChildWithID("true-peak-oversampling"));
+        if(!advanced||!lookahead||!attack||!transient||!os||
+           lookahead->isVisible()||attack->isVisible()||transient->isVisible()||os->isVisible()){
+            std::cerr<<"Advanced Maximizer controls missing or visible on core page\n";
+            return captureError(__LINE__);
+        }
+        const auto prevLookahead=actual("truePeakLookahead");
+        const auto prevAttack=actual("truePeakAttack");
+        const auto prevTransient=actual("truePeakTransient");
+        const auto prevOs=actual("truePeakOversampling");
+        advanced->onClick();
+        if(!lookahead->isVisible()||!attack->isVisible()||!transient->isVisible()||!os->isVisible()||
+           finalDrive->isVisible()||!controlsFit()){
+            std::cerr<<"Advanced Maximizer page visibility/geometry regression\n";
+            return captureError(__LINE__);
+        }
+        lookahead->setValue(7.5f,juce::sendNotificationSync);
+        attack->setValue(2.25f,juce::sendNotificationSync);
+        transient->setValue(.55f,juce::sendNotificationSync);
+        os->setSelectedId(4,juce::sendNotificationSync); // 8x detection: choice index 3
+        if(std::abs(actual("truePeakLookahead")-7.5f)>.06f||
+           std::abs(actual("truePeakAttack")-2.25f)>.06f||
+           std::abs(actual("truePeakTransient")-.55f)>.02f||
+           actual("truePeakOversampling")!=3.f)
+            return captureError(__LINE__);
+        if(iteration==0){
+            auto image=editor->createComponentSnapshot(editor->getLocalBounds());
+            if(!image.isValid())return captureError(__LINE__);
+            auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/maximizer-advanced-smoke.png");
+            juce::FileOutputStream stream(output);stream.truncate();
+            if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return captureError(__LINE__);
+        }
+        lookahead->setValue(prevLookahead,juce::sendNotificationSync);
+        attack->setValue(prevAttack,juce::sendNotificationSync);
+        transient->setValue(prevTransient,juce::sendNotificationSync);
+        os->setSelectedId(static_cast<int>(prevOs)+1,juce::sendNotificationSync);
+        advanced->onClick();
+        if(!finalDrive->isVisible()||lookahead->isVisible()||
+           std::abs(actual("truePeakLookahead")-prevLookahead)>.06f||
+           std::abs(actual("truePeakAttack")-prevAttack)>.06f||
+           std::abs(actual("truePeakTransient")-prevTransient)>.02f||
+           actual("truePeakOversampling")!=prevOs)return captureError(__LINE__);
         // Restore the exact baseline captured before Master Brain analysis.
         // Otherwise changing the ceiling during GUI smoke correctly marks
         // the Brain's verified proposal STALE and makes Apply unavailable.
