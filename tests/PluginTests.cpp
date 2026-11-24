@@ -30,6 +30,21 @@ int main(int argc,char**){
  bypassed->reset();dry.clear();dry.setSample(0,0,.1f);dry.setSample(1,0,.1f);bypassed->processBlockBypassed(dry,midi);
  if(std::abs(dry.getSample(0,bypassed->getLatencySamples())-.1f)>1e-6f||dry.getSample(0,0)!=0){std::cerr<<"bypass reset lost latency";return 1;}
  bypassed->releaseResources();
+ // A host may release the processor while the optional Brain worker is
+ // analysing. The inactive plug-in must not retain that worker or its packet
+ // queue, and a later prepare must remain valid.
+ auto* concrete=dynamic_cast<Processor*>(a.get());
+ if(!concrete){std::cerr<<"concrete processor unavailable";return 1;}
+ masterlab::BrainConfig lifecycleConfig;lifecycleConfig.seconds=5;
+ concrete->brain.startUI(lifecycleConfig);
+ const auto activeResources=concrete->brain.resourcesUI();
+ if(!activeResources.workerRunning||!activeResources.jobAllocated||activeResources.packetBytes==0){std::cerr<<"Brain lifecycle test did not start a real analysis";return 1;}
+ a->releaseResources();
+ const auto releasedResources=concrete->brain.resourcesUI();
+ if(releasedResources.workerRunning||releasedResources.jobAllocated||releasedResources.packetBytes!=0){std::cerr<<"releaseResources retained Brain CPU or packet memory";return 1;}
+ a->prepareToPlay(48000,257);
+ x.clear();a->processBlock(x,midi);
+ for(int c=0;c<2;++c)for(int i=0;i<x.getNumSamples();++i)if(!std::isfinite(x.getSample(c,i))){std::cerr<<"reprepare after Brain release emitted invalid audio";return 1;}
  if(argc>1){GuiSmoke smoke(*a);juce::MessageManager::getInstance()->runDispatchLoop();if(!smoke.passed())return 1;std::cout<<"Passed: custom EQ controls, node drag, Q wheel, host gestures, response rendering, Master Brain analysis/approval/Undo, reopen and resize at three sizes\n";}
  a->releaseResources();b->releaseResources();std::cout<<"Passed: parameter state roundtrip, fixed PDC, automated routing, oversized buffers, host bypass, deterministic render without editor\n";
 }
