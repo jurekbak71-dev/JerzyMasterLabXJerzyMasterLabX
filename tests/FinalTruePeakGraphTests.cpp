@@ -1,4 +1,5 @@
 #include "GraphConfiguration.h"
+#include "ModuleParameters.h"
 #include <array>
 #include <algorithm>
 #include <cmath>
