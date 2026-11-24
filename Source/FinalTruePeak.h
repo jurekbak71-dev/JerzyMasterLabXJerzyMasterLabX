@@ -217,11 +217,17 @@ public:
    controlledGain_=desired<controlledGain_?
      attackCoeff*controlledGain_+(1.f-attackCoeff)*desired:
      release*controlledGain_+(1.f-release)*desired;
-   // The fast protective constraint cannot be bypassed by slow attack,
-   // transient emphasis, or automation of the oversampling rate.
-   gain_=std::min(controlledGain_,desired);
-   minGain=std::min(minGain,gain_);
+   // The user-selected attack shapes a predictive gain envelope, while
+   // sample-aligned reconstructed peak detection forms the independent hard
+   // safety gate. This leaves quieter samples ahead of the transient free
+   // to ramp down musically without risking a late overshoot.
    const int read=(delayPosition_+ringCapacity-fixedLatencySamples_)%ringCapacity;
+   const int peakAtOutput=(read+detectorTaps/2)%ringCapacity;
+   const float atOutput=std::max(peakHistory_[peakAtOutput],
+       std::max(std::abs(delay_[0][read]),std::abs(delay_[1][read])));
+   const float safeGain=atOutput>threshold?threshold/atOutput:1.f;
+   gain_=std::min(controlledGain_,safeGain);
+   minGain=std::min(minGain,gain_);
    const float y[2]{
     delay_[0][read]*gain_*outputGain,
     delay_[1][read]*gain_*outputGain
