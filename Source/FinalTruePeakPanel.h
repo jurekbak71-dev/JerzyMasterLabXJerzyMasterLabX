@@ -155,8 +155,9 @@ public:
   g.drawText("REAL DSP  /  INPUT CYAN   OUTPUT AMBER   GAIN REDUCTION RED",34,static_cast<int>(scopeY)-18,getWidth()-68,18,juce::Justification::left);
   const int y=compact?299:std::max(375,getHeight()-117);
   auto db=[](float x){return juce::String(20.f*std::log10(std::max(1e-9f,x)),2);};
-  g.drawText("INPUT TP "+db(reading_.detectedTruePeak)+" dBFS"
-             (reading_.oversamplingFactor>1?"     OUTPUT TP EST ":"     OUTPUT SAMPLE ")+db(reading_.outputTruePeak)+" dBFS"
+  g.drawText(juce::String("INPUT TP ")+db(reading_.detectedTruePeak)+" dBFS"+
+             (reading_.oversamplingFactor>1?"     OUTPUT TP EST ":"     OUTPUT SAMPLE ")+
+             db(reading_.outputTruePeak)+" dBFS"+
              "     GAIN REDUCTION "+juce::String(reading_.gainReductionDb,2)+" dB",
              24,y,getWidth()-48,32,juce::Justification::left);
   if(!compact){g.setColour(juce::Colour(0xff29393a));
