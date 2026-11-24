@@ -20,6 +20,7 @@ struct FinalTruePeakReading {
  float detectedTruePeak=0.f,outputSamplePeak=0.f,gainReductionDb=0.f;
  std::array<float,64> inputWave{},outputWave{},gainEnvelope{};
  float outputTruePeak=0.f,lookaheadMs=0.f;
+ bool active=false;
  int oversamplingFactor=4;
 };
 class FinalTruePeak {
@@ -93,7 +94,7 @@ private:
   }
   return peak;
  }
- void queuePeak(float value)noexcept{
+ void queuePeak(float value,std::uint64_t stamp)noexcept{
   // Monotone queue: amortized O(1) per incoming peak, no allocations.
   while(peakHead_!=peakTail_){
    const size_t last=(peakTail_+peakQueueCapacity-1)%peakQueueCapacity;
@@ -101,7 +102,7 @@ private:
    peakTail_=last;
   }
   peakValues_[peakTail_]=value;
-  peakStamps_[peakTail_]=sampleClock_;
+  peakStamps_[peakTail_]=stamp;
   peakTail_=(peakTail_+1)%peakQueueCapacity;
  }
 public:
@@ -128,10 +129,17 @@ public:
     detectorTaps/2+2,fixedLatencySamples_);
   const float actualLookaheadMs=1000.f*lookahead/static_cast<float>(sampleRate_);
   const int detectorOffset=fixedLatencySamples_-lookahead;
-  // Rebuild the monotone queue from fixed ring storage whenever the effective
-  // lookahead changes; the transient buffer is never resized in process().
+  // Reconstruct the detector window on automation changes rather than
+  // clearing the prediction for an entire attack period. No allocations.
+  const int queueWindow=lookahead+detectorTaps/2+1;
   if(previousLookaheadSamples_!=lookahead){
    peakHead_=peakTail_=0;
+   const int available=static_cast<int>(std::min<std::uint64_t>(
+       sampleClock_,static_cast<std::uint64_t>(queueWindow-1)));
+   for(int age=available;age>0;--age){
+    const int past=(delayPosition_+ringCapacity-detectorOffset-age)%ringCapacity;
+    queuePeak(peakHistory_[past],sampleClock_-static_cast<std::uint64_t>(age));
+   }
    previousLookaheadSamples_=lookahead;
   }
   if(!settings_.enabled){
@@ -196,11 +204,10 @@ public:
    peakHistory_[delayPosition_]=peak;
    const int detectorRead=(delayPosition_+ringCapacity-detectorOffset)%ringCapacity;
    const float delayedPeak=peakHistory_[detectorRead];
-   const int queueWindow=lookahead+detectorTaps/2+1;
    while(peakHead_!=peakTail_&&
          sampleClock_-peakStamps_[peakHead_]>=static_cast<std::uint64_t>(queueWindow))
      peakHead_=(peakHead_+1)%peakQueueCapacity;
-   queuePeak(delayedPeak);
+   queuePeak(delayedPeak,sampleClock_);
    const float futurePeak=peakHead_!=peakTail_?peakValues_[peakHead_]:delayedPeak;
    const float desired=futurePeak>threshold?threshold/futurePeak:1.f;
 
@@ -210,8 +217,9 @@ public:
     recoveryMs*=1.f+.12f*std::clamp(reduction,0.f,12.f);
     // Transient emphasis speeds recovery following a rising percussion hit,
     // never increases gain above the true-peak safety request.
-    recoveryMs*=1.f-.48f*transient*onset;
    }
+   // Transient emphasis must remain functional even with Auto Release OFF.
+   recoveryMs*=1.f-.48f*transient*onset;
    const float release=std::exp(-1.f/(static_cast<float>(sampleRate_)*.001f*
                                       std::max(10.f,recoveryMs)));
    controlledGain_=desired<controlledGain_?
@@ -257,6 +265,7 @@ public:
   reading_.gainEnvelope=gainEnvelope;
   reading_.lookaheadMs=actualLookaheadMs;
   reading_.oversamplingFactor=factor;
+  reading_.active=true;
  }
 };
 }
