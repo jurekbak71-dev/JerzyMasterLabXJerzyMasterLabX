@@ -14,9 +14,9 @@ inline juce::ValueTree validateState(const juce::ValueTree& candidate,
     const auto schema=candidate["schemaVersion"].toString();
     // Schema 24 originally shipped with 304 parameters; later append-only fields
     // may be absent from a saved DAW project. Accept only complete historical
-    // snapshots (304) or the full current state, never a truncated subset.
+    // snapshots (304 or 316) or the full current state, never a truncated subset.
     const int supplied=candidate.getNumChildren();
-    const int sourceCount=schema=="24" && (supplied==304 || supplied==static_cast<int>(parameterCount))?supplied:0;
+    const int sourceCount=schema=="24" && (supplied==304 || supplied==316 || supplied==static_cast<int>(parameterCount))?supplied:0;
     if (!candidate.hasType("MasterLab") || sourceCount==0 || expected.size()!=static_cast<int>(parameterCount)
         || candidate["eqInstanceId"].toString() != "eq-0001"
         || candidate["limiterInstanceId"].toString() != "limiter-0001"
