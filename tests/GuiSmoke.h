@@ -316,6 +316,11 @@ class GuiSmoke final : private juce::Timer {
         auto* release=dynamic_cast<juce::Slider*>(editor->findChildWithID("limiter-release"));
         auto* frequency=editor->findChildWithID("eq-frequency");
         if(!finalPanel||!finalPanel->isVisible()||!frequency||frequency->isVisible())return captureError(__LINE__);
+        auto* renderedMaximizer=dynamic_cast<FinalTruePeakPanel*>(finalPanel);
+        if(!renderedMaximizer||!renderedMaximizer->hasRenderedMaximizerAssets()){
+            std::cerr<<"Maximizer UI regression: embedded rendered meter/scope kit missing\\n";
+            return captureError(__LINE__);
+        }
         auto* finalDrive=dynamic_cast<juce::Slider*>(finalPanel->findChildWithID("truePeakDrive"));
         auto* finalRelease=dynamic_cast<juce::Slider*>(finalPanel->findChildWithID("truePeakRelease"));
         auto* finalCeiling=dynamic_cast<juce::Slider*>(finalPanel->findChildWithID("truePeakCeiling"));
@@ -337,8 +342,14 @@ class GuiSmoke final : private juce::Timer {
             if(!finalPanel->isVisible()||!controlsFit())return captureError(__LINE__);
             auto image=editor->createComponentSnapshot(editor->getLocalBounds());
             if(!image.isValid()||image.getWidth()!=size.x||image.getHeight()!=size.y)return captureError(__LINE__);
-            if(iteration==0&&size.x==1000){
-                auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/limiter-smoke.png");
+            if(iteration==0){
+                if(size.x==1000){
+                    auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/limiter-smoke.png");
+                    juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();
+                    if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return captureError(__LINE__);
+                }
+                auto output=juce::File::getCurrentWorkingDirectory().getChildFile(
+                    "build-plugin/maximizer-core-"+juce::String(size.x)+"x"+juce::String(size.y)+".png");
                 juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();
                 if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return captureError(__LINE__);
             }
@@ -376,11 +387,24 @@ class GuiSmoke final : private juce::Timer {
            actual("truePeakOversampling")!=3.f)
             return captureError(__LINE__);
         if(iteration==0){
-            auto image=editor->createComponentSnapshot(editor->getLocalBounds());
-            if(!image.isValid())return captureError(__LINE__);
-            auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/maximizer-advanced-smoke.png");
-            juce::FileOutputStream stream(output);stream.truncate();
-            if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return captureError(__LINE__);
+            for(const auto dim:{juce::Point<int>{750,550},juce::Point<int>{1000,700},juce::Point<int>{1400,1000}}){
+                editor->setSize(dim.x,dim.y);
+                if(!controlsFit())return captureError(__LINE__);
+                auto* selected=finalPanel->findChildWithID("truePeakLookahead");
+                if(!selected||selected->getHeight()<75||!selected->isVisible())return captureError(__LINE__);
+                auto image=editor->createComponentSnapshot(editor->getLocalBounds());
+                if(!image.isValid())return captureError(__LINE__);
+                auto output=juce::File::getCurrentWorkingDirectory().getChildFile(
+                    "build-plugin/maximizer-advanced-"+juce::String(dim.x)+"x"+juce::String(dim.y)+".png");
+                juce::FileOutputStream stream(output);stream.truncate();
+                if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return captureError(__LINE__);
+                if(dim.x==1000){
+                    auto legacy=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/maximizer-advanced-smoke.png");
+                    juce::FileOutputStream out(legacy);out.truncate();
+                    if(!juce::PNGImageFormat{}.writeImageToStream(image,out))return captureError(__LINE__);
+                }
+            }
+            editor->setSize(1000,700);
         }
         lookahead->setValue(prevLookahead,juce::sendNotificationSync);
         attack->setValue(prevAttack,juce::sendNotificationSync);
