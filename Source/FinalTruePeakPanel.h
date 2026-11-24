@@ -62,110 +62,183 @@ public:
  ~FinalTruePeakPanel()override{setLookAndFeel(nullptr);}
  void update(const Processor::ResponseFrame& response){reading_=response.truePeak;repaint();}
  void resized()override{
-  const int width=getWidth(),height=getHeight();
-  included_.setBounds(24,12,130,34);
-  enabled_.setBounds(160,12,112,34);
-  character_.setBounds(280,12,162,32);
-  autoRelease_.setBounds(450,12,125,32);
-  advancedButton_.setBounds(std::max(580,width-132),12,120,32);
-  const bool compact=height<440;
-  const int knobWidth=std::clamp((width-310)/5,68,138);
-  const int labelY=compact?92:108,knobY=compact?115:132,knobH=compact?91:118;
+  const int w=getWidth(),h=getHeight();
+  const bool compact=h<430;
+  const bool showMeter=w>=870&&!compact;
+  const int meterReserve=showMeter?270:0;
+  // The meter owns a dedicated column: controls can never overlap it.
+  included_.setBounds(24,12,124,32);
+  enabled_.setBounds(154,12,115,32);
+  character_.setBounds(278,12,168,32);
+  autoRelease_.setBounds(454,12,130,32);
+  advancedButton_.setBounds(w-157,12,125,32);
+  const int areaWidth=std::max(200,w-48-meterReserve);
+  const int columns=advancedView_?4:5;
+  const int gap=12;
+  const int knobWidth=std::clamp((areaWidth-gap*(columns-1))/columns,72,157);
+  const int rowWidth=columns*knobWidth+(columns-1)*gap;
+  const int xStart=24+std::max(0,(areaWidth-rowWidth)/2);
+  const int rowTop=compact?109:(h>=680?133:121);
+  const int knobTop=rowTop+23;
+  const int knobHeight=compact?91:(h>=680?155:129);
   for(size_t i=0;i<knobs_.size();++i){
    const bool visible=advancedView_?i>=5:i<5;
-   knobs_[i]->name.setVisible(visible);
-   knobs_[i]->slider.setVisible(visible);
+   auto& knob=*knobs_[i];
+   knob.name.setVisible(visible);
+   knob.slider.setVisible(visible);
    if(!visible)continue;
-   const size_t index=advancedView_?i-5:i;
-   const int x=24+static_cast<int>(index)*(knobWidth+12);
-   knobs_[i]->name.setBounds(x,labelY,knobWidth,22);
-   knobs_[i]->slider.setBounds(x,knobY,knobWidth,knobH);
+   const int column=static_cast<int>(advancedView_?i-5:i);
+   const int x=xStart+column*(knobWidth+gap);
+   knob.name.setBounds(x,rowTop,knobWidth,21);
+   knob.slider.setBounds(x,knobTop,knobWidth,knobHeight);
   }
   oversampling_.setVisible(advancedView_);
-  oversampling_.setBounds(24+3*(knobWidth+12),knobY+22,knobWidth+30,32);
+  if(advancedView_)
+   oversampling_.setBounds(xStart+3*(knobWidth+gap),knobTop+std::min(38,knobHeight/3),
+                           knobWidth,32);
  }
  void paint(juce::Graphics& g)override{
-  g.fillAll(juce::Colour(0xffedf0f2));
-  // Concept C powder-coated sheet-metal side rails and inset dark instrument panel.
-  const float panelWidth=juce::jmax(1.f,static_cast<float>(getWidth())-20.f);
-  g.setGradientFill(juce::ColourGradient(juce::Colour(0xff344553),10.f,0.f,
-                                        juce::Colour(0xff111b25),10.f,static_cast<float>(getHeight()),false));
-  g.fillRect(10.f,0.f,panelWidth,static_cast<float>(getHeight()));
-  g.setColour(juce::Colour(0xff96a7b6));
-  g.drawVerticalLine(10,0.f,static_cast<float>(getHeight()));
-  g.drawVerticalLine(juce::jmax(10,getWidth()-11),0.f,static_cast<float>(getHeight()));
-  g.setColour(juce::Colour(0xffb3e2ce));g.setFont(juce::Font(juce::FontOptions(23.f)));
-  g.drawText("FINAL MAXIMIZER / TRUE-PEAK LIMITER",24,56,getWidth()-48,37,juce::Justification::left);
+  const int w=getWidth(),h=getHeight();
+  if(w<120||h<150)return;
+  const bool compact=h<430;
+  const bool showMeter=w>=870&&!compact;
+  // Concept C: powder-coated light chassis around a recessed, dark DSP surface.
+  g.fillAll(juce::Colour(0xffd6dfe4));
+  const auto frame=juce::Rectangle<float>(9.f,0.f,static_cast<float>(w-18),static_cast<float>(h));
+  g.setGradientFill(juce::ColourGradient(juce::Colour(0xff324555),12.f,0.f,
+                                        juce::Colour(0xff111d28),12.f,static_cast<float>(h),false));
+  g.fillRoundedRectangle(frame,11.f);
+  g.setColour(juce::Colour(0xff7a8e9e));g.drawRoundedRectangle(frame.reduced(.5f),10.f,1.f);
+  g.setColour(juce::Colour(0xff1c9bc8).withAlpha(.35f));
+  g.drawHorizontalLine(99,24.f,static_cast<float>(w-24));
+  g.setColour(juce::Colour(0xffc3eadf));g.setFont(theme_.font(compact?18.f:20.f));
+  g.drawText("FINAL MAXIMIZER",24,53,w-260,32,juce::Justification::centredLeft);
+  g.setColour(juce::Colour(0xff8faebf));g.setFont(theme_.font(11.f));
+  g.drawText("STEREO LINKED  /  TRUE PEAK",24,80,w-260,18,juce::Justification::left);
+  const bool clipping=reading_.active&&
+      reading_.outputTruePeak>reading_.ceilingLinear*1.002f;
+  const juce::String status=!reading_.active?"WAITING / BYPASSED":
+       (clipping?"TRUE PEAK OVER":"TRUE PEAK EST OK");
+  theme_.paintStatusLed(g,w-191,63,21,clipping);
+  g.setFont(theme_.font(11.f));
+  g.setColour(clipping?juce::Colour(0xffff7384):juce::Colour(0xffb3e2ce));
+  g.drawText(status,w-163,60,133,26,juce::Justification::centredLeft);
 
-  // A red warning light is driven strictly by a measured sample clipping condition.
-  // Inter-sample conformity remains separately audited, not inferred here.
-  const bool sampleClip=reading_.active&&reading_.outputTruePeak>reading_.ceilingLinear*1.002f;
-  theme_.paintStatusLed(g,juce::jmax(24,getWidth()-195),56,25,sampleClip);
-  g.setColour(juce::Colour(sampleClip?0xffff5969:0xff63e28d));g.setFont(12.f);
-  g.drawText(!reading_.active?"BYPASSED":(sampleClip?"CEILING OVER":"TP EST OK"),juce::jmax(24,getWidth()-166),56,130,25,
-             juce::Justification::left);
-  // Live, mechanically styled gain reduction meter; sourced from DSP
-  // telemetry rather than a decorative animation.
-  if(getWidth()>=870){
-   const float cx=static_cast<float>(getWidth()-172),cy=209.f,radius=92.f;
-   const juce::Rectangle<float> bezel(cx-126.f,105.f,252.f,196.f);
-   theme_.drawAnalogGrBezel(g,bezel);
-   auto polar=[&](float angle,float r){
-    return juce::Point<float>(cx+std::sin(angle)*r,cy-std::cos(angle)*r);
+  const int areaWidth=w-48-(showMeter?270:0);
+  const int columns=advancedView_?4:5;
+  const int gap=12;
+  const int knobWidth=std::clamp((std::max(200,areaWidth)-gap*(columns-1))/columns,72,157);
+  const int rowWidth=columns*knobWidth+(columns-1)*gap;
+  const int xStart=24+std::max(0,(areaWidth-rowWidth)/2);
+  const int rowTop=compact?109:(h>=680?133:121);
+  const int knobTop=rowTop+23;
+  const int knobHeight=compact?91:(h>=680?155:129);
+
+  // Label the fourth advanced control accurately; it is a real true-peak
+  // reconstruction setting, not nonlinear oversampling of soft clipping.
+  if(advancedView_){
+   g.setColour(juce::Colour(0xffc5d6e2));g.setFont(theme_.font(11.f));
+   g.drawFittedText("TP DETECTION",xStart+3*(knobWidth+gap),rowTop,
+                    knobWidth,20,juce::Justification::centred,1);
+  }
+
+  const int rowBottom=knobTop+knobHeight;
+  if(showMeter){
+   // Physically separate VU window; a knob is never drawn in this column.
+   const int mx=w-255,my=109,mw=226,mh=h>=680?211:180;
+   const juce::Rectangle<float> meterRect(static_cast<float>(mx),
+       static_cast<float>(my),static_cast<float>(mw),static_cast<float>(mh));
+   theme_.drawAnalogGrBezel(g,meterRect);
+   const float cx=mx+mw*.5f,cy=my+mh*.58f,rad=std::min(82.f,mh*.40f);
+   auto polar=[&](float a,float d){
+    return juce::Point<float>(cx+std::sin(a)*d,cy-std::cos(a)*d);
    };
-   constexpr float a0=-1.13f,a1=1.13f;
-   for(int tick=0;tick<=9;++tick){
-    const float angle=a0+(a1-a0)*(tick/9.f);
-    auto p1=polar(angle,radius*.70f),p2=polar(angle,radius*.84f);
-    g.setColour(juce::Colour(0xff51463d));g.drawLine({p1,p2},tick%3==0?1.9f:1.f);
-    if(tick%3==0){
-     g.setFont(11.f);
-     g.drawText(juce::String(tick*2),static_cast<int>(p2.x)-14,static_cast<int>(p2.y)-27,28,18,
-                juce::Justification::centred);
+   constexpr float first=-1.10f,last=1.10f;
+   g.setColour(juce::Colour(0xff4b4036));
+   for(int t=0;t<=9;++t){
+    const float a=first+(last-first)*(t/9.f);
+    g.drawLine({polar(a,rad*.74f),polar(a,rad*.92f)},t%3==0?1.7f:1.f);
+    if(t%3==0){
+     const auto p=polar(a,rad*1.02f);
+     g.setFont(theme_.font(9.f));g.drawText(juce::String(t*2),
+       static_cast<int>(p.x)-13,static_cast<int>(p.y)-12,26,15,
+       juce::Justification::centred);
     }
    }
-   const float reduction=juce::jlimit(0.f,18.f,reading_.gainReductionDb);
-   const float angle=a0+(a1-a0)*reduction/18.f;
-   const auto tip=polar(angle,radius*.76f);
-   g.setColour(juce::Colour(0xff2b333a));g.drawLine({juce::Point<float>(cx+1.f,cy+2.f),tip.translated(1.f,2.f)},3.f);
-   g.setColour(juce::Colour(0xffab332b));g.drawLine({juce::Point<float>(cx,cy),tip},2.2f);
-   g.setColour(juce::Colour(0xff3a302a));g.fillEllipse(cx-5.f,cy-5.f,10.f,10.f);
-   g.setColour(juce::Colour(0xff554738));g.setFont(12.f);
-   g.drawText("GAIN REDUCTION  /  dB",static_cast<int>(cx-108.f),266,216,24,
+   const float gr=juce::jlimit(0.f,18.f,reading_.gainReductionDb);
+   const auto needle=polar(first+(last-first)*(gr/18.f),rad*.82f);
+   g.setColour(juce::Colour(0xffc83832));
+   g.drawLine({juce::Point<float>(cx,cy),needle},2.5f);
+   g.setColour(juce::Colour(0xff282c30));g.fillEllipse(cx-5.f,cy-5.f,10.f,10.f);
+   g.setColour(juce::Colour(0xff4d423b));g.setFont(theme_.font(10.f));
+   g.drawText("GAIN REDUCTION / dB",mx+12,my+mh-32,mw-24,20,
               juce::Justification::centred);
   }
-  g.setColour(juce::Colour(0xffd4dee6));g.setFont(14.f);
-  const bool compact=getHeight()<440;
-  const float scopeY=compact?216.f:juce::jmax(270.f,static_cast<float>(getHeight()-245)),scopeX=32.f,scopeW=static_cast<float>(getWidth()-64-(getWidth()>=870?270:0)),scopeH=compact?78.f:95.f;
-  g.setColour(juce::Colour(0xff101d27));g.fillRoundedRectangle(scopeX,scopeY,scopeW,scopeH,10.f);
-  for(int i=1;i<4;++i){g.setColour(juce::Colour(0xff536c79).withAlpha(.23f));g.drawHorizontalLine(static_cast<int>(scopeY+scopeH*i/4),scopeX,scopeX+scopeW);}
+
+  const int scopeTop=compact?232:std::max(rowBottom+20,
+                                             showMeter?(h>=680?344:305):rowBottom+20);
+  const int footerHeight=compact?61:(h>=680?103:91);
+  const int scopeHeight=std::max(43,h-scopeTop-footerHeight);
+  const auto scope=juce::Rectangle<float>(26.f,static_cast<float>(scopeTop),
+                                         static_cast<float>(w-52),
+                                         static_cast<float>(scopeHeight));
+  g.setColour(juce::Colour(0xff091722));g.fillRoundedRectangle(scope,9.f);
+  g.setColour(juce::Colour(0xff2c5364));g.drawRoundedRectangle(scope,9.f,1.f);
+  g.saveState();g.reduceClipRegion(scope.toNearestInt().reduced(2));
+  for(int line=1;line<4;++line){
+   const float gy=scope.getY()+scope.getHeight()*line/4.f;
+   g.setColour(juce::Colour(0xff61788d).withAlpha(.22f));
+   g.drawHorizontalLine(juce::roundToInt(gy),scope.getX()+4.f,scope.getRight()-4.f);
+  }
   for(int lane=0;lane<3;++lane){
-   const auto& wave=lane==0?reading_.inputWave:(lane==1?reading_.outputWave:reading_.gainEnvelope);
+   const auto& points=lane==0?reading_.inputWave:
+       (lane==1?reading_.outputWave:reading_.gainEnvelope);
    juce::Path line;
-   for(size_t i=0;i<wave.size();++i){
-    const float x=scopeX+scopeW*i/(wave.size()-1.f);
-    const float position=lane==2?1.f-wave[i]:wave[i];
-    const float y=scopeY+scopeH*(lane==2?.15f:.5f)-std::clamp(position,-1.f,1.f)*scopeH*(lane==2?.23f:.4f);
+   for(size_t i=0;i<points.size();++i){
+    const float x=scope.getX()+6.f+
+      (scope.getWidth()-12.f)*static_cast<float>(i)/
+      static_cast<float>(points.size()-1);
+    const float norm=lane==2?
+        juce::jlimit(0.f,1.f,1.f-points[i]):
+        juce::jlimit(-1.f,1.f,points[i]);
+    const float y=scope.getCentreY()-norm*scope.getHeight()*(lane==2?.40f:.43f);
     if(i==0)line.startNewSubPath(x,y);else line.lineTo(x,y);
    }
-   g.setColour(lane==0?juce::Colour(0xff6fcde2):(lane==1?juce::Colour(0xffffb46b):juce::Colour(0xffff6b76)));
-   g.strokePath(line,juce::PathStrokeType(lane==2?2.f:1.2f));
+   g.setColour(lane==0?juce::Colour(0xff76d6ef):
+      (lane==1?juce::Colour(0xffffb46b):juce::Colour(0xffff6e82)));
+   g.strokePath(line,juce::PathStrokeType(lane==2?2.2f:1.6f));
   }
-  g.setColour(juce::Colour(0xffd4dee6));g.setFont(11.f);
-  g.drawText("REAL DSP  /  INPUT CYAN   OUTPUT AMBER   GAIN REDUCTION RED",34,static_cast<int>(scopeY)-18,getWidth()-68,18,juce::Justification::left);
-  const int y=compact?299:std::max(375,getHeight()-117);
-  auto db=[](float x){return juce::String(20.f*std::log10(std::max(1e-9f,x)),2);};
-  g.drawText(juce::String("INPUT TP ")+db(reading_.detectedTruePeak)+" dBFS"+
-             (reading_.oversamplingFactor>1?"     OUTPUT TP EST ":"     OUTPUT SAMPLE ")+
-             db(reading_.outputTruePeak)+" dBFS"+
-             "     GAIN REDUCTION "+juce::String(reading_.gainReductionDb,2)+" dB",
-             24,y,getWidth()-48,32,juce::Justification::left);
-  if(!compact){g.setColour(juce::Colour(0xff29393a));
-  g.fillRoundedRectangle(24.f,static_cast<float>(y+45),static_cast<float>(getWidth()-48),15.f,5.f);
-  g.setColour(juce::Colour(0xffb3e2ce));
-  g.fillRoundedRectangle(24.f,static_cast<float>(y+45),static_cast<float>(getWidth()-48)*juce::jlimit(0.f,1.f,reading_.gainReductionDb/18.f),15.f,5.f);
-  g.setColour(juce::Colour(0xff9dacad));g.setFont(12.f);
-  g.drawText("TP DETECTOR "+juce::String(reading_.oversamplingFactor)+"x   /   LOOKAHEAD "+juce::String(reading_.lookaheadMs,2)+" ms   /   CONSTANT PDC AT THIS SAMPLE RATE   /   INDEPENDENT EXPORT TP CHECK STILL REQUIRED.",
-             24,y+83,getWidth()-48,30,juce::Justification::left);}
+  g.restoreState();
+  // Legend and values occupy their own footer, never overlap a slider.
+  const int footerTop=scopeTop+scopeHeight+6;
+  g.setColour(juce::Colour(0xffb8c9d3));g.setFont(theme_.font(10.5f));
+  g.drawFittedText("INPUT / CYAN     OUTPUT / AMBER     GAIN REDUCTION / RED",
+                   30,footerTop,w-60,19,juce::Justification::left,1);
+  auto db=[](float peak){return juce::String(20.f*std::log10(std::max(1e-9f,peak)),2);};
+  g.setFont(theme_.font(compact?10.f:12.f));
+  g.setColour(juce::Colour(0xffe5f1f5));
+  const juce::String tpName=reading_.oversamplingFactor>1?"OUTPUT TP EST ":"OUTPUT SAMPLE ";
+  const juce::String metrics=reading_.active?
+       ("INPUT "+db(reading_.detectedTruePeak)+" dBFS     "+
+        tpName+db(reading_.outputTruePeak)+" dBFS     GR "+
+        juce::String(reading_.gainReductionDb,2)+" dB"):
+       "AWAITING AUDIO — METERS SHOW LAST PROCESSED BLOCK";
+  g.drawFittedText(metrics,30,footerTop+20,w-60,25,juce::Justification::left,1);
+  if(!compact){
+   // The UI settings update immediately; DSP telemetry updates only after
+   // a real audio block. Do not present stale measurements as new settings.
+   const juce::String selected="SELECTED: "+
+        juce::String(1<<std::clamp(oversampling_.getSelectedItemIndex(),0,3))+
+        "x TP / "+
+        juce::String(knobs_[5]->slider.getValue(),2)+" ms LOOKAHEAD";
+   const juce::String processed=reading_.active?
+      ("    LAST PROCESSED: "+juce::String(reading_.oversamplingFactor)+
+       "x / "+juce::String(reading_.lookaheadMs,2)+" ms"):
+      "    LAST PROCESSED: NO AUDIO";
+   g.setColour(juce::Colour(0xff90bcc5));g.setFont(theme_.font(10.f));
+   g.drawFittedText(selected+processed,30,footerTop+50,w-60,22,
+                    juce::Justification::left,1);
+  }
  }
+
 };
