@@ -19,7 +19,7 @@ struct FinalTruePeakSettings {
 struct FinalTruePeakReading {
  float detectedTruePeak=0.f,outputSamplePeak=0.f,gainReductionDb=0.f;
  std::array<float,64> inputWave{},outputWave{},gainEnvelope{};
- float outputTruePeak=0.f,lookaheadMs=0.f;
+ float outputTruePeak=0.f,lookaheadMs=0.f,ceilingLinear=1.f;
  bool active=false;
  int oversamplingFactor=4;
 };
@@ -265,6 +265,7 @@ public:
   reading_.gainEnvelope=gainEnvelope;
   reading_.lookaheadMs=actualLookaheadMs;
   reading_.oversamplingFactor=factor;
+  reading_.ceilingLinear=ceiling;
   reading_.active=true;
  }
 };
