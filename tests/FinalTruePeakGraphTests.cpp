@@ -15,7 +15,7 @@ static std::vector<float> render(bool enable,bool parallel,int block,int rate){
  graph.topology(parallel,{false,false,false,false,false,false});
  FinalTruePeakSettings tp;tp.enabled=enable;tp.ceilingDb=-6.f;tp.driveDb=14.f;tp.releaseMs=70.f;
  graph.finalTruePeakSettings(tp);
- check(graph.latency()>=FinalTruePeak::latencySamples,"graph reports fixed final PDC");
+ check(graph.latency()>=std::max(128,static_cast<int>(std::ceil(rate*.010))),"graph reports fixed final PDC");
  const int length=rate/2;
  std::vector<float> left(length),right(length),trace(std::max(block,1));
  for(int i=0;i<length;++i){
