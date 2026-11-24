@@ -287,9 +287,9 @@ public:
    // parameter adapters. Do not change values on a complete current preset.
    const auto xml=getXmlFromBinary(data,size);
    const auto incoming=xml!=nullptr?juce::ValueTree::fromXml(*xml):juce::ValueTree{};
-   const bool legacy304=incoming.getNumChildren()==304;
-   if(legacy304){
-    for(size_t i=304;i<masterlab::parameterCount;++i){
+   const int supplied=incoming.getNumChildren();
+   if(supplied==304||supplied==316){
+    for(size_t i=static_cast<size_t>(supplied);i<masterlab::parameterCount;++i){
      auto* parameter=dynamic_cast<juce::RangedAudioParameter*>(getParameters()[static_cast<int>(i)]);
      if(parameter!=nullptr){
       const auto factoryDefault=parameter->getDefaultValue();
