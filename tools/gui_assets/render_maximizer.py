@@ -60,7 +60,7 @@ def scope():
  w,h=1600,470
  im=Image.new("RGBA",(w,h))
  shadow=Image.new("RGBA",(w,h))
- ImageDraw.Draw(shadow).rounded_rectangle((10,10,w-10,h-10),31,fill=(0,0,0,155))
+ ImageDraw.Draw(shadow).rounded_rectangle((10,10,w-10,h-10),31,outline=(0,0,0,155),width=15)
  im.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(9)))
  d=ImageDraw.Draw(im)
  d.rounded_rectangle((5,5,w-6,h-6),28,outline=(135,159,172,240),width=15)
