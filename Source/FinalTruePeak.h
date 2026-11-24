@@ -37,7 +37,7 @@ private:
  std::array<std::array<double,detectorTaps>,maxOversampling> kernel_{};
  std::array<std::array<float,detectorTaps>,2> history_{},outputHistory_{};
  std::array<std::array<float,ringCapacity>,2> delay_{};
- std::array<float,ringCapacity> peakHistory_{};
+ std::array<float,ringCapacity> peakHistory_{},transientHistory_{};
  std::array<float,peakQueueCapacity> peakValues_{};
  std::array<std::uint64_t,peakQueueCapacity> peakStamps_{};
  int histPosition_=0,outputHistPosition_=0,delayPosition_=0;
@@ -114,7 +114,7 @@ public:
   reset();
  }
  void reset()noexcept{
-  history_={};outputHistory_={};delay_={};peakHistory_={};
+  history_={};outputHistory_={};delay_={};peakHistory_={};transientHistory_={};
   peakValues_={};peakStamps_={};
   histPosition_=outputHistPosition_=delayPosition_=0;
   previousLookaheadSamples_=-1;peakHead_=peakTail_=0;sampleClock_=0;
@@ -150,7 +150,7 @@ public:
     left[i]=delay_[0][read];right[i]=delay_[1][read];
     delayPosition_=advance(delayPosition_,ringCapacity);
    }
-   history_={};outputHistory_={};peakHistory_={};
+   history_={};outputHistory_={};peakHistory_={};transientHistory_={};
    histPosition_=outputHistPosition_=0;peakHead_=peakTail_=0;
    previousLookaheadSamples_=-1;
    sampleClock_+=static_cast<std::uint64_t>(count);
@@ -191,8 +191,12 @@ public:
    const float oldEnvelope=transientEnvelope_;
    transientEnvelope_=envelopeCoeff*transientEnvelope_+
                       (1.f-envelopeCoeff)*amplitude;
-   const float onset=std::clamp((amplitude-oldEnvelope)/
-                               std::max(.05f,oldEnvelope+.05f),0.f,1.f);
+   // Envelope-ratio transient detector: reject normal sine half-cycles.
+   // Strong new attacks are aligned to the exact delayed output sample.
+   const float onset=amplitude>.25f&&amplitude>1.8f*oldEnvelope?
+       std::clamp((amplitude-1.8f*oldEnvelope)/
+                  (amplitude+.10f),0.f,1.f):0.f;
+   transientHistory_[delayPosition_]=onset;
    for(int c=0;c<2;++c){
     history_[c][histPosition_]=input[c];
     delay_[c][delayPosition_]=input[c];
@@ -234,7 +238,10 @@ public:
    const float atOutput=std::max(peakHistory_[peakAtOutput],
        std::max(std::abs(delay_[0][read]),std::abs(delay_[1][read])));
    const float safeGain=atOutput>threshold?threshold/atOutput:1.f;
-   gain_=std::min(controlledGain_,safeGain);
+   // Restore a little transient-level contrast relative to the sustained
+   // gain-reduction envelope, but NEVER beyond the local TP safety bound.
+   const float transientLift=1.f+.25f*transient*transientHistory_[read];
+   gain_=std::min(controlledGain_*transientLift,safeGain);
    minGain=std::min(minGain,gain_);
    const float y[2]{
     delay_[0][read]*gain_*outputGain,
