@@ -109,10 +109,10 @@
 - Consumes: actual readings produced by Tasks 2–3.
 - Produces: responsive layouts and screenshots at the three required viewport sizes.
 
-- [ ] Capture current panels and list concrete clipping, hierarchy and information defects.
-- [ ] Add failing geometry/visibility checks for each confirmed defect.
-- [ ] Re-layout panels without bitmap mockups or invented telemetry.
-- [ ] Visually inspect all captures, run GUI smoke and commit independently.
+- [x] Capture Analog Exciter and list concrete clipping, hierarchy, status and stale-evidence defects; remaining panels are still open.
+- [x] Add failing Analog Exciter geometry/visibility and state checks.
+- [x] Re-layout Analog Exciter without bitmap mockups or invented telemetry.
+- [x] Visually inspect its three fresh captures and run GUI smoke; remaining module layouts are still open.
 
 ### Task 6: Full verification and handoff
 

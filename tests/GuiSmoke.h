@@ -251,7 +251,7 @@ class GuiSmoke final : private juce::Timer {
                 if(!visual.isValid())return captureError(__LINE__);
                 const auto file=juce::File::getCurrentWorkingDirectory().getChildFile(
                     "build-plugin/console-"+juce::String(dim.x)+"x"+juce::String(dim.y)+".png");
-                juce::FileOutputStream out(file);out.truncate();
+                juce::FileOutputStream out(file);out.setPosition(0);out.truncate();
                 if(!juce::PNGImageFormat{}.writeImageToStream(visual,out))return captureError(__LINE__);
             }
             editor->setSize(1000,700);
@@ -273,14 +273,47 @@ class GuiSmoke final : private juce::Timer {
                 std::cerr<<"Analog Exciter console navigation failed\\n";
                 return captureError(__LINE__);
             }
+            auto* colourPresent=dynamic_cast<juce::Button*>(analogExciter->findChildWithID("analogizer-present"));
+            auto* colourEnabled=dynamic_cast<juce::Button*>(analogExciter->findChildWithID("analogizer-enabled"));
+            if(!colourPresent||!colourEnabled)return captureError(__LINE__);
+            const bool initialColourPresent=colourPresent->getToggleState();
+            const bool initialColourEnabled=colourEnabled->getToggleState();
+            colourPresent->setToggleState(false,juce::sendNotificationSync);
+            colourEnabled->setToggleState(true,juce::sendNotificationSync);
+            feed(2);
+            if(colourEnabled->getButtonText()!="NOT IN CHAIN"){
+                std::cerr<<"Analog Exciter reports enabled while absent from the DSP chain\n";
+                return captureError(__LINE__);
+            }
+            colourPresent->setToggleState(true,juce::sendNotificationSync);
+            feed(2);
+            if(colourEnabled->getButtonText()!="ACTIVE"){
+                std::cerr<<"Analog Exciter active status does not follow the real DSP chain\n";
+                return captureError(__LINE__);
+            }
+            colourPresent->setToggleState(initialColourPresent,juce::sendNotificationSync);
+            colourEnabled->setToggleState(initialColourEnabled,juce::sendNotificationSync);
             for(const auto dim:{juce::Point<int>{750,550},juce::Point<int>{1000,700},juce::Point<int>{1400,1000}}){
                 editor->setSize(dim.x,dim.y);
                 if(!controlsFit())return captureError(__LINE__);
+                const int minimumSliderHeight=56;
+                for(const char* id:{"analogizerDrive","analogizerWarmth","analogizerDeFizz","analogizerMix",
+                                    "analogizerOutput","exciterAmountLow","exciterAmountMid","exciterAmountHigh",
+                                    "exciterAmountAir","exciterEven","exciterOdd","analogBias","analogTone",
+                                    "analogDynamics","analogImpact"}){
+                    auto* slider=dynamic_cast<juce::Slider*>(analogExciter->findChildWithID(id));
+                    if(!slider||!slider->isVisible()||slider->getHeight()<minimumSliderHeight||
+                       !analogExciter->getLocalBounds().contains(slider->getBounds())){
+                        std::cerr<<"Analog Exciter control is not usable at "<<dim.x<<"x"<<dim.y
+                                 <<": "<<id<<" bounds="<<(slider?slider->getBounds().toString():"missing")<<"\n";
+                        return captureError(__LINE__);
+                    }
+                }
                 auto visual=editor->createComponentSnapshot(editor->getLocalBounds());
                 if(!visual.isValid())return captureError(__LINE__);
                 const auto file=juce::File::getCurrentWorkingDirectory().getChildFile(
                     "build-plugin/analog-exciter-"+juce::String(dim.x)+"x"+juce::String(dim.y)+".png");
-                juce::FileOutputStream out(file);out.truncate();
+                juce::FileOutputStream out(file);out.setPosition(0);out.truncate();
                 if(!juce::PNGImageFormat{}.writeImageToStream(visual,out))return captureError(__LINE__);
             }
             console->onClick();
@@ -476,11 +509,11 @@ class GuiSmoke final : private juce::Timer {
                 if(!image.isValid())return captureError(__LINE__);
                 auto output=juce::File::getCurrentWorkingDirectory().getChildFile(
                     "build-plugin/maximizer-advanced-"+juce::String(dim.x)+"x"+juce::String(dim.y)+".png");
-                juce::FileOutputStream stream(output);stream.truncate();
+                juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();
                 if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return captureError(__LINE__);
                 if(dim.x==1000){
                     auto legacy=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/maximizer-advanced-smoke.png");
-                    juce::FileOutputStream out(legacy);out.truncate();
+                    juce::FileOutputStream out(legacy);out.setPosition(0);out.truncate();
                     if(!juce::PNGImageFormat{}.writeImageToStream(image,out))return captureError(__LINE__);
                 }
             }
