@@ -316,11 +316,51 @@ class GuiSmoke final : private juce::Timer {
         auto* release=dynamic_cast<juce::Slider*>(editor->findChildWithID("limiter-release"));
         auto* frequency=editor->findChildWithID("eq-frequency");
         if(!finalPanel||!finalPanel->isVisible()||!frequency||frequency->isVisible())return captureError(__LINE__);
-        auto* renderedMaximizer=dynamic_cast<FinalTruePeakPanel*>(finalPanel);
-        if(!renderedMaximizer||!renderedMaximizer->hasRenderedMaximizerAssets()){
-            std::cerr<<"Maximizer UI regression: embedded rendered meter/scope kit missing\\n";
+        // The test compilation unit intentionally does not include
+        // Editor-private panel types. Check actual JUCE child geometry and
+        // rendered bitmaps without a dynamic_cast to FinalTruePeakPanel.
+        const auto meter=juce::ImageCache::getFromMemory(
+            MasterLabGuiAssets::maximizer_meter_bezel_png,
+            MasterLabGuiAssets::maximizer_meter_bezel_pngSize);
+        const auto scope=juce::ImageCache::getFromMemory(
+            MasterLabGuiAssets::maximizer_scope_frame_png,
+            MasterLabGuiAssets::maximizer_scope_frame_pngSize);
+        if(meter.isNull()||scope.isNull()||
+           meter.getWidth()!=512||meter.getHeight()!=396||
+           scope.getWidth()!=1600||scope.getHeight()!=470){
+            std::cerr<<"Maximizer embedded renders are invalid\\n";
             return captureError(__LINE__);
         }
+        auto validateFinalLayout=[&]{
+            const int w=finalPanel->getWidth(),h=finalPanel->getHeight();
+            const bool compact=h<430;
+            const bool showMeter=w>=870&&!compact;
+            const int rowTop=compact?109:(h>=680?133:121);
+            const int knobBottom=rowTop+23+(compact?91:(h>=680?155:129));
+            const int scopeTop=compact?232:std::max(knobBottom+20,
+                           showMeter?(h>=680?344:305):knobBottom+20);
+            const int footer=compact?61:(h>=680?103:91);
+            const int scopeHeight=std::max(43,h-scopeTop-footer);
+            const juce::Rectangle<int> waveform(26,scopeTop,w-52,scopeHeight);
+            const juce::Rectangle<int> vu(w-255,109,226,h>=680?211:180);
+            if(scopeTop<knobBottom+8||scopeTop+scopeHeight+footer>h)return false;
+            for(int i=0;i<finalPanel->getNumChildComponents();++i){
+                auto* c=finalPanel->getChildComponent(i);
+                if(!c||!c->isVisible())continue;
+                if(!finalPanel->getLocalBounds().contains(c->getBounds()))return false;
+                for(int j=i+1;j<finalPanel->getNumChildComponents();++j){
+                    auto* other=finalPanel->getChildComponent(j);
+                    if(other&&other->isVisible()&&
+                       c->getBounds().intersects(other->getBounds()))return false;
+                }
+                if(auto* slider=dynamic_cast<juce::Slider*>(c)){
+                    if(slider->getHeight()<75||slider->getWidth()<72)return false;
+                    if(slider->getBounds().intersects(waveform)||
+                       (showMeter&&slider->getBounds().intersects(vu)))return false;
+                }
+            }
+            return true;
+        };
         auto* finalDrive=dynamic_cast<juce::Slider*>(finalPanel->findChildWithID("truePeakDrive"));
         auto* finalRelease=dynamic_cast<juce::Slider*>(finalPanel->findChildWithID("truePeakRelease"));
         auto* finalCeiling=dynamic_cast<juce::Slider*>(finalPanel->findChildWithID("truePeakCeiling"));
@@ -339,7 +379,7 @@ class GuiSmoke final : private juce::Timer {
            std::abs(actual("truePeakCeiling")+6)>.02f)return captureError(__LINE__);
         for(auto size:{juce::Point<int>(750,550),juce::Point<int>(1000,700),juce::Point<int>(2000,1400)}){
             editor->setSize(size.x,size.y);
-            if(!finalPanel->isVisible()||!controlsFit()||!renderedMaximizer->layoutValidForTest())return captureError(__LINE__);
+            if(!finalPanel->isVisible()||!controlsFit()||!validateFinalLayout())return captureError(__LINE__);
             auto image=editor->createComponentSnapshot(editor->getLocalBounds());
             if(!image.isValid()||image.getWidth()!=size.x||image.getHeight()!=size.y)return captureError(__LINE__);
             if(iteration==0){
@@ -389,7 +429,7 @@ class GuiSmoke final : private juce::Timer {
         if(iteration==0){
             for(const auto dim:{juce::Point<int>{750,550},juce::Point<int>{1000,700},juce::Point<int>{1400,1000}}){
                 editor->setSize(dim.x,dim.y);
-                if(!controlsFit()||!renderedMaximizer->layoutValidForTest())return captureError(__LINE__);
+                if(!controlsFit()||!validateFinalLayout())return captureError(__LINE__);
                 auto* selected=finalPanel->findChildWithID("truePeakLookahead");
                 if(!selected||selected->getHeight()<75||!selected->isVisible())return captureError(__LINE__);
                 auto image=editor->createComponentSnapshot(editor->getLocalBounds());
