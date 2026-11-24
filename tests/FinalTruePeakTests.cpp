@@ -152,6 +152,45 @@ int main(){
           "Maximizer violates sample ceiling under 1x/2x/4x/8x automation");
   }
  }
+ // Controls must alter the *audible audio*, not merely change the GUI
+ // value or self-reported metering.
+ auto musicalRender=[&](float lookahead,float attack,float emphasis){
+  FinalTruePeak limiter;
+  FinalTruePeakSettings settings;
+  settings.enabled=true;settings.ceilingDb=-6.f;settings.driveDb=14.f;
+  settings.lookaheadMs=lookahead;settings.attackMs=attack;
+  settings.transientEmphasis=emphasis;settings.oversamplingFactor=8;
+  limiter.settings(settings);limiter.prepare(48000.);
+  std::vector<float> left(12000),right(12000);
+  for(int i=0;i<12000;++i){
+   const int p=i%2900;
+   float sample=.08f*std::sin(2*pi*733.*i/48000.);
+   if(p==2500)sample=1.5f;
+   if(p==2530)sample=.35f;
+   if(p==2534)sample=-.31f;
+   left[static_cast<size_t>(i)]=right[static_cast<size_t>(i)]=sample;
+  }
+  for(int i=0;i<12000;i+=128)
+   limiter.process(left.data()+i,right.data()+i,std::min(128,12000-i));
+  return left;
+ };
+ auto effectDistance=[](const auto& lhs,const auto& rhs){
+  double energy=0.;
+  for(size_t i=1500;i<lhs.size();++i){
+   const double d=lhs[i]-rhs[i];energy+=d*d;
+  }
+  return std::sqrt(energy/(lhs.size()-1500));
+ };
+ const auto shortPreview=musicalRender(1.f,.2f,0.f);
+ const auto longPreview=musicalRender(10.f,.2f,0.f);
+ const auto slowAttack=musicalRender(10.f,6.f,0.f);
+ const auto transientBoost=musicalRender(10.f,6.f,1.f);
+ check(effectDistance(shortPreview,longPreview)>1.e-5,
+       "Lookahead changes a label but not the output gain trajectory");
+ check(effectDistance(longPreview,slowAttack)>1.e-5,
+       "Attack changes a knob but not the output gain trajectory");
+ check(effectDistance(slowAttack,transientBoost)>1.e-6,
+       "Transient emphasis did not produce any measurable audio change");
  FinalTruePeak dsp;FinalTruePeakSettings s;s.enabled=true;
  dsp.settings(s);dsp.prepare(48000);
  std::array<float,512> a{},b{};a[0]=std::numeric_limits<float>::quiet_NaN();
