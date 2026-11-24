@@ -193,6 +193,10 @@ inline BrainProposal proposeMastering(const BrainFeatures& f,BrainConfig config)
   add("truePeakAutoRelease",1.f);
   add("truePeakSoftClip",0.f);
   add("truePeakOutput",0.f);
+  add("truePeakLookahead",c.style==1?4.f:3.f);
+  add("truePeakOversampling",2.f); // 4x FIR TP detector
+  add("truePeakAttack",c.style==2?.18f:.35f);
+  add("truePeakTransient",c.style==1?.15f:(c.style==2?.10f:0.f));
   p.drive=safeDrive;
   p.reasons.push_back("Final Maximizer: gain staged at the actual True-Peak input, transparent soft clip OFF, auto release ON; measured DSP preview must approve the selected drive and peak margin.");
  }
