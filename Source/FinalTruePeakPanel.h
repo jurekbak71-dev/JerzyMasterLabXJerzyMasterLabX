@@ -23,6 +23,34 @@ class FinalTruePeakPanel final : public juce::Component {
  juce::Image scopeFrame_{juce::ImageCache::getFromMemory(
      MasterLabGuiAssets::maximizer_scope_frame_png,
      MasterLabGuiAssets::maximizer_scope_frame_pngSize)};
+ struct Layout {
+  bool compact=false,showMeter=false;
+  juce::Rectangle<int> drive,ceiling,scope,meter,bottom;
+ };
+ Layout layout()const noexcept {
+  Layout out;const int w=getWidth(),h=getHeight();out.compact=h<430;
+  out.showMeter=w>=870&&!out.compact;
+  const int leftWidth=out.compact?132:(w>=1200?224:196);
+  const int rightWidth=out.showMeter?238:0;
+  const int contentTop=109;
+  // Legend + live readings need 45 px in compact mode. The regular layout
+  // also paints the selected/processed control summary and needs 72 px.
+  const int footer=out.compact?50:76;
+  const int bottomHeight=out.compact?91:(h>=680?142:122);
+  const int graphHeight=std::max(92,h-contentTop-bottomHeight-footer-10);
+  out.scope={24+leftWidth+12,contentTop,
+             std::max(120,w-48-leftWidth-rightWidth-24),graphHeight};
+  out.bottom={out.scope.getX(),out.scope.getBottom()+10,
+              out.scope.getWidth(),bottomHeight};
+  const int driveHeight=out.compact?112:(h>=680?214:178);
+  out.drive={24,contentTop+22,leftWidth,driveHeight};
+  const int ceilingTop=out.drive.getBottom()+22;
+  out.ceiling={24,ceilingTop,leftWidth,
+               std::max(76,h-footer-ceilingTop)};
+  if(out.showMeter)out.meter={w-rightWidth+8,contentTop,rightWidth-32,
+                              std::min(238,graphHeight)};
+  return out;
+ }
  void addKnob(const char* caption,const char* parameter){
   auto k=std::make_unique<Knob>();k->name.setText(caption,juce::dontSendNotification);
   k->name.setColour(juce::Label::textColourId,juce::Colour(0xffd4dee6));
@@ -87,73 +115,58 @@ public:
      return false;
    }
   }
-  const bool compact=getHeight()<430;
-  const bool meter=getWidth()>=870&&!compact;
-  const int knobTop=(compact?109:(getHeight()>=680?133:121))+23;
-  const int knobHeight=compact?91:(getHeight()>=680?155:129);
-  const int knobBottom=knobTop+knobHeight;
-  const int scopeTop=compact?232:std::max(knobBottom+20,
-                            meter?(getHeight()>=680?344:305):knobBottom+20);
-  const int footer=compact?61:(getHeight()>=680?103:91);
-  const int scopeHeight=std::max(43,getHeight()-scopeTop-footer);
-  if(scopeTop<knobBottom+8||scopeTop+scopeHeight+footer>getHeight())return false;
-  const auto scope=juce::Rectangle<int>(26,scopeTop,getWidth()-52,scopeHeight);
-  const auto meterRect=juce::Rectangle<int>(getWidth()-255,109,226,
-                                            getHeight()>=680?211:180);
+  const auto regions=layout();
   for(const auto& ptr:knobs_){
    if(!ptr->slider.isVisible())continue;
-   if(ptr->slider.getHeight()<75||ptr->slider.getWidth()<72)return false;
-   if(ptr->slider.getBounds().intersects(scope))return false;
-   if(meter&&(ptr->slider.getBounds().intersects(meterRect)||
-              ptr->name.getBounds().intersects(meterRect)))return false;
+   if(ptr->slider.getHeight()<70||ptr->slider.getWidth()<68)return false;
+   if(ptr->slider.getBounds().intersects(regions.scope))return false;
+   if(regions.showMeter&&(ptr->slider.getBounds().intersects(regions.meter)||
+              ptr->name.getBounds().intersects(regions.meter)))return false;
   }
   if(oversampling_.isVisible()&&
-     (oversampling_.getBounds().intersects(scope)||
-      (meter&&oversampling_.getBounds().intersects(meterRect))))return false;
+     (oversampling_.getBounds().intersects(regions.scope)||
+      (regions.showMeter&&oversampling_.getBounds().intersects(regions.meter))))return false;
   return true;
  }
  void update(const Processor::ResponseFrame& response){reading_=response.truePeak;repaint();}
  void resized()override{
   const int w=getWidth(),h=getHeight();
-  const bool compact=h<430;
-  const bool showMeter=w>=870&&!compact;
-  const int meterReserve=showMeter?270:0;
   // The meter owns a dedicated column: controls can never overlap it.
   included_.setBounds(24,12,124,32);
   enabled_.setBounds(154,12,115,32);
   character_.setBounds(278,12,168,32);
   autoRelease_.setBounds(454,12,130,32);
   advancedButton_.setBounds(w-157,12,125,32);
-  const int areaWidth=std::max(200,w-48-meterReserve);
-  const int columns=advancedView_?4:5;
-  const int gap=12;
-  const int knobWidth=std::clamp((areaWidth-gap*(columns-1))/columns,72,157);
-  const int rowWidth=columns*knobWidth+(columns-1)*gap;
-  const int xStart=24+std::max(0,(areaWidth-rowWidth)/2);
-  const int rowTop=compact?109:(h>=680?133:121);
-  const int knobTop=rowTop+23;
-  const int knobHeight=compact?91:(h>=680?155:129);
+  const auto regions=layout();
   for(size_t i=0;i<knobs_.size();++i){
-   const bool visible=advancedView_?i>=5:i<5;
+   const bool visible=i==0||i==2||(advancedView_?(i>=5):(i==1||i==3||i==4));
    auto& knob=*knobs_[i];
    knob.name.setVisible(visible);
    knob.slider.setVisible(visible);
    if(!visible)continue;
-   const int column=static_cast<int>(advancedView_?i-5:i);
-   const int x=xStart+column*(knobWidth+gap);
-   knob.name.setBounds(x,rowTop,knobWidth,21);
-   knob.slider.setBounds(x,knobTop,knobWidth,knobHeight);
+   if(i==2){knob.name.setBounds(regions.drive.withHeight(21).withY(regions.drive.getY()-22));knob.slider.setBounds(regions.drive);continue;}
+   if(i==0){knob.name.setBounds(regions.ceiling.withHeight(21).withY(regions.ceiling.getY()-22));knob.slider.setBounds(regions.ceiling);continue;}
+  }
+  const std::array<size_t,3> page=advancedView_?std::array<size_t,3>{5,6,7}:std::array<size_t,3>{1,3,4};
+  const int gap=10;
+  const int columns=advancedView_?4:3;
+  const int controlWidth=std::min(180,(regions.bottom.getWidth()-(columns-1)*gap)/columns);
+  const int rowWidth=columns*controlWidth+(columns-1)*gap;
+  const int start=regions.bottom.getX()+std::max(0,(regions.bottom.getWidth()-rowWidth)/2);
+  for(size_t column=0;column<page.size();++column){auto& knob=*knobs_[page[column]];
+   const int x=start+static_cast<int>(column)*(controlWidth+gap);
+   knob.name.setBounds(x,regions.bottom.getY(),controlWidth,21);
+   knob.slider.setBounds(x,regions.bottom.getY()+21,controlWidth,regions.bottom.getHeight()-21);
   }
   oversampling_.setVisible(advancedView_);
-  if(advancedView_)
-   oversampling_.setBounds(xStart+3*(knobWidth+gap),knobTop+std::min(38,knobHeight/3),
-                           knobWidth,32);
+  if(advancedView_)oversampling_.setBounds(start+3*(controlWidth+gap),
+                                            regions.bottom.getY()+35,controlWidth,31);
  }
  void paint(juce::Graphics& g)override{
   const int w=getWidth(),h=getHeight();
   if(w<120||h<150)return;
-  const bool compact=h<430;
-  const bool showMeter=w>=870&&!compact;
+  const auto regions=layout();const bool compact=regions.compact;
+  const bool showMeter=regions.showMeter;
   // Concept C: powder-coated light chassis around a recessed, dark DSP surface.
   g.fillAll(juce::Colour(0xffd6dfe4));
   const auto frame=juce::Rectangle<float>(9.f,0.f,static_cast<float>(w-18),static_cast<float>(h));
@@ -176,28 +189,20 @@ public:
   g.setColour(clipping?juce::Colour(0xffff7384):juce::Colour(0xffb3e2ce));
   g.drawText(status,w-163,60,133,26,juce::Justification::centredLeft);
 
-  const int areaWidth=w-48-(showMeter?270:0);
-  const int columns=advancedView_?4:5;
-  const int gap=12;
-  const int knobWidth=std::clamp((std::max(200,areaWidth)-gap*(columns-1))/columns,72,157);
-  const int rowWidth=columns*knobWidth+(columns-1)*gap;
-  const int xStart=24+std::max(0,(areaWidth-rowWidth)/2);
-  const int rowTop=compact?109:(h>=680?133:121);
-  const int knobTop=rowTop+23;
-  const int knobHeight=compact?91:(h>=680?155:129);
-
   // Label the fourth advanced control accurately; it is a real true-peak
   // reconstruction setting, not nonlinear oversampling of soft clipping.
   if(advancedView_){
    g.setColour(juce::Colour(0xffc5d6e2));g.setFont(theme_.font(11.f));
-   g.drawFittedText("TP DETECTION",xStart+3*(knobWidth+gap),rowTop,
-                    knobWidth,20,juce::Justification::centred,1);
+   const int gap=10,controlWidth=std::min(180,(regions.bottom.getWidth()-3*gap)/4);
+   const int rowWidth=4*controlWidth+3*gap;
+   const int start=regions.bottom.getX()+std::max(0,(regions.bottom.getWidth()-rowWidth)/2);
+   g.drawFittedText("TP DETECTION",start+3*(controlWidth+gap),
+                    regions.bottom.getY(),controlWidth,20,juce::Justification::centred,1);
   }
-
-  const int rowBottom=knobTop+knobHeight;
   if(showMeter){
    // Physically separate VU window; a knob is never drawn in this column.
-   const int mx=w-255,my=109,mw=226,mh=h>=680?211:180;
+   const int mx=regions.meter.getX(),my=regions.meter.getY();
+   const int mw=regions.meter.getWidth(),mh=regions.meter.getHeight();
    const juce::Rectangle<float> meterRect(static_cast<float>(mx),
        static_cast<float>(my),static_cast<float>(mw),static_cast<float>(mh));
    if(!meterBezel_.isNull())g.drawImage(meterBezel_,meterRect);
@@ -228,13 +233,8 @@ public:
               juce::Justification::centred);
   }
 
-  const int scopeTop=compact?232:std::max(rowBottom+20,
-                                             showMeter?(h>=680?344:305):rowBottom+20);
-  const int footerHeight=compact?61:(h>=680?103:91);
-  const int scopeHeight=std::max(43,h-scopeTop-footerHeight);
-  const auto scope=juce::Rectangle<float>(26.f,static_cast<float>(scopeTop),
-                                         static_cast<float>(w-52),
-                                         static_cast<float>(scopeHeight));
+  const int scopeTop=regions.scope.getY(),scopeHeight=regions.scope.getHeight();
+  const auto scope=regions.scope.toFloat();
   g.setColour(juce::Colour(0xff091722));g.fillRoundedRectangle(scope,9.f);
   g.setColour(juce::Colour(0xff2c5364));g.drawRoundedRectangle(scope,9.f,1.f);
   g.saveState();g.reduceClipRegion(scope.toNearestInt().reduced(2));
@@ -265,7 +265,7 @@ public:
   // Transparent center in rendered frame keeps every DSP waveform genuine.
   if(!scopeFrame_.isNull())g.drawImage(scopeFrame_,scope);
   // Legend and values occupy their own footer, never overlap a slider.
-  const int footerTop=scopeTop+scopeHeight+6;
+  const int footerTop=regions.bottom.getBottom()+2;
   g.setColour(juce::Colour(0xffb8c9d3));g.setFont(theme_.font(10.5f));
   g.drawFittedText("INPUT / CYAN     OUTPUT / AMBER     GAIN REDUCTION / RED",
                    30,footerTop,w-60,19,juce::Justification::left,1);
