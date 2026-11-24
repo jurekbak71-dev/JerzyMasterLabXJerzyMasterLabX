@@ -15,6 +15,14 @@ class FinalTruePeakPanel final : public juce::Component {
   std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> attachment;};
  std::vector<std::unique_ptr<Knob>> knobs_;
  masterlab::FinalTruePeakReading reading_{};
+ // Embedded deterministic static housing; audio-driven GR needle and
+ // measured waveform are still painted live from FinalTruePeakReading.
+ juce::Image meterBezel_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::maximizer_meter_bezel_png,
+     MasterLabGuiAssets::maximizer_meter_bezel_pngSize)};
+ juce::Image scopeFrame_{juce::ImageCache::getFromMemory(
+     MasterLabGuiAssets::maximizer_scope_frame_png,
+     MasterLabGuiAssets::maximizer_scope_frame_pngSize)};
  void addKnob(const char* caption,const char* parameter){
   auto k=std::make_unique<Knob>();k->name.setText(caption,juce::dontSendNotification);
   k->name.setColour(juce::Label::textColourId,juce::Colour(0xffd4dee6));
@@ -60,6 +68,11 @@ public:
   advancedButton_.setTooltip("Switch between core Maximizer controls and advanced lookahead, attack, transient and TP detection settings.");
  }
  ~FinalTruePeakPanel()override{setLookAndFeel(nullptr);}
+ bool hasRenderedMaximizerAssets()const noexcept{
+  return !meterBezel_.isNull()&&!scopeFrame_.isNull()&&
+         meterBezel_.getWidth()==512&&meterBezel_.getHeight()==396&&
+         scopeFrame_.getWidth()==1600&&scopeFrame_.getHeight()==470;
+ }
  void update(const Processor::ResponseFrame& response){reading_=response.truePeak;repaint();}
  void resized()override{
   const int w=getWidth(),h=getHeight();
@@ -148,7 +161,8 @@ public:
    const int mx=w-255,my=109,mw=226,mh=h>=680?211:180;
    const juce::Rectangle<float> meterRect(static_cast<float>(mx),
        static_cast<float>(my),static_cast<float>(mw),static_cast<float>(mh));
-   theme_.drawAnalogGrBezel(g,meterRect);
+   if(!meterBezel_.isNull())g.drawImage(meterBezel_,meterRect);
+   else theme_.drawAnalogGrBezel(g,meterRect);
    const float cx=mx+mw*.5f,cy=my+mh*.58f,rad=std::min(82.f,mh*.40f);
    auto polar=[&](float a,float d){
     return juce::Point<float>(cx+std::sin(a)*d,cy-std::cos(a)*d);
@@ -209,6 +223,8 @@ public:
    g.strokePath(line,juce::PathStrokeType(lane==2?2.2f:1.6f));
   }
   g.restoreState();
+  // Transparent center in rendered frame keeps every DSP waveform genuine.
+  if(!scopeFrame_.isNull())g.drawImage(scopeFrame_,scope);
   // Legend and values occupy their own footer, never overlap a slider.
   const int footerTop=scopeTop+scopeHeight+6;
   g.setColour(juce::Colour(0xffb8c9d3));g.setFont(theme_.font(10.5f));
