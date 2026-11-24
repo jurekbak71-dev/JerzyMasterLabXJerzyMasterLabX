@@ -122,6 +122,8 @@ jobs:
             build-plugin/*-smoke.png
             build-plugin/console-*.png
             build-plugin/analog-exciter-*.png
+            build-plugin/maximizer-core-*.png
+            build-plugin/maximizer-advanced-*.png
           if-no-files-found: error
       - name: Download pluginval 1.0.3
         shell: pwsh
@@ -190,3 +192,5 @@ jobs:
             build-plugin/parallel-smoke.png
             build-plugin/stabilizer-smoke.png
             build-plugin/analog-exciter-*.png
+            build-plugin/maximizer-core-*.png
+            build-plugin/maximizer-advanced-*.png
