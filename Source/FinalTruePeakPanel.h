@@ -83,6 +83,17 @@ public:
   autoReleaseAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.state,"truePeakAutoRelease",autoRelease_);
   includedAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.state,"truePeakPresent",included_);
   enabledAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(p.state,"truePeakOn",enabled_);
+  // Repair old sessions that persisted the contradictory On-but-not-present
+  // state.  A deliberate click on Active must make this fixed slot audible in
+  // the same gesture instead of requiring an unexplained off/on sequence.
+  enabled_.onClick=[this]{
+   if(!enabled_.getToggleState())return;
+   auto* present=processor_.state.getParameter("truePeakPresent");
+   if(present&&present->getValue()<.5f){
+    present->beginChangeGesture();present->setValueNotifyingHost(1.f);
+    present->endChangeGesture();
+   }
+  };
   addKnob("Ceiling dBTP (target)","truePeakCeiling");
   addKnob("Release ms","truePeakRelease");
   addKnob("Drive dB","truePeakDrive");

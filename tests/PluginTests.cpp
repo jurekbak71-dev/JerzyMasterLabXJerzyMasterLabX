@@ -6,6 +6,11 @@ extern juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter();
 int main(int argc,char**){
  std::unique_ptr<juce::ScopedJuceInitialiser_GUI> gui;if(argc>1)gui=std::make_unique<juce::ScopedJuceInitialiser_GUI>();
  std::unique_ptr<juce::AudioProcessor> a(createPluginFilter()),b(createPluginFilter());
+ auto* initial=dynamic_cast<Processor*>(a.get());
+ if(!initial||initial->state.getRawParameterValue("truePeakPresent")->load()<.5f||
+    initial->state.getRawParameterValue("truePeakOn")->load()<.5f){
+  std::cerr<<"fixed Final Maximizer advertises Active while absent from the default DSP chain";return 1;
+ }
  auto* gain=a->getParameters()[1];gain->setValueNotifyingHost(.72f);
  juce::MemoryBlock state;a->getStateInformation(state);b->setStateInformation(state.getData(),static_cast<int>(state.getSize()));
  if(b->getParameters()[1]->getValue()!=gain->getValue()){std::cerr<<"state restore failed";return 1;}
