@@ -154,6 +154,22 @@ if(MASTERLAB_PLUGIN)
  if(NOT MASTERLAB_GUI_VALIDATE_RESULT EQUAL 0)
    message(FATAL_ERROR "Concept C resource validation failed: ${MASTERLAB_GUI_VALIDATE_ERROR}")
  endif()
+ # Render the dedicated Maximizer bezel/scope on the same verified build
+ # pipeline as the existing 101-frame Concept C knobs. No fake telemetry.
+ execute_process(
+   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/gui_assets/render_maximizer.py" "${MASTERLAB_GUI_ASSET_DIR}"
+   RESULT_VARIABLE MASTERLAB_MAXIMIZER_RENDER_RESULT
+   ERROR_VARIABLE MASTERLAB_MAXIMIZER_RENDER_ERROR)
+ if(NOT MASTERLAB_MAXIMIZER_RENDER_RESULT EQUAL 0)
+   message(FATAL_ERROR "Maximizer graphics render failed: ${MASTERLAB_MAXIMIZER_RENDER_ERROR}")
+ endif()
+ execute_process(
+   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/gui_assets/validate_maximizer.py" "${MASTERLAB_GUI_ASSET_DIR}"
+   RESULT_VARIABLE MASTERLAB_MAXIMIZER_VALIDATE_RESULT
+   ERROR_VARIABLE MASTERLAB_MAXIMIZER_VALIDATE_ERROR)
+ if(NOT MASTERLAB_MAXIMIZER_VALIDATE_RESULT EQUAL 0)
+   message(FATAL_ERROR "Maximizer graphics validation failed: ${MASTERLAB_MAXIMIZER_VALIDATE_ERROR}")
+ endif()
  juce_add_binary_data(MasterLabGuiAssets HEADER_NAME ConceptCImages.h NAMESPACE MasterLabGuiAssets SOURCES
    "${MASTERLAB_GUI_ASSET_DIR}/knob_96_atlas.png"
    "${MASTERLAB_GUI_ASSET_DIR}/knob_160_atlas.png"
@@ -168,6 +184,8 @@ if(MASTERLAB_PLUGIN)
    "${MASTERLAB_GUI_ASSET_DIR}/ring_red_on.png"
    "${MASTERLAB_GUI_ASSET_DIR}/powdercoat_tile.png"
    "${MASTERLAB_GUI_ASSET_DIR}/analog_gr_bezel.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/maximizer_meter_bezel.png"
+   "${MASTERLAB_GUI_ASSET_DIR}/maximizer_scope_frame.png"
    "${MASTERLAB_GUI_ASSET_DIR}/led_wreath_96_atlas.png"
    "${MASTERLAB_GUI_ASSET_DIR}/led_wreath_160_atlas.png"
    "${MASTERLAB_GUI_ASSET_DIR}/glass_analyzer.png"
@@ -181,6 +199,8 @@ if(MASTERLAB_PLUGIN)
  target_link_libraries(JerzyMasterLabX PUBLIC MasterLabFonts MasterLabGuiAssets)
  add_test(NAME concept_c_asset_pack
    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/gui_assets/validate_concept_c.py" "${MASTERLAB_GUI_ASSET_DIR}")
+ add_test(NAME maximizer_asset_pack
+   COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/tools/gui_assets/validate_maximizer.py" "${MASTERLAB_GUI_ASSET_DIR}")
  target_sources(JerzyMasterLabX PRIVATE Source/Plugin.cpp)
  target_link_libraries(JerzyMasterLabX PRIVATE masterlab juce::juce_audio_utils juce::juce_dsp PUBLIC juce::juce_recommended_config_flags)
  target_compile_definitions(JerzyMasterLabX PUBLIC JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)

@@ -72,6 +72,15 @@ class AnalogizerPanel final : public juce::Component {
  };
  std::vector<std::unique_ptr<Control>> controls_;
  masterlab::AnalogizerReading reading_{};
+ void refreshStatus(){
+  auto reflect=[](juce::ToggleButton& present,juce::ToggleButton& enabled){
+   const bool inChain=present.getToggleState();
+   enabled.setButtonText(!inChain?"NOT IN CHAIN":
+                         (enabled.getToggleState()?"ACTIVE":"OFF"));
+   enabled.setEnabled(inChain);
+  };
+  reflect(present_,enabled_);reflect(harmonicsPresent_,harmonicsEnabled_);
+ }
  void add(const char* title,const char* id){
   auto item=std::make_unique<Control>();item->label.setText(title,juce::dontSendNotification);
   item->label.setColour(juce::Label::textColourId,juce::Colour(0xffc0cedb));
@@ -97,6 +106,9 @@ public:
   modeAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(processor_.state,"analogizerMode",mode_);
   harmonicsPresentAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor_.state,"exciterPresent",harmonicsPresent_);
   harmonicsEnabledAttachment_=std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(processor_.state,"exciterOn",harmonicsEnabled_);
+  present_.onClick=[this]{refreshStatus();};enabled_.onClick=[this]{refreshStatus();};
+  harmonicsPresent_.onClick=[this]{refreshStatus();};harmonicsEnabled_.onClick=[this]{refreshStatus();};
+  refreshStatus();
   add("Drive dB","analogizerDrive");add("Warmth","analogizerWarmth");
   add("Dynamic de-fizz","analogizerDeFizz");add("Dry / wet","analogizerMix");
   add("Output dB","analogizerOutput");
@@ -108,7 +120,7 @@ public:
  }
  ~AnalogizerPanel()override{setLookAndFeel(nullptr);}
  bool has3DExciteAssets()const noexcept{return excite_.renderedAssetsReady();}
- void update(const Processor::ResponseFrame& frame){reading_=frame.analogizer;harmonicReading_=frame.exciter;repaint();}
+ void update(const Processor::ResponseFrame& frame){reading_=frame.analogizer;harmonicReading_=frame.exciter;refreshStatus();repaint();}
  void resized()override{
   const bool compactWidth=getWidth()<850;
   present_.setBounds(24,12,compactWidth?112:130,30);
@@ -117,16 +129,34 @@ public:
   harmonicsEnabled_.setBounds(compactWidth?367:438,12,compactWidth?110:145,30);
   mode_.setBounds(compactWidth?481:596,12,compactWidth?170:170,30);
   const bool compact=getHeight()<440;
+  if(compact){
+   // Minimum host viewport: reserve a real 150 px EXCITE instrument and use a
+   // three-by-five control grid. The old 39 px sliders left only 15 px for
+   // the rotary artwork after the value box, effectively making them vanish.
+   excite_.setBounds(18,91,150,158);
+   const int gridX=184,gridWidth=getWidth()-gridX-18;
+   const int cellWidth=gridWidth/5,rowHeight=(getHeight()-96)/3;
+   for(size_t i=0;i<controls_.size();++i){
+    const int column=static_cast<int>(i%5),row=static_cast<int>(i/5);
+    const int x=gridX+column*cellWidth,y=91+row*rowHeight;
+    controls_[i]->label.setBounds(x,y,cellWidth-5,15);
+    controls_[i]->slider.setBounds(x,y+15,cellWidth-5,rowHeight-17);
+   }
+   return;
+  }
   const int centre=getWidth()/2;
-  excite_.setBounds(centre-(compact?100:122),compact?88:101,compact?200:244,compact?205:253);
-  const int sideWidth=std::max(76,std::min(132,(getWidth()-294)/3));
+  const int exciteSize=getHeight()>=680?300:244;
+  excite_.setBounds(centre-exciteSize/2,101,exciteSize,exciteSize+9);
+  const int sideWidth=std::clamp((getWidth()-exciteSize-110)/2,112,170);
+  const int sideRow=getHeight()>=680?105:75;
   for(size_t i=0;i<controls_.size();++i){
    int x=0,y=0,width=sideWidth;
-   if(i<4){x=22;y=(compact?90:102)+static_cast<int>(i)*(compact?50:75);}
-   else if(i<8){x=getWidth()-sideWidth-22;y=(compact?90:102)+static_cast<int>(i-4)*(compact?50:75);}
-   else {width=std::max(70,(getWidth()-44)/7);x=22+static_cast<int>(i-8)*width;y=compact?getHeight()-64:getHeight()-105;}
-   controls_[i]->label.setBounds(x,y,width-4,compact?15:18);
-   controls_[i]->slider.setBounds(x,y+(compact?15:18),width-4,compact?39:54);
+   if(i<4){x=24;y=102+static_cast<int>(i)*sideRow;}
+   else if(i<8){x=getWidth()-sideWidth-24;y=102+static_cast<int>(i-4)*sideRow;}
+   else {width=std::max(82,(getWidth()-48)/7);x=24+static_cast<int>(i-8)*width;y=getHeight()-(getHeight()>=680?142:105);}
+   controls_[i]->label.setBounds(x,y,width-5,18);
+   const int sliderHeight=(i<8?sideRow-19:(getHeight()>=680?112:82));
+   controls_[i]->slider.setBounds(x,y+18,width-5,sliderHeight);
   }
  }
  void paint(juce::Graphics& g)override{
@@ -135,7 +165,7 @@ public:
   g.setColour(juce::Colours::lightgrey);g.setFont(juce::FontOptions(14.f));
   if(getHeight()>=440)g.drawText("Input RMS "+juce::String(reading_.inputRms,4)+"   Output RMS "+juce::String(reading_.outputRms,4)+"   Delta RMS "+juce::String(reading_.deltaRms,4),
       24,81,getWidth()-48,20,juce::Justification::left);
-  const int meterY=std::min(getHeight()-61,363);
+  const int meterY=getHeight()>=680?445:363;
   g.setFont(11.f);
   if(getHeight()>=440)for(size_t band=0;band<4;++band){
    const float energy=harmonicReading_.generatedRms[band];
@@ -147,6 +177,6 @@ public:
    g.setColour(juce::Colour(0xffcbd6e0));g.drawText(juce::String(std::array<const char*,4>{"LOW H","MID H","HIGH H","AIR H"}[band]),static_cast<int>(x),meterY+10,static_cast<int>(width-9),18,juce::Justification::left);
   }
   if(getHeight()>=440)g.drawText("Actual harmonic DSP RMS / Tube - FET - Tape / EXCITE macro",
-      24,getHeight()-53,getWidth()-48,24,juce::Justification::left);
+      24,82,getWidth()-48,18,juce::Justification::right);
  }
 };

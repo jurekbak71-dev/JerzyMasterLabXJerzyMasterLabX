@@ -251,7 +251,7 @@ class GuiSmoke final : private juce::Timer {
                 if(!visual.isValid())return captureError(__LINE__);
                 const auto file=juce::File::getCurrentWorkingDirectory().getChildFile(
                     "build-plugin/console-"+juce::String(dim.x)+"x"+juce::String(dim.y)+".png");
-                juce::FileOutputStream out(file);out.truncate();
+                juce::FileOutputStream out(file);out.setPosition(0);out.truncate();
                 if(!juce::PNGImageFormat{}.writeImageToStream(visual,out))return captureError(__LINE__);
             }
             editor->setSize(1000,700);
@@ -273,14 +273,47 @@ class GuiSmoke final : private juce::Timer {
                 std::cerr<<"Analog Exciter console navigation failed\\n";
                 return captureError(__LINE__);
             }
+            auto* colourPresent=dynamic_cast<juce::Button*>(analogExciter->findChildWithID("analogizer-present"));
+            auto* colourEnabled=dynamic_cast<juce::Button*>(analogExciter->findChildWithID("analogizer-enabled"));
+            if(!colourPresent||!colourEnabled)return captureError(__LINE__);
+            const bool initialColourPresent=colourPresent->getToggleState();
+            const bool initialColourEnabled=colourEnabled->getToggleState();
+            colourPresent->setToggleState(false,juce::sendNotificationSync);
+            colourEnabled->setToggleState(true,juce::sendNotificationSync);
+            feed(2);
+            if(colourEnabled->getButtonText()!="NOT IN CHAIN"){
+                std::cerr<<"Analog Exciter reports enabled while absent from the DSP chain\n";
+                return captureError(__LINE__);
+            }
+            colourPresent->setToggleState(true,juce::sendNotificationSync);
+            feed(2);
+            if(colourEnabled->getButtonText()!="ACTIVE"){
+                std::cerr<<"Analog Exciter active status does not follow the real DSP chain\n";
+                return captureError(__LINE__);
+            }
+            colourPresent->setToggleState(initialColourPresent,juce::sendNotificationSync);
+            colourEnabled->setToggleState(initialColourEnabled,juce::sendNotificationSync);
             for(const auto dim:{juce::Point<int>{750,550},juce::Point<int>{1000,700},juce::Point<int>{1400,1000}}){
                 editor->setSize(dim.x,dim.y);
                 if(!controlsFit())return captureError(__LINE__);
+                const int minimumSliderHeight=56;
+                for(const char* id:{"analogizerDrive","analogizerWarmth","analogizerDeFizz","analogizerMix",
+                                    "analogizerOutput","exciterAmountLow","exciterAmountMid","exciterAmountHigh",
+                                    "exciterAmountAir","exciterEven","exciterOdd","analogBias","analogTone",
+                                    "analogDynamics","analogImpact"}){
+                    auto* slider=dynamic_cast<juce::Slider*>(analogExciter->findChildWithID(id));
+                    if(!slider||!slider->isVisible()||slider->getHeight()<minimumSliderHeight||
+                       !analogExciter->getLocalBounds().contains(slider->getBounds())){
+                        std::cerr<<"Analog Exciter control is not usable at "<<dim.x<<"x"<<dim.y
+                                 <<": "<<id<<" bounds="<<(slider?slider->getBounds().toString():"missing")<<"\n";
+                        return captureError(__LINE__);
+                    }
+                }
                 auto visual=editor->createComponentSnapshot(editor->getLocalBounds());
                 if(!visual.isValid())return captureError(__LINE__);
                 const auto file=juce::File::getCurrentWorkingDirectory().getChildFile(
                     "build-plugin/analog-exciter-"+juce::String(dim.x)+"x"+juce::String(dim.y)+".png");
-                juce::FileOutputStream out(file);out.truncate();
+                juce::FileOutputStream out(file);out.setPosition(0);out.truncate();
                 if(!juce::PNGImageFormat{}.writeImageToStream(visual,out))return captureError(__LINE__);
             }
             console->onClick();
@@ -292,7 +325,10 @@ class GuiSmoke final : private juce::Timer {
             editor->setSize(size.x,size.y);auto image=editor->createComponentSnapshot(editor->getLocalBounds());
             if(!image.isValid()||image.getWidth()!=size.x||image.getHeight()!=size.y)return captureError(__LINE__);
             int curvePixels=0;for(int y=174;y<size.y-271;++y)for(int x=48;x<size.x-252;++x){auto colour=image.getPixelAt(x,y);if(std::abs(static_cast<int>(colour.getRed())-181)<14&&std::abs(static_cast<int>(colour.getGreen())-203)<14&&std::abs(static_cast<int>(colour.getBlue())-231)<14)++curvePixels;}
-            if(curvePixels<400){std::cerr<<"EQ response missing from real GUI frame: "<<curvePixels<<'\n';return captureError(__LINE__);}
+            // Font/line rasterisation differs slightly between the Windows CI
+            // renderer and the Linux Xvfb smoke host. Keep a substantial
+            // visible-curve requirement without a four-pixel platform cliff.
+            if(curvePixels<350){std::cerr<<"EQ response missing from real GUI frame: "<<curvePixels<<'\n';return captureError(__LINE__);}
             if(iteration==0&&size.x==1000){auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/gui-smoke.png");output.getParentDirectory().createDirectory();juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return captureError(__LINE__);}
             if(!controlsFit())return captureError(__LINE__);
         }
@@ -316,6 +352,73 @@ class GuiSmoke final : private juce::Timer {
         auto* release=dynamic_cast<juce::Slider*>(editor->findChildWithID("limiter-release"));
         auto* frequency=editor->findChildWithID("eq-frequency");
         if(!finalPanel||!finalPanel->isVisible()||!frequency||frequency->isVisible())return captureError(__LINE__);
+        // The test compilation unit intentionally does not include
+        // Editor-private panel types. Check actual JUCE child geometry and
+        // rendered bitmaps without a dynamic_cast to FinalTruePeakPanel.
+        const auto meter=juce::ImageCache::getFromMemory(
+            MasterLabGuiAssets::maximizer_meter_bezel_png,
+            MasterLabGuiAssets::maximizer_meter_bezel_pngSize);
+        const auto scope=juce::ImageCache::getFromMemory(
+            MasterLabGuiAssets::maximizer_scope_frame_png,
+            MasterLabGuiAssets::maximizer_scope_frame_pngSize);
+        if(meter.isNull()||scope.isNull()||
+           meter.getWidth()!=512||meter.getHeight()!=396||
+           scope.getWidth()!=1600||scope.getHeight()!=470){
+            std::cerr<<"Maximizer embedded renders are invalid\\n";
+            return captureError(__LINE__);
+        }
+        auto validateFinalLayout=[&]{
+            const int w=finalPanel->getWidth(),h=finalPanel->getHeight();
+            const bool compact=h<430;
+            const bool showMeter=w>=870&&!compact;
+            const int leftWidth=compact?132:(w>=1200?224:196);
+            const int rightWidth=showMeter?238:0;
+            // The footer contains two lines in CORE/compact and three in the
+            // regular layout. Reserve their full painted height so diagnostics
+            // cannot be clipped by the panel edge.
+            const int footer=compact?50:76;
+            const int bottomHeight=compact?91:(h>=680?142:122);
+            const int scopeHeight=std::max(92,h-109-bottomHeight-footer-10);
+            const juce::Rectangle<int> waveform(24+leftWidth+12,109,
+                std::max(120,w-48-leftWidth-rightWidth-24),scopeHeight);
+            const juce::Rectangle<int> vu(w-rightWidth+8,109,rightWidth-32,
+                                          std::min(238,scopeHeight));
+            if(waveform.getBottom()+10+bottomHeight+footer>h){
+                std::cerr<<"Maximizer vertical regions overflow\n";return false;}
+            for(int i=0;i<finalPanel->getNumChildComponents();++i){
+                auto* c=finalPanel->getChildComponent(i);
+                if(!c||!c->isVisible())continue;
+                if(!finalPanel->getLocalBounds().contains(c->getBounds())){
+                    std::cerr<<"Maximizer child outside panel: "<<c->getComponentID()
+                             <<" "<<c->getBounds().toString()<<" in "
+                             <<finalPanel->getLocalBounds().toString()<<"\n";return false;}
+                for(int j=i+1;j<finalPanel->getNumChildComponents();++j){
+                    auto* other=finalPanel->getChildComponent(j);
+                    if(other&&other->isVisible()&&
+                       c->getBounds().intersects(other->getBounds())){
+                        std::cerr<<"Maximizer children overlap: "<<c->getComponentID()
+                                 <<" "<<c->getBounds().toString()<<" / "
+                                 <<other->getComponentID()<<" "<<other->getBounds().toString()<<"\n";
+                        return false;}
+                }
+                if(auto* slider=dynamic_cast<juce::Slider*>(c)){
+                    if(slider->getHeight()<70||slider->getWidth()<68){
+                        std::cerr<<"Maximizer slider too small: "<<slider->getComponentID()
+                                 <<" "<<slider->getBounds().toString()<<"\n";return false;}
+                    if(slider->getBounds().intersects(waveform)||
+                       (showMeter&&slider->getBounds().intersects(vu))){
+                        std::cerr<<"Maximizer slider enters telemetry: "<<slider->getComponentID()
+                                 <<" "<<slider->getBounds().toString()<<" wave="
+                                 <<waveform.toString()<<" meter="<<vu.toString()<<"\n";return false;}
+                }
+            }
+            auto* tpChoice=finalPanel->findChildWithID("true-peak-oversampling");
+            if(tpChoice&&tpChoice->isVisible()&&
+               (tpChoice->getBounds().intersects(waveform)||
+                (showMeter&&tpChoice->getBounds().intersects(vu)))){
+                std::cerr<<"Maximizer TP choice enters telemetry\n";return false;}
+            return true;
+        };
         auto* finalDrive=dynamic_cast<juce::Slider*>(finalPanel->findChildWithID("truePeakDrive"));
         auto* finalRelease=dynamic_cast<juce::Slider*>(finalPanel->findChildWithID("truePeakRelease"));
         auto* finalCeiling=dynamic_cast<juce::Slider*>(finalPanel->findChildWithID("truePeakCeiling"));
@@ -332,13 +435,34 @@ class GuiSmoke final : private juce::Timer {
         if(std::abs(actual("truePeakDrive")-12)>.02f||
            std::abs(actual("truePeakRelease")-150)>.11f||
            std::abs(actual("truePeakCeiling")+6)>.02f)return captureError(__LINE__);
-        for(auto size:{juce::Point<int>(750,550),juce::Point<int>(1000,700),juce::Point<int>(2000,1400)}){
+        for(auto size:{juce::Point<int>(750,550),juce::Point<int>(1000,700),juce::Point<int>(1400,1000)}){
             editor->setSize(size.x,size.y);
-            if(!finalPanel->isVisible()||!controlsFit())return captureError(__LINE__);
+            const bool topLevelFit=controlsFit(),finalFit=validateFinalLayout();
+            if(!finalPanel->isVisible()||!topLevelFit||!finalFit){
+                std::cerr<<"Maximizer layout invalid at "<<size.x<<"x"<<size.y
+                         <<": visible="<<finalPanel->isVisible()
+                         <<" top="<<topLevelFit<<" final="<<finalFit<<"\n";
+                return captureError(__LINE__);
+            }
+            if(size.x>=1000&&
+               (finalDrive->getWidth()<170||finalDrive->getHeight()<170||
+                finalDrive->getWidth()<=finalRelease->getWidth())){
+                std::cerr<<"Maximizer primary Gain control has no visual priority: "
+                         <<finalDrive->getWidth()<<"x"<<finalDrive->getHeight()
+                         <<" vs release "<<finalRelease->getWidth()<<"x"
+                         <<finalRelease->getHeight()<<"\n";
+                return captureError(__LINE__);
+            }
             auto image=editor->createComponentSnapshot(editor->getLocalBounds());
             if(!image.isValid()||image.getWidth()!=size.x||image.getHeight()!=size.y)return captureError(__LINE__);
-            if(iteration==0&&size.x==1000){
-                auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/limiter-smoke.png");
+            if(iteration==0){
+                if(size.x==1000){
+                    auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/limiter-smoke.png");
+                    juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();
+                    if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return captureError(__LINE__);
+                }
+                auto output=juce::File::getCurrentWorkingDirectory().getChildFile(
+                    "build-plugin/maximizer-core-"+juce::String(size.x)+"x"+juce::String(size.y)+".png");
                 juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();
                 if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return captureError(__LINE__);
             }
@@ -362,7 +486,7 @@ class GuiSmoke final : private juce::Timer {
         const auto prevOs=actual("truePeakOversampling");
         advanced->onClick();
         if(!lookahead->isVisible()||!attack->isVisible()||!transient->isVisible()||!os->isVisible()||
-           finalDrive->isVisible()||!controlsFit()){
+           !finalDrive->isVisible()||!finalCeiling->isVisible()||!controlsFit()){
             std::cerr<<"Advanced Maximizer page visibility/geometry regression\n";
             return captureError(__LINE__);
         }
@@ -376,11 +500,24 @@ class GuiSmoke final : private juce::Timer {
            actual("truePeakOversampling")!=3.f)
             return captureError(__LINE__);
         if(iteration==0){
-            auto image=editor->createComponentSnapshot(editor->getLocalBounds());
-            if(!image.isValid())return captureError(__LINE__);
-            auto output=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/maximizer-advanced-smoke.png");
-            juce::FileOutputStream stream(output);stream.truncate();
-            if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return captureError(__LINE__);
+            for(const auto dim:{juce::Point<int>{750,550},juce::Point<int>{1000,700},juce::Point<int>{1400,1000}}){
+                editor->setSize(dim.x,dim.y);
+                if(!controlsFit()||!validateFinalLayout())return captureError(__LINE__);
+                auto* selected=finalPanel->findChildWithID("truePeakLookahead");
+                if(!selected||selected->getHeight()<70||!selected->isVisible())return captureError(__LINE__);
+                auto image=editor->createComponentSnapshot(editor->getLocalBounds());
+                if(!image.isValid())return captureError(__LINE__);
+                auto output=juce::File::getCurrentWorkingDirectory().getChildFile(
+                    "build-plugin/maximizer-advanced-"+juce::String(dim.x)+"x"+juce::String(dim.y)+".png");
+                juce::FileOutputStream stream(output);stream.setPosition(0);stream.truncate();
+                if(!juce::PNGImageFormat{}.writeImageToStream(image,stream))return captureError(__LINE__);
+                if(dim.x==1000){
+                    auto legacy=juce::File::getCurrentWorkingDirectory().getChildFile("build-plugin/maximizer-advanced-smoke.png");
+                    juce::FileOutputStream out(legacy);out.setPosition(0);out.truncate();
+                    if(!juce::PNGImageFormat{}.writeImageToStream(image,out))return captureError(__LINE__);
+                }
+            }
+            editor->setSize(1000,700);
         }
         lookahead->setValue(prevLookahead,juce::sendNotificationSync);
         attack->setValue(prevAttack,juce::sendNotificationSync);

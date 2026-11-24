@@ -205,6 +205,24 @@ public:
   }
  }
  void cancelRT()noexcept {active.store(0);cancelled.store(nextGeneration.load());}
+ // Host lifecycle callback (non realtime): close capture first, stop the
+ // optional worker and release its large packet/job storage. A completed
+ // proposal may remain visible, but an in-flight analysis is cancelled.
+ bool release(){
+  cancelRT();nextGeneration.fetch_add(1);
+  if(isThreadRunning()){signalThreadShouldExit();notify();
+   if(!waitForThreadToExit(3000))return false;
+  }
+  captureState.fetch_or(captureClosed,std::memory_order_acq_rel);
+  while((captureState.load(std::memory_order_acquire)&~captureClosed)!=0)
+   juce::Thread::sleep(1);
+  std::scoped_lock lock(mutex);
+  if(snapshot.phase==BrainPhase::Pending||snapshot.phase==BrainPhase::Analysing||
+     snapshot.phase==BrainPhase::Validating){snapshot.phase=BrainPhase::Cancelled;
+   snapshot.proposal={};snapshot.message="Analysis stopped because the host released audio resources.";
+  }
+  releaseCaptureStorage();return true;
+ }
  void cancelUI(){cancelRT();std::scoped_lock lock(mutex);active.store(0);snapshot.phase=BrainPhase::Cancelled;snapshot.proposal={};snapshot.message="Analysis cancelled. No parameters changed.";}
  // User-initiated NEW/DEFAULT: invalidate proposals without touching the realtime
  // FIFO or requiring a host transport stop. Stored presets remain untouched.

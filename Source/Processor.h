@@ -157,7 +157,9 @@ public:
   boolean("transientPresent","Transient Sculptor post chain",false);boolean("transientOn","Transient Sculptor active",true);
   for(const char* id:{"transientAttackLow","transientAttackMid","transientAttackHigh","transientSustainLow","transientSustainMid","transientSustainHigh"})number(id,id,-1,1,0);
   number("transientMix","Transient Sculptor mix",0,1,1);number("transientOutput","Transient Sculptor output",-12,12,0);
-  boolean("truePeakPresent","Final limiter fixed slot",false);boolean("truePeakOn","Final True-Peak enabled",true);
+  // This is a fixed final slot, not an optional card.  Keeping On=true while
+  // Present=false produced a green Active control with no DSP behind it.
+  boolean("truePeakPresent","Final limiter fixed slot",true);boolean("truePeakOn","Final True-Peak enabled",true);
   number("truePeakCeiling","Final True-Peak ceiling dB",-12,-.1f,-1);
   number("truePeakRelease","Final True-Peak release ms",10,1000,120);
   number("truePeakDrive","Final True-Peak drive dB",0,18,0);
@@ -195,6 +197,7 @@ public:
   hostBypassStep=static_cast<float>(1/(std::isfinite(sr)&&sr>=8000&&sr<=384000?sr*.02:960.));
  }
  void releaseResources()override{
+  brain.release();
  }void reset()override{
  brain.cancelRT();engine.reset();updateModules();inputMeter.reset();outputMeter.reset();inputLoudness.reset();outputLoudness.reset();limiterMeter.prepare(displayRate.load());for(auto& channel:hostDryDelay)std::fill(channel.begin(),channel.end(),0);hostDryPosition=0;hostBypassMix=hostBypassTarget?1.f:0.f;profileBlend=parameters[302]->load()>.5f?parameters[303]->load():1.f;}
  void processBlock(juce::AudioBuffer<float>& b,juce::MidiBuffer&)override{renderAudio(b,false);}

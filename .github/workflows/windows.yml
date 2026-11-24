@@ -28,6 +28,15 @@ jobs:
           $py = python -c "import sys; print(sys.executable)"
           cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -T ClangCL "-DPython3_EXECUTABLE=$py"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Publish reproducible Maximizer render sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: Maximizer-Concept-C-Rendered-Assets
+          path: |
+            build/concept_c_gui/maximizer_meter_bezel.png
+            build/concept_c_gui/maximizer_scope_frame.png
+            build/concept_c_gui/maximizer_assets_manifest.json
+          if-no-files-found: error
       - name: Build Release (ClangCL diagnostic)
         run: cmake --build build --config Release --parallel 1
       - name: Diagnose Windows compiler failure
@@ -122,6 +131,8 @@ jobs:
             build-plugin/*-smoke.png
             build-plugin/console-*.png
             build-plugin/analog-exciter-*.png
+            build-plugin/maximizer-core-*.png
+            build-plugin/maximizer-advanced-*.png
           if-no-files-found: error
       - name: Download pluginval 1.0.3
         shell: pwsh
@@ -190,3 +201,5 @@ jobs:
             build-plugin/parallel-smoke.png
             build-plugin/stabilizer-smoke.png
             build-plugin/analog-exciter-*.png
+            build-plugin/maximizer-core-*.png
+            build-plugin/maximizer-advanced-*.png
