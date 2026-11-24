@@ -339,7 +339,7 @@ class GuiSmoke final : private juce::Timer {
            std::abs(actual("truePeakCeiling")+6)>.02f)return captureError(__LINE__);
         for(auto size:{juce::Point<int>(750,550),juce::Point<int>(1000,700),juce::Point<int>(2000,1400)}){
             editor->setSize(size.x,size.y);
-            if(!finalPanel->isVisible()||!controlsFit())return captureError(__LINE__);
+            if(!finalPanel->isVisible()||!controlsFit()||!renderedMaximizer->layoutValidForTest())return captureError(__LINE__);
             auto image=editor->createComponentSnapshot(editor->getLocalBounds());
             if(!image.isValid()||image.getWidth()!=size.x||image.getHeight()!=size.y)return captureError(__LINE__);
             if(iteration==0){
@@ -389,7 +389,7 @@ class GuiSmoke final : private juce::Timer {
         if(iteration==0){
             for(const auto dim:{juce::Point<int>{750,550},juce::Point<int>{1000,700},juce::Point<int>{1400,1000}}){
                 editor->setSize(dim.x,dim.y);
-                if(!controlsFit())return captureError(__LINE__);
+                if(!controlsFit()||!renderedMaximizer->layoutValidForTest())return captureError(__LINE__);
                 auto* selected=finalPanel->findChildWithID("truePeakLookahead");
                 if(!selected||selected->getHeight()<75||!selected->isVisible())return captureError(__LINE__);
                 auto image=editor->createComponentSnapshot(editor->getLocalBounds());
