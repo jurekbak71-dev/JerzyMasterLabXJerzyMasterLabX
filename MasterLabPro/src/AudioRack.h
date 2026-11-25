@@ -70,7 +70,7 @@ public:
   }
   std::array<Node*,10> active{};
   for(std::size_t j=0;j<config.stages.size();++j)if(config.stages[j].id)active[j]=find(config.stages[j].id);
-  const bool module=config.moduleAnalysis && config.deltaId && find(config.deltaId);
+  const bool module=config.moduleAnalysis && config.deltaId && std::any_of(active.begin(),active.end(),[this](const Node* x){return x&&x->id==config.deltaId;});
   capture.setSource(module?config.deltaId:0);
   RackMeters m;m.input=measure(l,r,n);
   double squares[2]{};float peaks[2]{},outPeaks[2]{};double outSquares[2]{};
@@ -90,7 +90,7 @@ public:
    const float normalL=a?*a:0,normalR=b?*b:0;
    const float out[]{normalL,normalR};
    for(int ch=0;ch<2;++ch)if(std::isfinite(out[ch])){outPeaks[ch]=std::max(outPeaks[ch],std::abs(out[ch]));outSquares[ch]+=double(out[ch])*out[ch];}
-   const float target=config.listenDelta?1.f:0.f;
+   const float target=config.listenDelta&&(!config.moduleAnalysis||module)?1.f:0.f;
    const float step=1.f/float(ramp);
    monitorMix+=std::clamp(target-monitorMix,-step,step);
    if(monitorMix>0){
