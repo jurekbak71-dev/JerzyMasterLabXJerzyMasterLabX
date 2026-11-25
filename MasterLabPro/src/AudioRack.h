@@ -1,12 +1,13 @@
 #pragma once
 #include "GainDSP.h"
+#include "AnalysisCapture.h"
 #include "MeasurementModel.h"
 #include <atomic>
 #include <cstdint>
 #include <array>
 namespace ml {
 struct GainStage {std::uint64_t id=0;float db=0;bool operator==(const GainStage&)const=default;};
-struct RackConfig {std::array<GainStage,10> stages{};std::uint64_t deltaId=0;bool operator==(const RackConfig&)const=default;};
+struct RackConfig {std::array<GainStage,10> stages{};std::uint64_t deltaId=0;bool moduleAnalysis=false;bool operator==(const RackConfig&)const=default;};
 // One producer (control thread), one consumer (audio thread).
 // Bounded queue; full means retry on control thread, never overwrite unread data.
 template<class T,unsigned N=8> class Spsc {
@@ -26,6 +27,8 @@ class AudioRack {
  RackConfig config{};
  Spsc<RackConfig> commands;
  Spsc<RackMeters> readings;
+ AnalysisCapture capture;
+ Spsc<AnalysisFrame,5> analysisFrames;
  double rate=44100.;unsigned ramp=882;
 public:
  bool submit(const RackConfig& c) noexcept {
@@ -36,15 +39,17 @@ public:
   return commands.push(c);
  }
  bool poll(RackMeters& m) noexcept {return readings.pop(m);}
+ bool pollAnalysis(AnalysisFrame& frame) noexcept {return analysisFrames.pop(frame);}
  void prepare(double sr) noexcept {
   rate=std::clamp(std::isfinite(sr)?sr:44100.,1.,768000.);ramp=std::max(1,int(rate*.02));
+  capture.restart(rate);
   nodes={};
   // Device restart: retain last applied configuration; do not consume the GUI's telemetry queue.
   for(std::size_t i=0;i<config.stages.size();++i){auto s=config.stages[i];if(s.id){nodes[i].id=s.id;nodes[i].dsp.prepare(rate);nodes[i].dsp.setGainDb(s.db);}}
  }
  // Only when BOTH threads are stopped (e.g. between playback sessions).
  void resetWhenStopped() noexcept {
-  nodes={};config={};RackConfig c;while(commands.pop(c)){};RackMeters m;while(readings.pop(m)){}
+  nodes={};config={};RackConfig c;while(commands.pop(c)){};RackMeters m;while(readings.pop(m)){};AnalysisFrame frame;while(analysisFrames.pop(frame)){};capture.restart(rate);
  }
  void process(float* l,float* r,std::size_t n) noexcept {
   if(!n)return;
@@ -65,17 +70,22 @@ public:
   }
   std::array<Node*,10> active{};
   for(std::size_t j=0;j<config.stages.size();++j)if(config.stages[j].id)active[j]=find(config.stages[j].id);
+  const bool module=config.moduleAnalysis && config.deltaId && find(config.deltaId);
+  capture.setSource(module?config.deltaId:0);
   RackMeters m;m.input=measure(l,r,n);
   double squares[2]{};float peaks[2]{};
   for(std::size_t i=0;i<n;++i){
    float* a=l?l+i:nullptr;float* b=r?r+i:nullptr;
    float dl=0,dr=0;
+   float bl=a?*a:0,br=b?*b:0,al=bl,ar=br;
    for(std::size_t j=0;j<active.size();++j)if(auto* x=active[j]){
     const float beforeL=a?*a:0,beforeR=b?*b:0;
     x->dsp.process(a,b,1);
-    if(x->id==config.deltaId){dl=a?*a-beforeL:0;dr=b?*b-beforeR:0;}
+    if(x->id==config.deltaId){dl=a?*a-beforeL:0;dr=b?*b-beforeR:0;if(module){bl=beforeL;br=beforeR;al=a?*a:0;ar=b?*b:0;}}
    }
    for(auto& x:nodes)if(x.retire){x.dsp.process(a,b,1);if(--x.retire==0)x.id=0;}
+   if(!module){al=a?*a:0;ar=b?*b:0;}
+   capture.push(bl,br,al,ar,[this](const AnalysisFrame& frame){analysisFrames.push(frame);});
    peaks[0]=std::max(peaks[0],std::abs(dl));peaks[1]=std::max(peaks[1],std::abs(dr));
    squares[0]+=double(dl)*dl;squares[1]+=double(dr)*dr;
   }
