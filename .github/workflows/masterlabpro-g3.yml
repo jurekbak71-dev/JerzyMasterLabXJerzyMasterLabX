@@ -44,7 +44,15 @@ jobs:
           path: reports/build-windows.log
           if-no-files-found: error
       - name: Test
-        run: ctest --test-dir build-masterlabpro -C Release --output-on-failure --output-junit reports-tests.xml
+        shell: pwsh
+        run: |
+          ctest --test-dir build-masterlabpro -C Release --output-on-failure --output-junit reports-tests.xml 2>&1 | Tee-Object -FilePath reports/ctest-windows.log
+          if ($LASTEXITCODE -ne 0) {
+            $message = (Get-Content reports/ctest-windows.log -Tail 100) -join "`n"
+            $message = $message.Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
+            Write-Output "::error title=Windows CTest output::$message"
+            exit $LASTEXITCODE
+          }
       - name: Measure CPU RAM and PDC
         shell: pwsh
         run: |
