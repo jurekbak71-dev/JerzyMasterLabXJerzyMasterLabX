@@ -1,13 +1,15 @@
 #include "RackEditor.h"
 #include "RackController.h"
+#include "AudioRack.h"
+#include <juce_audio_utils/juce_audio_utils.h>
+#include <atomic>
 #include "RotaryParameterControl.h"
 #include <map>
 #include "AssetLoader.h"
 #include <juce_gui_extra/juce_gui_extra.h>
 
 namespace ml {
-// Development-only console: parameter and rack configuration test, no audio device.
-// GainDSP is tested separately; the console does not yet stream audio.
+// Development console: explicit WAV playback only, no microphone or host automation.
 class GainPanel final : public juce::Component {
 public:
  GainPanel(juce::RangedAudioParameter& p,juce::Image cap,juce::Image pointer,
@@ -26,7 +28,7 @@ private:
  RotaryParameterControl knob;
  juce::TextButton removeButton{"REMOVE GAIN"};
 };
-class ConsoleContent final : public juce::Component {
+class ConsoleContent final : public juce::AudioAppComponent, private juce::Timer {
 public:
  explicit ConsoleContent(AssetLoader& assets)
  : cap(assets.loadKnobCap()),pointer(assets.loadKnobPointer()),
@@ -38,10 +40,92 @@ public:
  },assets.loadPanel()) {
    editor.setRackSkin(assets.loadSlot());
    addAndMakeVisible(editor);
+   addAndMakeVisible(loadButton);addAndMakeVisible(stopButton);
+   loadButton.onClick=[this]{chooseWav();};stopButton.onClick=[this]{stopPlayback();};
+   addAndMakeVisible(status);status.setText("NO AUDIO",juce::dontSendNotification);
    setSize(1600,1000);
  }
- void resized() override { editor.setBounds(getLocalBounds()); }
+ ~ConsoleContent() override {stopTimer();shutdownAudio();}
+ void resized() override {
+   editor.setBounds(getLocalBounds());
+   const int y=juce::jmax(0,getHeight()*10/1000);
+   loadButton.setBounds(getWidth()*53/100,y+8,juce::jmax(80,getWidth()*13/100),28);
+   stopButton.setBounds(getWidth()*67/100,y+8,juce::jmax(60,getWidth()*7/100),28);
+   status.setBounds(getWidth()*75/100,y+8,getWidth()*24/100,28);
+ }
+ void prepareToPlay(int,double sampleRate) override {
+   // Device may choose a different rate. Never silently change pitch.
+   rack.prepare(sampleRate);cursor=0;
+   mismatch.store(std::abs(sampleRate-fileRate)>0.5,std::memory_order_release);
+ }
+ void releaseResources() override {}
+ void getNextAudioBlock(const juce::AudioSourceChannelInfo& info) override {
+   info.clearActiveBufferRegion();
+   if(mismatch.load(std::memory_order_acquire)||!info.buffer)return;
+   const int n=juce::jmin(info.numSamples,source.getNumSamples()-cursor);
+   if(n<=0){finished.store(true,std::memory_order_release);return;}
+   auto* l=info.buffer->getWritePointer(0,info.startSample);
+   auto* r=info.buffer->getNumChannels()>1?info.buffer->getWritePointer(1,info.startSample):nullptr;
+   std::copy_n(source.getReadPointer(0,cursor),n,l);
+   if(r)std::copy_n(source.getReadPointer(source.getNumChannels()>1?1:0,cursor),n,r);
+   rack.process(l,r,static_cast<std::size_t>(n));cursor+=n;
+   if(cursor>=source.getNumSamples())finished.store(true,std::memory_order_release);
+ }
 private:
+ void stopPlayback(){
+   stopTimer();shutdownAudio();source.setSize(0,0);
+   editor.setGlobalLevels({},{});status.setText("STOPPED",juce::dontSendNotification);
+ }
+ void chooseWav(){
+   if(chooser)return;
+   chooser=std::make_unique<juce::FileChooser>("Choose WAV for development playback",juce::File{},"*.wav");
+   juce::Component::SafePointer<ConsoleContent> safe(this);
+   chooser->launchAsync(juce::FileBrowserComponent::openMode|juce::FileBrowserComponent::canSelectFiles,
+      [safe](const juce::FileChooser& fc){
+       if(safe==nullptr)return;
+       auto file=fc.getResult();
+       juce::MessageManager::callAsync([safe,file]{
+        if(safe!=nullptr){safe->chooser.reset();if(file.existsAsFile())safe->playWav(file);}
+       });
+      });
+ }
+ void playWav(const juce::File& file){
+   stopPlayback();
+   juce::AudioFormatManager formats;formats.registerBasicFormats();
+   std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
+   if(!reader||reader->numChannels<1||reader->numChannels>2||reader->sampleRate<8000||
+      reader->sampleRate>192000||reader->lengthInSamples<=0||
+      reader->lengthInSamples>reader->sampleRate*60){
+    status.setText("WAV: mono/stereo, max 60 s",juce::dontSendNotification);return;
+   }
+   fileRate=reader->sampleRate;
+   source.setSize(static_cast<int>(reader->numChannels),static_cast<int>(reader->lengthInSamples));
+   if(!reader->read(&source,0,source.getNumSamples(),0,true,source.getNumChannels()>1)){
+    source.setSize(0,0);status.setText("READ FAILED",juce::dontSendNotification);return;
+   }
+   finished.store(false);mismatch.store(false);
+   setAudioChannels(0,2); // never open microphone
+   if(auto* device=deviceManager.getCurrentAudioDevice()){
+    if(std::abs(device->getCurrentSampleRate()-fileRate)>0.5){
+     auto setup=deviceManager.getAudioDeviceSetup();setup.sampleRate=fileRate;
+     auto error=deviceManager.setAudioDeviceSetup(setup,true);
+     if(error.isNotEmpty()){stopPlayback();status.setText("DEVICE RATE MISMATCH",juce::dontSendNotification);return;}
+    }
+   }else{stopPlayback();status.setText("NO AUDIO DEVICE",juce::dontSendNotification);return;}
+   status.setText("WAV PLAYBACK",juce::dontSendNotification);startTimerHz(30);timerCallback();
+ }
+ void timerCallback() override {
+   if(mismatch.load(std::memory_order_acquire)){stopPlayback();status.setText("DEVICE RATE MISMATCH",juce::dontSendNotification);return;}
+   if(finished.load(std::memory_order_acquire)){stopPlayback();return;}
+   RackConfig config;config.deltaId=controller.selection();
+   const auto& slots=controller.order().slots();
+   for(std::size_t i=0;i<slots.size();++i){
+    if(auto it=params.find(slots[i]);it!=params.end())config.stages[i]={slots[i],it->second->get()};
+   }
+   rack.submit(config); // retry next tick if queue full
+   RackMeters latest,m;bool got=false;while(rack.poll(m)){latest=m;got=true;}
+   if(got)editor.setGlobalLevels(latest.input,latest.output);
+ }
  void chooseModule(int pos){
    controller.select(0);editor.setModuleEditor(nullptr);
    juce::PopupMenu menu;menu.addItem(1,"Add Gain (full-band test)");
@@ -80,6 +164,10 @@ private:
  std::map<RackOrder::Id,std::unique_ptr<juce::AudioParameterFloat>> params;
  juce::Image cap,pointer;
  RackEditor editor; // destroyed before parameters
+ AudioRack rack;juce::AudioBuffer<float> source;double fileRate=44100.;int cursor=0;
+ std::atomic<bool> finished{false},mismatch{false};
+ juce::TextButton loadButton{"PLAY WAV"},stopButton{"STOP"};juce::Label status;
+ std::unique_ptr<juce::FileChooser> chooser;
 };
 
 class ConsoleWindow final : public juce::DocumentWindow {
