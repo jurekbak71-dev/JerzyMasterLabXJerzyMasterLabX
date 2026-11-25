@@ -1,0 +1,1 @@
+Raster crops from four generated design sheets. RGB rectangular crops, no transparent alpha; baked labels/glow and example signals are illustrative. Not production-ready layered controls. Original pixel resolution; no invented DSP. manifest.json lists source sheet and pixel crop.

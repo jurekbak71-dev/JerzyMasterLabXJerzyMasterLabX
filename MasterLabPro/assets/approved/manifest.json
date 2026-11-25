@@ -1,0 +1,2704 @@
+[
+  {
+    "file": "01_controls/knob_large_normal.png",
+    "sheet": 2,
+    "box": [
+      117,
+      176,
+      230,
+      290
+    ],
+    "size": [
+      113,
+      114
+    ]
+  },
+  {
+    "file": "01_controls/knob_large_hover.png",
+    "sheet": 2,
+    "box": [
+      234,
+      176,
+      348,
+      290
+    ],
+    "size": [
+      114,
+      114
+    ]
+  },
+  {
+    "file": "01_controls/knob_large_active.png",
+    "sheet": 2,
+    "box": [
+      351,
+      176,
+      465,
+      290
+    ],
+    "size": [
+      114,
+      114
+    ]
+  },
+  {
+    "file": "01_controls/knob_large_disabled.png",
+    "sheet": 2,
+    "box": [
+      468,
+      176,
+      581,
+      290
+    ],
+    "size": [
+      113,
+      114
+    ]
+  },
+  {
+    "file": "01_controls/knob_medium_normal.png",
+    "sheet": 2,
+    "box": [
+      128,
+      296,
+      219,
+      387
+    ],
+    "size": [
+      91,
+      91
+    ]
+  },
+  {
+    "file": "01_controls/knob_medium_hover.png",
+    "sheet": 2,
+    "box": [
+      246,
+      296,
+      337,
+      387
+    ],
+    "size": [
+      91,
+      91
+    ]
+  },
+  {
+    "file": "01_controls/knob_medium_active.png",
+    "sheet": 2,
+    "box": [
+      362,
+      296,
+      454,
+      387
+    ],
+    "size": [
+      92,
+      91
+    ]
+  },
+  {
+    "file": "01_controls/knob_medium_disabled.png",
+    "sheet": 2,
+    "box": [
+      479,
+      296,
+      570,
+      387
+    ],
+    "size": [
+      91,
+      91
+    ]
+  },
+  {
+    "file": "01_controls/knob_small_normal.png",
+    "sheet": 2,
+    "box": [
+      144,
+      390,
+      203,
+      449
+    ],
+    "size": [
+      59,
+      59
+    ]
+  },
+  {
+    "file": "01_controls/knob_small_hover.png",
+    "sheet": 2,
+    "box": [
+      262,
+      390,
+      321,
+      449
+    ],
+    "size": [
+      59,
+      59
+    ]
+  },
+  {
+    "file": "01_controls/knob_small_active.png",
+    "sheet": 2,
+    "box": [
+      378,
+      390,
+      437,
+      449
+    ],
+    "size": [
+      59,
+      59
+    ]
+  },
+  {
+    "file": "01_controls/knob_small_disabled.png",
+    "sheet": 2,
+    "box": [
+      495,
+      390,
+      554,
+      449
+    ],
+    "size": [
+      59,
+      59
+    ]
+  },
+  {
+    "file": "01_controls/ring_cyan.png",
+    "sheet": 2,
+    "box": [
+      634,
+      140,
+      752,
+      257
+    ],
+    "size": [
+      118,
+      117
+    ]
+  },
+  {
+    "file": "01_controls/ring_green.png",
+    "sheet": 2,
+    "box": [
+      760,
+      140,
+      878,
+      257
+    ],
+    "size": [
+      118,
+      117
+    ]
+  },
+  {
+    "file": "01_controls/ring_amber.png",
+    "sheet": 2,
+    "box": [
+      886,
+      140,
+      1003,
+      257
+    ],
+    "size": [
+      117,
+      117
+    ]
+  },
+  {
+    "file": "01_controls/ring_red.png",
+    "sheet": 2,
+    "box": [
+      1012,
+      140,
+      1129,
+      257
+    ],
+    "size": [
+      117,
+      117
+    ]
+  },
+  {
+    "file": "01_controls/ring_purple.png",
+    "sheet": 2,
+    "box": [
+      1137,
+      140,
+      1255,
+      257
+    ],
+    "size": [
+      118,
+      117
+    ]
+  },
+  {
+    "file": "01_controls/pointer_silver.png",
+    "sheet": 2,
+    "box": [
+      641,
+      355,
+      685,
+      426
+    ],
+    "size": [
+      44,
+      71
+    ]
+  },
+  {
+    "file": "01_controls/pointer_cyan.png",
+    "sheet": 2,
+    "box": [
+      688,
+      355,
+      732,
+      426
+    ],
+    "size": [
+      44,
+      71
+    ]
+  },
+  {
+    "file": "01_controls/pointer_green.png",
+    "sheet": 2,
+    "box": [
+      734,
+      355,
+      777,
+      426
+    ],
+    "size": [
+      43,
+      71
+    ]
+  },
+  {
+    "file": "01_controls/pointer_bar.png",
+    "sheet": 2,
+    "box": [
+      782,
+      355,
+      826,
+      426
+    ],
+    "size": [
+      44,
+      71
+    ]
+  },
+  {
+    "file": "01_controls/pointer_triangle.png",
+    "sheet": 2,
+    "box": [
+      829,
+      355,
+      873,
+      426
+    ],
+    "size": [
+      44,
+      71
+    ]
+  },
+  {
+    "file": "01_controls/pointer_dot.png",
+    "sheet": 2,
+    "box": [
+      882,
+      355,
+      925,
+      426
+    ],
+    "size": [
+      43,
+      71
+    ]
+  },
+  {
+    "file": "01_controls/cap_silver.png",
+    "sheet": 2,
+    "box": [
+      981,
+      355,
+      1051,
+      426
+    ],
+    "size": [
+      70,
+      71
+    ]
+  },
+  {
+    "file": "01_controls/cap_dark_silver.png",
+    "sheet": 2,
+    "box": [
+      1053,
+      355,
+      1123,
+      426
+    ],
+    "size": [
+      70,
+      71
+    ]
+  },
+  {
+    "file": "01_controls/cap_black.png",
+    "sheet": 2,
+    "box": [
+      1126,
+      355,
+      1196,
+      426
+    ],
+    "size": [
+      70,
+      71
+    ]
+  },
+  {
+    "file": "01_controls/cap_matte.png",
+    "sheet": 2,
+    "box": [
+      1199,
+      355,
+      1269,
+      426
+    ],
+    "size": [
+      70,
+      71
+    ]
+  },
+  {
+    "file": "01_controls/led_active.png",
+    "sheet": 2,
+    "box": [
+      1334,
+      135,
+      1369,
+      166
+    ],
+    "size": [
+      35,
+      31
+    ]
+  },
+  {
+    "file": "01_controls/led_warning.png",
+    "sheet": 2,
+    "box": [
+      1334,
+      167,
+      1369,
+      199
+    ],
+    "size": [
+      35,
+      32
+    ]
+  },
+  {
+    "file": "01_controls/led_clip.png",
+    "sheet": 2,
+    "box": [
+      1334,
+      201,
+      1369,
+      232
+    ],
+    "size": [
+      35,
+      31
+    ]
+  },
+  {
+    "file": "01_controls/led_delta.png",
+    "sheet": 2,
+    "box": [
+      1334,
+      234,
+      1369,
+      266
+    ],
+    "size": [
+      35,
+      32
+    ]
+  },
+  {
+    "file": "01_controls/button_off.png",
+    "sheet": 2,
+    "box": [
+      43,
+      513,
+      169,
+      573
+    ],
+    "size": [
+      126,
+      60
+    ]
+  },
+  {
+    "file": "01_controls/button_on.png",
+    "sheet": 2,
+    "box": [
+      176,
+      513,
+      302,
+      573
+    ],
+    "size": [
+      126,
+      60
+    ]
+  },
+  {
+    "file": "01_controls/button_hover.png",
+    "sheet": 2,
+    "box": [
+      306,
+      513,
+      433,
+      573
+    ],
+    "size": [
+      127,
+      60
+    ]
+  },
+  {
+    "file": "01_controls/button_pressed.png",
+    "sheet": 2,
+    "box": [
+      436,
+      513,
+      563,
+      573
+    ],
+    "size": [
+      127,
+      60
+    ]
+  },
+  {
+    "file": "01_controls/power.png",
+    "sheet": 2,
+    "box": [
+      611,
+      512,
+      702,
+      576
+    ],
+    "size": [
+      91,
+      64
+    ]
+  },
+  {
+    "file": "01_controls/solo.png",
+    "sheet": 2,
+    "box": [
+      710,
+      512,
+      802,
+      576
+    ],
+    "size": [
+      92,
+      64
+    ]
+  },
+  {
+    "file": "01_controls/bypass.png",
+    "sheet": 2,
+    "box": [
+      809,
+      512,
+      900,
+      576
+    ],
+    "size": [
+      91,
+      64
+    ]
+  },
+  {
+    "file": "01_controls/delta.png",
+    "sheet": 2,
+    "box": [
+      908,
+      512,
+      999,
+      576
+    ],
+    "size": [
+      91,
+      64
+    ]
+  },
+  {
+    "file": "01_controls/link.png",
+    "sheet": 2,
+    "box": [
+      1006,
+      512,
+      1098,
+      576
+    ],
+    "size": [
+      92,
+      64
+    ]
+  },
+  {
+    "file": "01_controls/ab.png",
+    "sheet": 2,
+    "box": [
+      1105,
+      512,
+      1196,
+      576
+    ],
+    "size": [
+      91,
+      64
+    ]
+  },
+  {
+    "file": "01_controls/undo.png",
+    "sheet": 2,
+    "box": [
+      1240,
+      512,
+      1299,
+      570
+    ],
+    "size": [
+      59,
+      58
+    ]
+  },
+  {
+    "file": "01_controls/redo.png",
+    "sheet": 2,
+    "box": [
+      1310,
+      512,
+      1369,
+      570
+    ],
+    "size": [
+      59,
+      58
+    ]
+  },
+  {
+    "file": "01_controls/settings.png",
+    "sheet": 2,
+    "box": [
+      1381,
+      512,
+      1440,
+      570
+    ],
+    "size": [
+      59,
+      58
+    ]
+  },
+  {
+    "file": "01_controls/copy.png",
+    "sheet": 2,
+    "box": [
+      1450,
+      512,
+      1509,
+      570
+    ],
+    "size": [
+      59,
+      58
+    ]
+  },
+  {
+    "file": "01_controls/paste.png",
+    "sheet": 2,
+    "box": [
+      1519,
+      512,
+      1578,
+      570
+    ],
+    "size": [
+      59,
+      58
+    ]
+  },
+  {
+    "file": "01_controls/help.png",
+    "sheet": 2,
+    "box": [
+      1590,
+      512,
+      1649,
+      570
+    ],
+    "size": [
+      59,
+      58
+    ]
+  },
+  {
+    "file": "01_controls/fader_normal.png",
+    "sheet": 2,
+    "box": [
+      50,
+      652,
+      121,
+      870
+    ],
+    "size": [
+      71,
+      218
+    ]
+  },
+  {
+    "file": "01_controls/fader_hover.png",
+    "sheet": 2,
+    "box": [
+      147,
+      652,
+      218,
+      870
+    ],
+    "size": [
+      71,
+      218
+    ]
+  },
+  {
+    "file": "01_controls/fader_active.png",
+    "sheet": 2,
+    "box": [
+      245,
+      652,
+      316,
+      870
+    ],
+    "size": [
+      71,
+      218
+    ]
+  },
+  {
+    "file": "01_controls/fader_disabled.png",
+    "sheet": 2,
+    "box": [
+      342,
+      652,
+      413,
+      870
+    ],
+    "size": [
+      71,
+      218
+    ]
+  },
+  {
+    "file": "01_controls/slider_normal.png",
+    "sheet": 2,
+    "box": [
+      571,
+      656,
+      870,
+      702
+    ],
+    "size": [
+      299,
+      46
+    ]
+  },
+  {
+    "file": "01_controls/slider_hover.png",
+    "sheet": 2,
+    "box": [
+      571,
+      717,
+      870,
+      763
+    ],
+    "size": [
+      299,
+      46
+    ]
+  },
+  {
+    "file": "01_controls/slider_active.png",
+    "sheet": 2,
+    "box": [
+      571,
+      778,
+      870,
+      823
+    ],
+    "size": [
+      299,
+      45
+    ]
+  },
+  {
+    "file": "01_controls/slider_disabled.png",
+    "sheet": 2,
+    "box": [
+      571,
+      839,
+      870,
+      884
+    ],
+    "size": [
+      299,
+      45
+    ]
+  },
+  {
+    "file": "01_controls/screw_phillips.png",
+    "sheet": 2,
+    "box": [
+      928,
+      663,
+      993,
+      728
+    ],
+    "size": [
+      65,
+      65
+    ]
+  },
+  {
+    "file": "01_controls/screw_slot.png",
+    "sheet": 2,
+    "box": [
+      1009,
+      663,
+      1074,
+      728
+    ],
+    "size": [
+      65,
+      65
+    ]
+  },
+  {
+    "file": "01_controls/screw_hex.png",
+    "sheet": 2,
+    "box": [
+      928,
+      745,
+      993,
+      810
+    ],
+    "size": [
+      65,
+      65
+    ]
+  },
+  {
+    "file": "01_controls/screw_star.png",
+    "sheet": 2,
+    "box": [
+      1009,
+      745,
+      1074,
+      810
+    ],
+    "size": [
+      65,
+      65
+    ]
+  },
+  {
+    "file": "02_bands/sub_normal.png",
+    "sheet": 3,
+    "box": [
+      148,
+      115,
+      248,
+      168
+    ],
+    "size": [
+      100,
+      53
+    ]
+  },
+  {
+    "file": "02_bands/low_normal.png",
+    "sheet": 3,
+    "box": [
+      260,
+      115,
+      359,
+      168
+    ],
+    "size": [
+      99,
+      53
+    ]
+  },
+  {
+    "file": "02_bands/low_mid_normal.png",
+    "sheet": 3,
+    "box": [
+      368,
+      115,
+      468,
+      168
+    ],
+    "size": [
+      100,
+      53
+    ]
+  },
+  {
+    "file": "02_bands/mid_normal.png",
+    "sheet": 3,
+    "box": [
+      477,
+      115,
+      576,
+      168
+    ],
+    "size": [
+      99,
+      53
+    ]
+  },
+  {
+    "file": "02_bands/high_mid_normal.png",
+    "sheet": 3,
+    "box": [
+      583,
+      115,
+      683,
+      168
+    ],
+    "size": [
+      100,
+      53
+    ]
+  },
+  {
+    "file": "02_bands/high_normal.png",
+    "sheet": 3,
+    "box": [
+      688,
+      115,
+      787,
+      168
+    ],
+    "size": [
+      99,
+      53
+    ]
+  },
+  {
+    "file": "02_bands/air_normal.png",
+    "sheet": 3,
+    "box": [
+      795,
+      115,
+      895,
+      168
+    ],
+    "size": [
+      100,
+      53
+    ]
+  },
+  {
+    "file": "02_bands/full_normal.png",
+    "sheet": 3,
+    "box": [
+      902,
+      115,
+      1001,
+      168
+    ],
+    "size": [
+      99,
+      53
+    ]
+  },
+  {
+    "file": "02_bands/sub_hover.png",
+    "sheet": 3,
+    "box": [
+      148,
+      184,
+      248,
+      237
+    ],
+    "size": [
+      100,
+      53
+    ]
+  },
+  {
+    "file": "02_bands/low_hover.png",
+    "sheet": 3,
+    "box": [
+      260,
+      184,
+      359,
+      237
+    ],
+    "size": [
+      99,
+      53
+    ]
+  },
+  {
+    "file": "02_bands/low_mid_hover.png",
+    "sheet": 3,
+    "box": [
+      368,
+      184,
+      468,
+      237
+    ],
+    "size": [
+      100,
+      53
+    ]
+  },
+  {
+    "file": "02_bands/mid_hover.png",
+    "sheet": 3,
+    "box": [
+      477,
+      184,
+      576,
+      237
+    ],
+    "size": [
+      99,
+      53
+    ]
+  },
+  {
+    "file": "02_bands/high_mid_hover.png",
+    "sheet": 3,
+    "box": [
+      583,
+      184,
+      683,
+      237
+    ],
+    "size": [
+      100,
+      53
+    ]
+  },
+  {
+    "file": "02_bands/high_hover.png",
+    "sheet": 3,
+    "box": [
+      688,
+      184,
+      787,
+      237
+    ],
+    "size": [
+      99,
+      53
+    ]
+  },
+  {
+    "file": "02_bands/air_hover.png",
+    "sheet": 3,
+    "box": [
+      795,
+      184,
+      895,
+      237
+    ],
+    "size": [
+      100,
+      53
+    ]
+  },
+  {
+    "file": "02_bands/full_hover.png",
+    "sheet": 3,
+    "box": [
+      902,
+      184,
+      1001,
+      237
+    ],
+    "size": [
+      99,
+      53
+    ]
+  },
+  {
+    "file": "02_bands/sub_active.png",
+    "sheet": 3,
+    "box": [
+      148,
+      252,
+      248,
+      306
+    ],
+    "size": [
+      100,
+      54
+    ]
+  },
+  {
+    "file": "02_bands/low_active.png",
+    "sheet": 3,
+    "box": [
+      260,
+      252,
+      359,
+      306
+    ],
+    "size": [
+      99,
+      54
+    ]
+  },
+  {
+    "file": "02_bands/low_mid_active.png",
+    "sheet": 3,
+    "box": [
+      368,
+      252,
+      468,
+      306
+    ],
+    "size": [
+      100,
+      54
+    ]
+  },
+  {
+    "file": "02_bands/mid_active.png",
+    "sheet": 3,
+    "box": [
+      477,
+      252,
+      576,
+      306
+    ],
+    "size": [
+      99,
+      54
+    ]
+  },
+  {
+    "file": "02_bands/high_mid_active.png",
+    "sheet": 3,
+    "box": [
+      583,
+      252,
+      683,
+      306
+    ],
+    "size": [
+      100,
+      54
+    ]
+  },
+  {
+    "file": "02_bands/high_active.png",
+    "sheet": 3,
+    "box": [
+      688,
+      252,
+      787,
+      306
+    ],
+    "size": [
+      99,
+      54
+    ]
+  },
+  {
+    "file": "02_bands/air_active.png",
+    "sheet": 3,
+    "box": [
+      795,
+      252,
+      895,
+      306
+    ],
+    "size": [
+      100,
+      54
+    ]
+  },
+  {
+    "file": "02_bands/full_active.png",
+    "sheet": 3,
+    "box": [
+      902,
+      252,
+      1001,
+      306
+    ],
+    "size": [
+      99,
+      54
+    ]
+  },
+  {
+    "file": "02_bands/sub_disabled.png",
+    "sheet": 3,
+    "box": [
+      148,
+      321,
+      248,
+      375
+    ],
+    "size": [
+      100,
+      54
+    ]
+  },
+  {
+    "file": "02_bands/low_disabled.png",
+    "sheet": 3,
+    "box": [
+      260,
+      321,
+      359,
+      375
+    ],
+    "size": [
+      99,
+      54
+    ]
+  },
+  {
+    "file": "02_bands/low_mid_disabled.png",
+    "sheet": 3,
+    "box": [
+      368,
+      321,
+      468,
+      375
+    ],
+    "size": [
+      100,
+      54
+    ]
+  },
+  {
+    "file": "02_bands/mid_disabled.png",
+    "sheet": 3,
+    "box": [
+      477,
+      321,
+      576,
+      375
+    ],
+    "size": [
+      99,
+      54
+    ]
+  },
+  {
+    "file": "02_bands/high_mid_disabled.png",
+    "sheet": 3,
+    "box": [
+      583,
+      321,
+      683,
+      375
+    ],
+    "size": [
+      100,
+      54
+    ]
+  },
+  {
+    "file": "02_bands/high_disabled.png",
+    "sheet": 3,
+    "box": [
+      688,
+      321,
+      787,
+      375
+    ],
+    "size": [
+      99,
+      54
+    ]
+  },
+  {
+    "file": "02_bands/air_disabled.png",
+    "sheet": 3,
+    "box": [
+      795,
+      321,
+      895,
+      375
+    ],
+    "size": [
+      100,
+      54
+    ]
+  },
+  {
+    "file": "02_bands/full_disabled.png",
+    "sheet": 3,
+    "box": [
+      902,
+      321,
+      1001,
+      375
+    ],
+    "size": [
+      99,
+      54
+    ]
+  },
+  {
+    "file": "02_bands/sub_range.png",
+    "sheet": 3,
+    "box": [
+      1052,
+      108,
+      1192,
+      175
+    ],
+    "size": [
+      140,
+      67
+    ]
+  },
+  {
+    "file": "02_bands/low_range.png",
+    "sheet": 3,
+    "box": [
+      1199,
+      108,
+      1339,
+      175
+    ],
+    "size": [
+      140,
+      67
+    ]
+  },
+  {
+    "file": "02_bands/low_mid_range.png",
+    "sheet": 3,
+    "box": [
+      1346,
+      108,
+      1486,
+      175
+    ],
+    "size": [
+      140,
+      67
+    ]
+  },
+  {
+    "file": "02_bands/mid_range.png",
+    "sheet": 3,
+    "box": [
+      1494,
+      108,
+      1634,
+      175
+    ],
+    "size": [
+      140,
+      67
+    ]
+  },
+  {
+    "file": "02_bands/high_mid_range.png",
+    "sheet": 3,
+    "box": [
+      1052,
+      185,
+      1192,
+      251
+    ],
+    "size": [
+      140,
+      66
+    ]
+  },
+  {
+    "file": "02_bands/high_range.png",
+    "sheet": 3,
+    "box": [
+      1199,
+      185,
+      1339,
+      251
+    ],
+    "size": [
+      140,
+      66
+    ]
+  },
+  {
+    "file": "02_bands/air_range.png",
+    "sheet": 3,
+    "box": [
+      1346,
+      185,
+      1486,
+      251
+    ],
+    "size": [
+      140,
+      66
+    ]
+  },
+  {
+    "file": "02_bands/full_range.png",
+    "sheet": 3,
+    "box": [
+      1494,
+      185,
+      1634,
+      251
+    ],
+    "size": [
+      140,
+      66
+    ]
+  },
+  {
+    "file": "03_icons/input_compressor_mono.png",
+    "sheet": 3,
+    "box": [
+      46,
+      459,
+      159,
+      525
+    ],
+    "size": [
+      113,
+      66
+    ]
+  },
+  {
+    "file": "03_icons/spectral_eq_mono.png",
+    "sheet": 3,
+    "box": [
+      179,
+      459,
+      292,
+      525
+    ],
+    "size": [
+      113,
+      66
+    ]
+  },
+  {
+    "file": "03_icons/dynamic_eq_mono.png",
+    "sheet": 3,
+    "box": [
+      311,
+      459,
+      425,
+      525
+    ],
+    "size": [
+      114,
+      66
+    ]
+  },
+  {
+    "file": "03_icons/stabilizer_mono.png",
+    "sheet": 3,
+    "box": [
+      450,
+      459,
+      564,
+      525
+    ],
+    "size": [
+      114,
+      66
+    ]
+  },
+  {
+    "file": "03_icons/bass_architect_mono.png",
+    "sheet": 3,
+    "box": [
+      582,
+      459,
+      696,
+      525
+    ],
+    "size": [
+      114,
+      66
+    ]
+  },
+  {
+    "file": "03_icons/transient_processor_mono.png",
+    "sheet": 3,
+    "box": [
+      716,
+      459,
+      830,
+      525
+    ],
+    "size": [
+      114,
+      66
+    ]
+  },
+  {
+    "file": "03_icons/sound_exciter_mono.png",
+    "sheet": 3,
+    "box": [
+      848,
+      459,
+      962,
+      525
+    ],
+    "size": [
+      114,
+      66
+    ]
+  },
+  {
+    "file": "03_icons/stereo_architect_mono.png",
+    "sheet": 3,
+    "box": [
+      983,
+      459,
+      1097,
+      525
+    ],
+    "size": [
+      114,
+      66
+    ]
+  },
+  {
+    "file": "03_icons/final_maximizer_mono.png",
+    "sheet": 3,
+    "box": [
+      1115,
+      459,
+      1229,
+      525
+    ],
+    "size": [
+      114,
+      66
+    ]
+  },
+  {
+    "file": "03_icons/utility_mono.png",
+    "sheet": 3,
+    "box": [
+      1249,
+      459,
+      1363,
+      525
+    ],
+    "size": [
+      114,
+      66
+    ]
+  },
+  {
+    "file": "03_icons/analyzer_mono.png",
+    "sheet": 3,
+    "box": [
+      1382,
+      459,
+      1495,
+      525
+    ],
+    "size": [
+      113,
+      66
+    ]
+  },
+  {
+    "file": "03_icons/empty_mono.png",
+    "sheet": 3,
+    "box": [
+      1517,
+      459,
+      1630,
+      525
+    ],
+    "size": [
+      113,
+      66
+    ]
+  },
+  {
+    "file": "03_icons/input_compressor_card.png",
+    "sheet": 3,
+    "box": [
+      36,
+      606,
+      162,
+      728
+    ],
+    "size": [
+      126,
+      122
+    ]
+  },
+  {
+    "file": "03_icons/spectral_eq_card.png",
+    "sheet": 3,
+    "box": [
+      188,
+      606,
+      315,
+      728
+    ],
+    "size": [
+      127,
+      122
+    ]
+  },
+  {
+    "file": "03_icons/dynamic_eq_card.png",
+    "sheet": 3,
+    "box": [
+      320,
+      606,
+      446,
+      728
+    ],
+    "size": [
+      126,
+      122
+    ]
+  },
+  {
+    "file": "03_icons/stabilizer_card.png",
+    "sheet": 3,
+    "box": [
+      454,
+      606,
+      580,
+      728
+    ],
+    "size": [
+      126,
+      122
+    ]
+  },
+  {
+    "file": "03_icons/bass_architect_card.png",
+    "sheet": 3,
+    "box": [
+      586,
+      606,
+      713,
+      728
+    ],
+    "size": [
+      127,
+      122
+    ]
+  },
+  {
+    "file": "03_icons/transient_processor_card.png",
+    "sheet": 3,
+    "box": [
+      719,
+      606,
+      846,
+      728
+    ],
+    "size": [
+      127,
+      122
+    ]
+  },
+  {
+    "file": "03_icons/sound_exciter_card.png",
+    "sheet": 3,
+    "box": [
+      851,
+      606,
+      978,
+      728
+    ],
+    "size": [
+      127,
+      122
+    ]
+  },
+  {
+    "file": "03_icons/stereo_architect_card.png",
+    "sheet": 3,
+    "box": [
+      984,
+      606,
+      1111,
+      728
+    ],
+    "size": [
+      127,
+      122
+    ]
+  },
+  {
+    "file": "03_icons/final_maximizer_card.png",
+    "sheet": 3,
+    "box": [
+      1117,
+      606,
+      1244,
+      728
+    ],
+    "size": [
+      127,
+      122
+    ]
+  },
+  {
+    "file": "03_icons/utility_card.png",
+    "sheet": 3,
+    "box": [
+      1250,
+      606,
+      1377,
+      728
+    ],
+    "size": [
+      127,
+      122
+    ]
+  },
+  {
+    "file": "03_icons/analyzer_card.png",
+    "sheet": 3,
+    "box": [
+      1383,
+      606,
+      1510,
+      728
+    ],
+    "size": [
+      127,
+      122
+    ]
+  },
+  {
+    "file": "03_icons/empty_card.png",
+    "sheet": 3,
+    "box": [
+      1517,
+      606,
+      1644,
+      728
+    ],
+    "size": [
+      127,
+      122
+    ]
+  },
+  {
+    "file": "03_icons/selected_glow.png",
+    "sheet": 3,
+    "box": [
+      33,
+      796,
+      138,
+      864
+    ],
+    "size": [
+      105,
+      68
+    ]
+  },
+  {
+    "file": "03_icons/headphones.png",
+    "sheet": 3,
+    "box": [
+      179,
+      796,
+      283,
+      864
+    ],
+    "size": [
+      104,
+      68
+    ]
+  },
+  {
+    "file": "03_icons/delta.png",
+    "sheet": 3,
+    "box": [
+      299,
+      796,
+      404,
+      864
+    ],
+    "size": [
+      105,
+      68
+    ]
+  },
+  {
+    "file": "03_icons/link.png",
+    "sheet": 3,
+    "box": [
+      415,
+      796,
+      519,
+      864
+    ],
+    "size": [
+      104,
+      68
+    ]
+  },
+  {
+    "file": "03_icons/automation_on.png",
+    "sheet": 3,
+    "box": [
+      533,
+      796,
+      637,
+      864
+    ],
+    "size": [
+      104,
+      68
+    ]
+  },
+  {
+    "file": "03_icons/automation_off.png",
+    "sheet": 3,
+    "box": [
+      649,
+      796,
+      754,
+      864
+    ],
+    "size": [
+      105,
+      68
+    ]
+  },
+  {
+    "file": "04_rack/slot_empty.png",
+    "sheet": 1,
+    "box": [
+      24,
+      88,
+      380,
+      146
+    ],
+    "size": [
+      356,
+      58
+    ]
+  },
+  {
+    "file": "04_rack/slot_occupied.png",
+    "sheet": 1,
+    "box": [
+      24,
+      149,
+      380,
+      207
+    ],
+    "size": [
+      356,
+      58
+    ]
+  },
+  {
+    "file": "04_rack/slot_hover.png",
+    "sheet": 1,
+    "box": [
+      24,
+      211,
+      380,
+      269
+    ],
+    "size": [
+      356,
+      58
+    ]
+  },
+  {
+    "file": "04_rack/slot_selected.png",
+    "sheet": 1,
+    "box": [
+      24,
+      273,
+      380,
+      331
+    ],
+    "size": [
+      356,
+      58
+    ]
+  },
+  {
+    "file": "04_rack/slot_bypassed.png",
+    "sheet": 1,
+    "box": [
+      24,
+      334,
+      380,
+      391
+    ],
+    "size": [
+      356,
+      57
+    ]
+  },
+  {
+    "file": "04_rack/slot_drop_target.png",
+    "sheet": 1,
+    "box": [
+      24,
+      393,
+      380,
+      451
+    ],
+    "size": [
+      356,
+      58
+    ]
+  },
+  {
+    "file": "04_rack/slot_dragging.png",
+    "sheet": 1,
+    "box": [
+      24,
+      454,
+      380,
+      512
+    ],
+    "size": [
+      356,
+      58
+    ]
+  },
+  {
+    "file": "04_rack/handle_metal.png",
+    "sheet": 1,
+    "box": [
+      19,
+      580,
+      54,
+      705
+    ],
+    "size": [
+      35,
+      125
+    ]
+  },
+  {
+    "file": "04_rack/handle_cyan.png",
+    "sheet": 1,
+    "box": [
+      61,
+      580,
+      95,
+      705
+    ],
+    "size": [
+      34,
+      125
+    ]
+  },
+  {
+    "file": "04_rack/handle_green.png",
+    "sheet": 1,
+    "box": [
+      104,
+      580,
+      139,
+      705
+    ],
+    "size": [
+      35,
+      125
+    ]
+  },
+  {
+    "file": "04_rack/grip_1.png",
+    "sheet": 1,
+    "box": [
+      146,
+      600,
+      184,
+      686
+    ],
+    "size": [
+      38,
+      86
+    ]
+  },
+  {
+    "file": "04_rack/grip_2.png",
+    "sheet": 1,
+    "box": [
+      191,
+      600,
+      228,
+      686
+    ],
+    "size": [
+      37,
+      86
+    ]
+  },
+  {
+    "file": "04_rack/move.png",
+    "sheet": 1,
+    "box": [
+      233,
+      600,
+      271,
+      686
+    ],
+    "size": [
+      38,
+      86
+    ]
+  },
+  {
+    "file": "04_rack/insert_marker.png",
+    "sheet": 1,
+    "box": [
+      324,
+      581,
+      388,
+      691
+    ],
+    "size": [
+      64,
+      110
+    ]
+  },
+  {
+    "file": "04_rack/card_clean.png",
+    "sheet": 1,
+    "box": [
+      416,
+      88,
+      587,
+      231
+    ],
+    "size": [
+      171,
+      143
+    ]
+  },
+  {
+    "file": "04_rack/card_eq.png",
+    "sheet": 1,
+    "box": [
+      594,
+      88,
+      765,
+      231
+    ],
+    "size": [
+      171,
+      143
+    ]
+  },
+  {
+    "file": "04_rack/card_dynamics.png",
+    "sheet": 1,
+    "box": [
+      772,
+      88,
+      944,
+      231
+    ],
+    "size": [
+      172,
+      143
+    ]
+  },
+  {
+    "file": "04_rack/card_saturation.png",
+    "sheet": 1,
+    "box": [
+      951,
+      88,
+      1122,
+      231
+    ],
+    "size": [
+      171,
+      143
+    ]
+  },
+  {
+    "file": "04_rack/card_limiter.png",
+    "sheet": 1,
+    "box": [
+      1126,
+      88,
+      1298,
+      231
+    ],
+    "size": [
+      172,
+      143
+    ]
+  },
+  {
+    "file": "05_analyzers/fft_empty.png",
+    "sheet": 1,
+    "box": [
+      415,
+      281,
+      884,
+      469
+    ],
+    "size": [
+      469,
+      188
+    ]
+  },
+  {
+    "file": "05_analyzers/heatmap_empty.png",
+    "sheet": 1,
+    "box": [
+      910,
+      281,
+      1358,
+      469
+    ],
+    "size": [
+      448,
+      188
+    ]
+  },
+  {
+    "file": "05_analyzers/grid.png",
+    "sheet": 1,
+    "box": [
+      437,
+      532,
+      656,
+      639
+    ],
+    "size": [
+      219,
+      107
+    ]
+  },
+  {
+    "file": "05_analyzers/cyan_example.png",
+    "sheet": 1,
+    "box": [
+      672,
+      532,
+      891,
+      639
+    ],
+    "size": [
+      219,
+      107
+    ]
+  },
+  {
+    "file": "05_analyzers/amber_example.png",
+    "sheet": 1,
+    "box": [
+      437,
+      658,
+      656,
+      765
+    ],
+    "size": [
+      219,
+      107
+    ]
+  },
+  {
+    "file": "05_analyzers/overlay_example.png",
+    "sheet": 1,
+    "box": [
+      672,
+      658,
+      891,
+      765
+    ],
+    "size": [
+      219,
+      107
+    ]
+  },
+  {
+    "file": "05_analyzers/heatmap_before_example.png",
+    "sheet": 1,
+    "box": [
+      1004,
+      526,
+      1236,
+      602
+    ],
+    "size": [
+      232,
+      76
+    ]
+  },
+  {
+    "file": "05_analyzers/heatmap_after_example.png",
+    "sheet": 1,
+    "box": [
+      1004,
+      607,
+      1236,
+      683
+    ],
+    "size": [
+      232,
+      76
+    ]
+  },
+  {
+    "file": "05_analyzers/heatmap_delta_example.png",
+    "sheet": 1,
+    "box": [
+      1004,
+      687,
+      1236,
+      764
+    ],
+    "size": [
+      232,
+      77
+    ]
+  },
+  {
+    "file": "05_analyzers/energy_legend.png",
+    "sheet": 1,
+    "box": [
+      1238,
+      520,
+      1299,
+      765
+    ],
+    "size": [
+      61,
+      245
+    ]
+  },
+  {
+    "file": "05_analyzers/delta_legend.png",
+    "sheet": 1,
+    "box": [
+      1301,
+      520,
+      1362,
+      765
+    ],
+    "size": [
+      61,
+      245
+    ]
+  },
+  {
+    "file": "06_meters/input_example.png",
+    "sheet": 1,
+    "box": [
+      1385,
+      281,
+      1451,
+      536
+    ],
+    "size": [
+      66,
+      255
+    ]
+  },
+  {
+    "file": "06_meters/input_clip_example.png",
+    "sheet": 1,
+    "box": [
+      1454,
+      281,
+      1520,
+      536
+    ],
+    "size": [
+      66,
+      255
+    ]
+  },
+  {
+    "file": "06_meters/output_example.png",
+    "sheet": 1,
+    "box": [
+      1523,
+      281,
+      1589,
+      536
+    ],
+    "size": [
+      66,
+      255
+    ]
+  },
+  {
+    "file": "06_meters/output_clip_example.png",
+    "sheet": 1,
+    "box": [
+      1592,
+      281,
+      1658,
+      536
+    ],
+    "size": [
+      66,
+      255
+    ]
+  },
+  {
+    "file": "06_meters/input_off.png",
+    "sheet": 1,
+    "box": [
+      1385,
+      541,
+      1451,
+      773
+    ],
+    "size": [
+      66,
+      232
+    ]
+  },
+  {
+    "file": "06_meters/output_off.png",
+    "sheet": 1,
+    "box": [
+      1454,
+      541,
+      1520,
+      773
+    ],
+    "size": [
+      66,
+      232
+    ]
+  },
+  {
+    "file": "06_meters/input_bypassed.png",
+    "sheet": 1,
+    "box": [
+      1523,
+      541,
+      1589,
+      773
+    ],
+    "size": [
+      66,
+      232
+    ]
+  },
+  {
+    "file": "06_meters/output_bypassed.png",
+    "sheet": 1,
+    "box": [
+      1592,
+      541,
+      1658,
+      773
+    ],
+    "size": [
+      66,
+      232
+    ]
+  },
+  {
+    "file": "07_panels/module_plate.png",
+    "sheet": 0,
+    "box": [
+      15,
+      100,
+      163,
+      280
+    ],
+    "size": [
+      148,
+      180
+    ]
+  },
+  {
+    "file": "07_panels/mini_display.png",
+    "sheet": 0,
+    "box": [
+      173,
+      100,
+      315,
+      264
+    ],
+    "size": [
+      142,
+      164
+    ]
+  },
+  {
+    "file": "07_panels/large_frame.png",
+    "sheet": 0,
+    "box": [
+      455,
+      92,
+      861,
+      270
+    ],
+    "size": [
+      406,
+      178
+    ]
+  },
+  {
+    "file": "07_panels/glass_wide.png",
+    "sheet": 0,
+    "box": [
+      869,
+      91,
+      1155,
+      187
+    ],
+    "size": [
+      286,
+      96
+    ]
+  },
+  {
+    "file": "07_panels/glass_small_1.png",
+    "sheet": 0,
+    "box": [
+      869,
+      192,
+      1016,
+      275
+    ],
+    "size": [
+      147,
+      83
+    ]
+  },
+  {
+    "file": "07_panels/glass_small_2.png",
+    "sheet": 0,
+    "box": [
+      1022,
+      192,
+      1155,
+      275
+    ],
+    "size": [
+      133,
+      83
+    ]
+  },
+  {
+    "file": "07_panels/eq_example.png",
+    "sheet": 0,
+    "box": [
+      1179,
+      92,
+      1659,
+      276
+    ],
+    "size": [
+      480,
+      184
+    ]
+  },
+  {
+    "file": "07_panels/glass_main.png",
+    "sheet": 0,
+    "box": [
+      553,
+      506,
+      790,
+      646
+    ],
+    "size": [
+      237,
+      140
+    ]
+  },
+  {
+    "file": "07_panels/glass_short.png",
+    "sheet": 0,
+    "box": [
+      802,
+      507,
+      961,
+      578
+    ],
+    "size": [
+      159,
+      71
+    ]
+  },
+  {
+    "file": "07_panels/glass_square_1.png",
+    "sheet": 0,
+    "box": [
+      802,
+      582,
+      880,
+      644
+    ],
+    "size": [
+      78,
+      62
+    ]
+  },
+  {
+    "file": "07_panels/glass_square_2.png",
+    "sheet": 0,
+    "box": [
+      885,
+      582,
+      961,
+      644
+    ],
+    "size": [
+      76,
+      62
+    ]
+  },
+  {
+    "file": "07_panels/handle_left.png",
+    "sheet": 0,
+    "box": [
+      988,
+      510,
+      1033,
+      644
+    ],
+    "size": [
+      45,
+      134
+    ]
+  },
+  {
+    "file": "07_panels/handle_right.png",
+    "sheet": 0,
+    "box": [
+      1043,
+      510,
+      1088,
+      644
+    ],
+    "size": [
+      45,
+      134
+    ]
+  },
+  {
+    "file": "07_panels/rail_1.png",
+    "sheet": 0,
+    "box": [
+      1092,
+      510,
+      1136,
+      644
+    ],
+    "size": [
+      44,
+      134
+    ]
+  },
+  {
+    "file": "07_panels/rail_2.png",
+    "sheet": 0,
+    "box": [
+      1133,
+      510,
+      1178,
+      644
+    ],
+    "size": [
+      45,
+      134
+    ]
+  },
+  {
+    "file": "07_panels/rail_3.png",
+    "sheet": 0,
+    "box": [
+      1194,
+      510,
+      1239,
+      644
+    ],
+    "size": [
+      45,
+      134
+    ]
+  },
+  {
+    "file": "07_panels/corner.png",
+    "sheet": 0,
+    "box": [
+      1244,
+      510,
+      1288,
+      644
+    ],
+    "size": [
+      44,
+      134
+    ]
+  },
+  {
+    "file": "07_panels/corner_tl.png",
+    "sheet": 0,
+    "box": [
+      1339,
+      512,
+      1400,
+      573
+    ],
+    "size": [
+      61,
+      61
+    ]
+  },
+  {
+    "file": "07_panels/corner_tr.png",
+    "sheet": 0,
+    "box": [
+      1405,
+      512,
+      1466,
+      573
+    ],
+    "size": [
+      61,
+      61
+    ]
+  },
+  {
+    "file": "07_panels/corner_bl.png",
+    "sheet": 0,
+    "box": [
+      1339,
+      577,
+      1400,
+      638
+    ],
+    "size": [
+      61,
+      61
+    ]
+  },
+  {
+    "file": "07_panels/corner_br.png",
+    "sheet": 0,
+    "box": [
+      1405,
+      577,
+      1466,
+      638
+    ],
+    "size": [
+      61,
+      61
+    ]
+  },
+  {
+    "file": "07_panels/divider_silver.png",
+    "sheet": 0,
+    "box": [
+      1496,
+      512,
+      1614,
+      527
+    ],
+    "size": [
+      118,
+      15
+    ]
+  },
+  {
+    "file": "07_panels/divider_amber.png",
+    "sheet": 0,
+    "box": [
+      1496,
+      535,
+      1614,
+      551
+    ],
+    "size": [
+      118,
+      16
+    ]
+  },
+  {
+    "file": "07_panels/divider_cyan.png",
+    "sheet": 0,
+    "box": [
+      1496,
+      559,
+      1614,
+      574
+    ],
+    "size": [
+      118,
+      15
+    ]
+  },
+  {
+    "file": "07_panels/divider_dark.png",
+    "sheet": 0,
+    "box": [
+      1496,
+      583,
+      1614,
+      598
+    ],
+    "size": [
+      118,
+      15
+    ]
+  },
+  {
+    "file": "07_panels/divider_plain.png",
+    "sheet": 0,
+    "box": [
+      1496,
+      607,
+      1614,
+      623
+    ],
+    "size": [
+      118,
+      16
+    ]
+  }
+]
