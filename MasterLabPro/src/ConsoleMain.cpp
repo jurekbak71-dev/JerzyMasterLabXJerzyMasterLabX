@@ -9,6 +9,7 @@ class ConsoleContent final : public juce::Component {
 public:
  explicit ConsoleContent(AssetLoader& assets)
  : editor(order,assets.loadBands(),{},assets.loadPanel()) {
+   editor.setRackSkin(assets.loadSlot());
    addAndMakeVisible(editor);
    setSize(1600,1000);
  }
@@ -27,7 +28,8 @@ public:
    setResizable(true,false);
    setResizeLimits(800,500,3200,2000);
    if(auto* c=getConstrainer()) c->setFixedAspectRatio(1.6);
-   const auto area=juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()->userArea;
+   const auto* display=juce::Desktop::getInstance().getDisplays().getPrimaryDisplay();
+   const auto area=display?display->userArea:juce::Rectangle<int>(0,0,1600,1000);
    const int w=juce::jmin(1600,juce::jmin(area.getWidth()-40,int((area.getHeight()-80)*1.6)));
    centreWithSize(juce::jmax(800,w),juce::jmax(500,int(w/1.6)));
    setVisible(true);
