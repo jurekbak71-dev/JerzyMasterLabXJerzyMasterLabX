@@ -30,6 +30,7 @@ public:
   bands.onSelection=[this](int n){if(selected&&callbacks.band)callbacks.band(selected,n);};
   setSize(1600,1000);
  }
+ void setSelection(RackOrder::Id id){selected=id;tiles.setSelection(id);bands.setEnabled(id!=0);repaint();}
  void setRackSkin(juce::Image skin){tiles.setSkin(std::move(skin));}
  void refreshRack(){tiles.repaintTiles();}
  void setBandFromController(int n){bands.setSelected(n);}
