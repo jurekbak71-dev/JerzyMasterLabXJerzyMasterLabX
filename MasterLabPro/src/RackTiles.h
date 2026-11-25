@@ -21,6 +21,7 @@ class RackTiles final:public juce::Component,public juce::DragAndDropContainer {
 public:
  explicit RackTiles(const RackOrder& model):order(model){for(int i=0;i<10;++i){tiles[i]=std::make_unique<Tile>(*this,i);addAndMakeVisible(*tiles[i]);}}
  std::function<void(int,int)> onMove;std::function<void(RackOrder::Id,int)> onSelect;std::function<juce::String(RackOrder::Id)> label;
+ void setSelection(RackOrder::Id id){selected=id;repaintTiles();}
  void setSkin(juce::Image skin){slotSkin=std::move(skin);repaintTiles();}
  void paintSkin(juce::Graphics& g,juce::Rectangle<float> r){
   // Blank areas from approved slot_empty.png; never paint its baked label.
