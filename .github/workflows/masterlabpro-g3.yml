@@ -30,7 +30,12 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force reports | Out-Null
           cmake --build build-masterlabpro --config Release --parallel 2 2>&1 | Tee-Object -FilePath reports/build-windows.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            $message = (Get-Content reports/build-windows.log -Tail 80) -join "`n"
+            $message = $message.Replace('%','%25').Replace("`r",'%0D').Replace("`n",'%0A')
+            Write-Output "::error title=Windows compiler output::$message"
+            exit $LASTEXITCODE
+          }
       - name: Upload failed Windows build log
         if: failure()
         uses: actions/upload-artifact@v4
