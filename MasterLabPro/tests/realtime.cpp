@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <new>
 
 namespace {
@@ -30,16 +31,16 @@ void operator delete[](void* memory,std::size_t) noexcept {std::free(memory);}
 
 int main(){
  for(double rate:{44100.,48000.,88200.,96000.,192000.}){
-  ml::AudioRack rack;rack.prepare(rate);
+  auto rack=std::make_unique<ml::AudioRack>();rack->prepare(rate);
   ml::RackConfig config;
   config.stages[0]={1,12.f};
-  if(!rack.submit(config))return 1;
+  if(!rack->submit(config))return 1;
   std::array<float,257> left{},right{};
   const auto before=allocations.load(std::memory_order_relaxed);
   countAllocations.store(true,std::memory_order_relaxed);
   for(int block=0;block<100;++block){
    for(std::size_t i=0;i<left.size();++i){left[i]=std::sin(float(i+block)*.17f)*.1f;right[i]=-left[i];}
-   rack.process(left.data(),right.data(),left.size());
+   rack->process(left.data(),right.data(),left.size());
   }
   countAllocations.store(false,std::memory_order_relaxed);
   if(allocations.load(std::memory_order_relaxed)!=before)return 2;
@@ -47,10 +48,10 @@ int main(){
  }
 
  // The bounded control queue rejects overflow instead of overwriting unread snapshots.
- ml::AudioRack rack;rack.prepare(48000.);
- for(std::uint64_t id=1;id<=7;++id){ml::RackConfig c;c.stages[0]={id,0};if(!rack.submit(c))return 4;}
- ml::RackConfig overflow;overflow.stages[0]={8,0};if(rack.submit(overflow))return 5;
- std::array<float,17> mono{};rack.process(mono.data(),nullptr,mono.size());
- if(!rack.submit(overflow))return 6;
+ auto rack=std::make_unique<ml::AudioRack>();rack->prepare(48000.);
+ for(std::uint64_t id=1;id<=7;++id){ml::RackConfig c;c.stages[0]={id,0};if(!rack->submit(c))return 4;}
+ ml::RackConfig overflow;overflow.stages[0]={8,0};if(rack->submit(overflow))return 5;
+ std::array<float,17> mono{};rack->process(mono.data(),nullptr,mono.size());
+ if(!rack->submit(overflow))return 6;
  std::cout<<"PASS callback allocation, multirate odd-block stress and bounded command queue\n";
 }
