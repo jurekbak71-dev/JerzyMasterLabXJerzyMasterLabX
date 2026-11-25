@@ -19,6 +19,7 @@ struct AssetLoader {
    result[i][j]=load(juce::String("bands/")+names[i]+"_"+states[j]+".png");
   return result;
  }
+ juce::Image loadSlot(){return load("approved/04_rack/slot_empty.png");}
  juce::Image loadPanel(){return load("approved/07_panels/large_frame.png");}
  juce::Image loadKnobCap(){return load("knob_cap.png");}
  juce::Image loadKnobPointer(){return load("knob_pointer.png");}
