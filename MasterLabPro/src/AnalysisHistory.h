@@ -35,7 +35,11 @@ public:
  }
  const Cell& column(int x)const noexcept{return history[(head+1+x)%width];}
  double sampleRate()const noexcept{return rate;}
- void clear()noexcept{for(auto& c:history)c.valid=false;ready=hasTick=false;head=width-1;last=lastTick=0;}
+ void clear()noexcept{
+  for(auto& spectrum:spectra)spectrum.fill(-120.f);
+  for(auto& c:history)c.valid=false;
+  ready=hasTick=false;head=width-1;last=lastTick=0;
+ }
 private:
  SpectralAnalysis fft;bool ready=false,hasTick=false;int head=width-1;
  std::uint64_t epoch=0,source=0,last=0,lastTick=0;double rate=44100;

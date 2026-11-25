@@ -17,19 +17,25 @@ jobs:
       - name: Configure independent project
         shell: pwsh
         run: |
-          $options = @('-DMASTERLABPRO_GUI_CHECK=ON','-DMASTERLABPRO_CONSOLE=ON')
-          if (Test-Path 'MasterLabPro/assets') {
-            $root = (Resolve-Path 'MasterLabPro/assets').Path
-            $options += "-DMASTERLABPRO_ASSET_ROOT=$root"
+          if (-not (Test-Path 'MasterLabPro/assets/manifest.json')) {
+            throw 'Approved Package A assets are mandatory for the strict Windows build.'
           }
+          $options = @('-DMASTERLABPRO_GUI_CHECK=ON','-DMASTERLABPRO_CONSOLE=ON')
+          $root = (Resolve-Path 'MasterLabPro/assets').Path
+          $options += "-DMASTERLABPRO_ASSET_ROOT=$root"
           cmake -S MasterLabPro -B build-masterlabpro -A x64 @options
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build
         run: cmake --build build-masterlabpro --config Release --parallel 2
       - name: Test
         run: ctest --test-dir build-masterlabpro -C Release --output-on-failure
+      - name: Measure CPU RAM and PDC
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force reports | Out-Null
+          & build-masterlabpro/Release/masterlabpro_benchmark.exe | Tee-Object -FilePath reports/performance-windows.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Stage approved assets beside executable
-        if: ${{ hashFiles('MasterLabPro/assets/manifest.json') != '' }}
         shell: pwsh
         run: |
           Copy-Item -Recurse -Force 'MasterLabPro/assets' 'build-masterlabpro/MasterLabProConsole_artefacts/Release/assets'
@@ -48,9 +54,34 @@ jobs:
           path: build-masterlabpro/rack-smoke.png
           if-no-files-found: error
       - name: Upload strict A+C screenshot
-        if: ${{ hashFiles('MasterLabPro/assets/manifest.json') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: MasterLabPro-Rack-AC
-          path: build-masterlabpro/rack-ac.png
+          path: build-masterlabpro/rack-ac*.png
           if-no-files-found: error
+      - name: Upload performance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: MasterLabPro-Performance-Windows
+          path: reports/performance-windows.json
+          if-no-files-found: error
+
+  sanitizers:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: asan-ubsan
+            option: MASTERLABPRO_ASAN_UBSAN
+          - name: tsan
+            option: MASTERLABPRO_TSAN
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure ${{ matrix.name }}
+        run: cmake -S MasterLabPro -B build-${{ matrix.name }} -DCMAKE_BUILD_TYPE=RelWithDebInfo -D${{ matrix.option }}=ON
+      - name: Build ${{ matrix.name }}
+        run: cmake --build build-${{ matrix.name }} --parallel 2
+      - name: Test ${{ matrix.name }}
+        run: ctest --test-dir build-${{ matrix.name }} --output-on-failure

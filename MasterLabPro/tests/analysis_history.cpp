@@ -15,6 +15,9 @@ int main(){
  f->endSample+=4800;if(!h->accept(*f)||h->column(298).valid||!h->column(299).valid||!h->column(296).valid)return 4;
  f->sourceId=2;++f->epoch;f->samples={};if(!h->accept(*f)||h->column(298).valid)return 5;
  for(float x:h->column(299).values[2])if(x!=0)return 6;
+ h->spectra[0][17]=-3.f;h->spectra[1][17]=-6.f;h->spectra[2][17]=-9.f;
+ h->clear();
+ for(const auto& spectrum:h->spectra)for(float db:spectrum)if(db!=-120.f)return 12;
  auto rack=std::make_unique<ml::AudioRack>();rack->prepare(48000);
  ml::RackConfig c;c.stages[0]={1,6.0205999f};c.listenDelta=true;
  if(!rack->submit(c))return 7;
