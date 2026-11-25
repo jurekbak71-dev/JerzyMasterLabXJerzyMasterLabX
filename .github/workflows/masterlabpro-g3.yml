@@ -15,20 +15,42 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure independent project
-        run: cmake -S MasterLabPro -B build-masterlabpro -A x64 -DMASTERLABPRO_GUI_CHECK=ON -DMASTERLABPRO_CONSOLE=ON
+        shell: pwsh
+        run: |
+          $options = @('-DMASTERLABPRO_GUI_CHECK=ON','-DMASTERLABPRO_CONSOLE=ON')
+          if (Test-Path 'MasterLabPro/assets') {
+            $root = (Resolve-Path 'MasterLabPro/assets').Path
+            $options += "-DMASTERLABPRO_ASSET_ROOT=$root"
+          }
+          cmake -S MasterLabPro -B build-masterlabpro -A x64 @options
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build
         run: cmake --build build-masterlabpro --config Release --parallel 2
       - name: Test
         run: ctest --test-dir build-masterlabpro -C Release --output-on-failure
+      - name: Stage approved assets beside executable
+        if: ${{ hashFiles('MasterLabPro/assets/manifest.json') != '' }}
+        shell: pwsh
+        run: |
+          Copy-Item -Recurse -Force 'MasterLabPro/assets' 'build-masterlabpro/MasterLabProConsole_artefacts/Release/assets'
       - name: Upload standalone GUI
         uses: actions/upload-artifact@v4
         with:
           name: MasterLabPro-GUI-Windows
-          path: build-masterlabpro/MasterLabProConsole_artefacts/Release/*.exe
+          path: |
+            build-masterlabpro/MasterLabProConsole_artefacts/Release/*.exe
+            build-masterlabpro/MasterLabProConsole_artefacts/Release/assets/
           if-no-files-found: error
       - name: Upload rack smoke screenshot
         uses: actions/upload-artifact@v4
         with:
           name: MasterLabPro-Rack-Smoke
           path: build-masterlabpro/rack-smoke.png
+          if-no-files-found: error
+      - name: Upload strict A+C screenshot
+        if: ${{ hashFiles('MasterLabPro/assets/manifest.json') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: MasterLabPro-Rack-AC
+          path: build-masterlabpro/rack-ac.png
           if-no-files-found: error
