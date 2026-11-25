@@ -55,7 +55,7 @@ public:
  void paint(juce::Graphics& g)override{
   g.fillAll(juce::Colour(0xff171b21));
   for(int i=0;i<8;++i){auto r=box(i);if(panelSkin.isValid())g.drawImage(panelSkin,r.toFloat());else{g.setColour(juce::Colour(0xff272d34));g.fillRoundedRectangle(r.toFloat(),5);g.setColour(juce::Colour(0xff65717c));g.drawRoundedRectangle(r.toFloat(),5,1);}}
-  const char* names[]{"JERZY MASTERLAB PRO","SPECTRAL MONITOR","SPECTRAL HEAT MAP","INPUT","OUTPUT","SIGNAL ROUTING","MODULE EDITOR","DEVELOPMENT / TELEMETRY NOT CONNECTED"};
+  const char* names[]{"JERZY MASTERLAB PRO","SPECTRAL MONITOR","SPECTRAL HEAT MAP","INPUT","OUTPUT","SIGNAL ROUTING","MODULE EDITOR","DEVELOPMENT / GAIN TEST RACK"};
   g.setColour(juce::Colours::whitesmoke);g.setFont(14.f);
   for(int i=0;i<8;++i)g.drawText(names[i],box(i).removeFromTop(24).reduced(8,0),juce::Justification::centredLeft,true);
   if(!module){auto r=box(6);r.removeFromTop(76*getHeight()/1000);g.drawText(selected?"MODULE EDITOR NOT CONNECTED":"SELECT A MODULE",r,juce::Justification::centred);}
