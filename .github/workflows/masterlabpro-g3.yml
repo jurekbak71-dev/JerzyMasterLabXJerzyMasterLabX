@@ -1,0 +1,22 @@
+name: MasterLabPro G3
+on:
+  push:
+    branches: [masterlabpro-development]
+    paths:
+      - 'MasterLabPro/**'
+      - '.github/workflows/masterlabpro-g3.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure independent project
+        run: cmake -S MasterLabPro -B build-masterlabpro -A x64 -DMASTERLABPRO_GUI_CHECK=ON
+      - name: Build
+        run: cmake --build build-masterlabpro --config Release --parallel 2
+      - name: Test
+        run: ctest --test-dir build-masterlabpro -C Release --output-on-failure
