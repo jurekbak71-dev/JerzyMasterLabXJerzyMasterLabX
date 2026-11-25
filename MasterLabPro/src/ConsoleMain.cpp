@@ -42,7 +42,9 @@ public:
    editor.setRackSkin(assets.loadSlot());
    addAndMakeVisible(editor);
    addAndMakeVisible(loadButton);addAndMakeVisible(stopButton);addAndMakeVisible(scopeButton);
-   scopeButton.onClick=[this]{moduleScope=scopeButton.getToggleState();clearAnalysis();submitConfiguration();};
+   scopeButton.onClick=[this]{moduleScope=scopeButton.getToggleState();scopeButton.setButtonText(moduleScope?"MODULE":"GLOBAL");clearAnalysis();submitConfiguration();};
+   addAndMakeVisible(deltaButton);deltaButton.setClickingTogglesState(true);
+   deltaButton.onClick=[this]{submitConfiguration();};
    scopeButton.setClickingTogglesState(true);
    loadButton.onClick=[this]{chooseWav();};stopButton.onClick=[this]{stopPlayback();};
    addAndMakeVisible(status);status.setText("NO AUDIO",juce::dontSendNotification);
@@ -52,10 +54,12 @@ public:
  void resized() override {
    editor.setBounds(getLocalBounds());
    const int y=juce::jmax(0,getHeight()*10/1000);
-   loadButton.setBounds(getWidth()*53/100,y+8,juce::jmax(80,getWidth()*13/100),28);
-   stopButton.setBounds(getWidth()*67/100,y+8,juce::jmax(60,getWidth()*7/100),28);
-   scopeButton.setBounds(getWidth()*75/100,y+8,getWidth()*10/100,28);
-   status.setBounds(getWidth()*86/100,y+8,getWidth()*13/100,28);
+   auto bar=juce::Rectangle<int>(getWidth()*43/100,y+8,getWidth()*56/100,28);
+   loadButton.setBounds(bar.removeFromLeft(getWidth()*12/100).reduced(2,0));
+   stopButton.setBounds(bar.removeFromLeft(getWidth()*8/100).reduced(2,0));
+   scopeButton.setBounds(bar.removeFromLeft(getWidth()*11/100).reduced(2,0));
+   deltaButton.setBounds(bar.removeFromLeft(getWidth()*14/100).reduced(2,0));
+   status.setBounds(bar);
  }
  void prepareToPlay(int,double sampleRate) override {
    // Device may choose a different rate. Never silently change pitch.
@@ -78,7 +82,7 @@ public:
  }
 private:
  void stopPlayback(){
-   stopTimer();shutdownAudio();rack.resetWhenStopped();lastSubmitted={};source.setSize(0,0);
+   stopTimer();shutdownAudio();deltaButton.setToggleState(false,juce::dontSendNotification);rack.resetWhenStopped();lastSubmitted={};source.setSize(0,0);
    editor.setGlobalLevels({},{});clearAnalysis();status.setText("STOPPED",juce::dontSendNotification);
  }
  void chooseWav(){
@@ -129,7 +133,7 @@ private:
    updateAnalysis();
  }
  void submitConfiguration(){
-   RackConfig config;config.deltaId=controller.selection();config.moduleAnalysis=moduleScope;
+   RackConfig config;config.deltaId=controller.selection();config.moduleAnalysis=moduleScope;config.listenDelta=deltaButton.getToggleState()&&(!moduleScope||controller.selection()!=0);
    const auto& slots=controller.order().slots();
    for(std::size_t i=0;i<slots.size();++i){
     if(auto it=params.find(slots[i]);it!=params.end())config.stages[i]={slots[i],it->second->get()};
@@ -151,6 +155,7 @@ private:
    if(!got)return;
    const auto rate=analysis.sampleRate();
    std::array<std::vector<SpectrumBin>,3> traces;
+   for(auto& trace:traces)trace.reserve(fftBins);
    for(int t=0;t<3;++t)for(std::size_t k=1;k<fftBins;++k){
     const auto hz=float(k*rate/fftSize);
     if(hz>=20&&hz<=20000)traces[t].push_back({hz,analysis.spectra[t][k]});
@@ -217,7 +222,7 @@ private:
  AudioRack rack;RackConfig lastSubmitted{};juce::AudioBuffer<float> source;double fileRate=44100.;int cursor=0;
  std::atomic<bool> finished{false},mismatch{false};
  AnalysisHistory analysis;AnalysisFrame frame;bool moduleScope=false;RackOrder::Id displaySource=0;
- juce::TextButton loadButton{"PLAY WAV"},stopButton{"STOP"},scopeButton{"MODULE"};juce::Label status;
+ juce::TextButton loadButton{"PLAY WAV"},stopButton{"STOP"},scopeButton{"GLOBAL"},deltaButton{"DELTA LISTEN"};juce::Label status;
  std::unique_ptr<juce::FileChooser> chooser;
 };
 
