@@ -26,7 +26,18 @@ jobs:
           cmake -S MasterLabPro -B build-masterlabpro -A x64 @options
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build
-        run: cmake --build build-masterlabpro --config Release --parallel 2
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force reports | Out-Null
+          cmake --build build-masterlabpro --config Release --parallel 2 2>&1 | Tee-Object -FilePath reports/build-windows.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload failed Windows build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MasterLabPro-Windows-Build-Failure
+          path: reports/build-windows.log
+          if-no-files-found: error
       - name: Test
         run: ctest --test-dir build-masterlabpro -C Release --output-on-failure --output-junit reports-tests.xml
       - name: Measure CPU RAM and PDC
