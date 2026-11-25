@@ -47,7 +47,8 @@ int main(int argc,char** argv){
    if(!rack->submit(config))return 8;
    auto history=std::make_unique<ml::AnalysisHistory>();ml::AnalysisFrame frame;ml::RackMeters levels,latest;bool gotLevels=false;
    std::array<float,257> left{},right{};std::uint64_t sample=0;
-   for(int block=0;block<40;++block){
+   // Ten seconds of simulated audio fill the 300-column, 30 Hz history with measured frames.
+   for(int block=0;block<1900;++block){
     for(std::size_t i=0;i<left.size();++i,++sample){const float x=.18f*std::sin(float(2*std::numbers::pi*997.*sample/48000.));left[i]=x;right[i]=x*.72f;}
     rack->process(left.data(),right.data(),left.size());
     while(rack->pollAnalysis(frame))history->accept(frame);

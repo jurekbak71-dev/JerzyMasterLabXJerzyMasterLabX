@@ -16,9 +16,13 @@ int main(){
  c.stages[1]={2,-6.0205999f};if(!rack.submit(c))return 5;
  l.fill(.1f);r.fill(-.2f);rack.process(l.data(),r.data(),l.size());
  if(std::abs(l.back()-.1f)>1e-6f)return 6;
+ while(rack.poll(m)){}const float deltaBeforeReorder=m.delta.peak[0];
  std::swap(c.stages[0],c.stages[1]);if(!rack.submit(c))return 7;
  l.fill(.1f);rack.process(l.data(),nullptr,l.size());
  if(std::abs(l.front()-.1f)>1e-6f)return 8;
+ while(rack.poll(m)){}const float deltaAfterReorder=m.delta.peak[0];
+ // Total gain is commutative, but selected-stage delta proves the real execution order changed.
+ if(std::abs((deltaAfterReorder-deltaBeforeReorder)+6.0206f)>.01f)return 16;
  c={};if(!rack.submit(c))return 9;
  l.fill(.1f);rack.process(l.data(),nullptr,l.size());
  l.fill(.1f);rack.process(l.data(),nullptr,l.size());
