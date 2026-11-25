@@ -1,4 +1,5 @@
 #include "RackEditor.h"
+#include "RackController.h"
 #include "AssetLoader.h"
 #include <juce_gui_extra/juce_gui_extra.h>
 
@@ -8,14 +9,19 @@ namespace ml {
 class ConsoleContent final : public juce::Component {
 public:
  explicit ConsoleContent(AssetLoader& assets)
- : editor(order,assets.loadBands(),{},assets.loadPanel()) {
+ : editor(controller.order(),assets.loadBands(),{
+   [this](int a,int b){if(controller.move(a,b))editor.refreshRack();},
+   [this](RackOrder::Id id,int){if(controller.select(id)&&id)editor.setBandFromController(controller.band(id));},
+   {},
+   [this](RackOrder::Id id,int band){controller.setBand(id,band);}
+ },assets.loadPanel()) {
    editor.setRackSkin(assets.loadSlot());
    addAndMakeVisible(editor);
    setSize(1600,1000);
  }
  void resized() override { editor.setBounds(getLocalBounds()); }
 private:
- RackOrder order;
+ RackController controller;
  RackEditor editor;
 };
 
