@@ -24,5 +24,12 @@ int main(){
  if(l.front()!=.1f||l.back()!=.1f)return 10;
  c.stages[0]={3,0};c.stages[1]={3,0};if(rack.submit(c))return 11;
  ml::Spsc<int,3> q;int v;if(!q.push(1)||!q.push(2)||q.push(3)||!q.pop(v)||v!=1||!q.pop(v)||v!=2||q.pop(v))return 12;
- std::cout<<"PASS empty rack, gain chain, delta, reorder, retire, validation, queue\n";
+ // Reinitialising the audio device preserves the last applied stage configuration.
+ c={};c.stages[0]={5,6.0205999f};if(!rack.submit(c))return 13;
+ l.fill(.1f);rack.process(l.data(),nullptr,l.size());
+ rack.prepare(48000);l.fill(.1f);rack.process(l.data(),nullptr,l.size());
+ if(std::abs(l.back()-.2f)>1e-6f)return 14;
+ rack.resetWhenStopped();rack.prepare(48000);l.fill(.1f);rack.process(l.data(),nullptr,l.size());
+ if(l.front()!=.1f||l.back()!=.1f)return 15;
+ std::cout<<"PASS empty rack, gain chain, delta, reorder, retire, validation, queue, restart and reset\n";
 }
