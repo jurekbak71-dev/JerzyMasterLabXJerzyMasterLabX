@@ -1,6 +1,7 @@
 #include "RackEditor.h"
 #include "RackController.h"
 #include "AudioRack.h"
+#include "AnalysisHistory.h"
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <atomic>
 #include "RotaryParameterControl.h"
@@ -40,7 +41,9 @@ public:
  },assets.loadPanel()) {
    editor.setRackSkin(assets.loadSlot());
    addAndMakeVisible(editor);
-   addAndMakeVisible(loadButton);addAndMakeVisible(stopButton);
+   addAndMakeVisible(loadButton);addAndMakeVisible(stopButton);addAndMakeVisible(scopeButton);
+   scopeButton.onClick=[this]{moduleScope=scopeButton.getToggleState();clearAnalysis();submitConfiguration();};
+   scopeButton.setClickingTogglesState(true);
    loadButton.onClick=[this]{chooseWav();};stopButton.onClick=[this]{stopPlayback();};
    addAndMakeVisible(status);status.setText("NO AUDIO",juce::dontSendNotification);
    setSize(1600,1000);
@@ -51,7 +54,8 @@ public:
    const int y=juce::jmax(0,getHeight()*10/1000);
    loadButton.setBounds(getWidth()*53/100,y+8,juce::jmax(80,getWidth()*13/100),28);
    stopButton.setBounds(getWidth()*67/100,y+8,juce::jmax(60,getWidth()*7/100),28);
-   status.setBounds(getWidth()*75/100,y+8,getWidth()*24/100,28);
+   scopeButton.setBounds(getWidth()*75/100,y+8,getWidth()*10/100,28);
+   status.setBounds(getWidth()*86/100,y+8,getWidth()*13/100,28);
  }
  void prepareToPlay(int,double sampleRate) override {
    // Device may choose a different rate. Never silently change pitch.
@@ -75,7 +79,7 @@ public:
 private:
  void stopPlayback(){
    stopTimer();shutdownAudio();rack.resetWhenStopped();lastSubmitted={};source.setSize(0,0);
-   editor.setGlobalLevels({},{});status.setText("STOPPED",juce::dontSendNotification);
+   editor.setGlobalLevels({},{});clearAnalysis();status.setText("STOPPED",juce::dontSendNotification);
  }
  void chooseWav(){
    if(chooser)return;
@@ -122,14 +126,55 @@ private:
    submitConfiguration();
    RackMeters latest,m;bool got=false;while(rack.poll(m)){latest=m;got=true;}
    if(got)editor.setGlobalLevels(latest.input,latest.output);
+   updateAnalysis();
  }
  void submitConfiguration(){
-   RackConfig config;config.deltaId=controller.selection();
+   RackConfig config;config.deltaId=controller.selection();config.moduleAnalysis=moduleScope;
    const auto& slots=controller.order().slots();
    for(std::size_t i=0;i<slots.size();++i){
     if(auto it=params.find(slots[i]);it!=params.end())config.stages[i]={slots[i],it->second->get()};
    }
    if(config!=lastSubmitted&&rack.submit(config))lastSubmitted=config; // retry if full
+ }
+ void clearAnalysis(){
+   analysis.clear();editor.setSpectrum({},20000);editor.setHeatmaps({},{},{});
+ }
+ void updateAnalysis(){
+   const auto wanted=moduleScope?controller.selection():0;
+   if(wanted!=displaySource){clearAnalysis();displaySource=wanted;}
+   bool got=false;
+   // Bound consumer work per timer tick, never FFT in audio callback.
+   for(int i=0;i<4&&rack.pollAnalysis(frame);++i){
+    if((moduleScope&&!wanted)||frame.sourceId!=wanted)continue;
+    got=analysis.accept(frame)||got;
+   }
+   if(!got)return;
+   const auto rate=analysis.sampleRate();
+   std::array<std::vector<SpectrumBin>,3> traces;
+   for(int t=0;t<3;++t)for(std::size_t k=1;k<fftBins;++k){
+    const auto hz=float(k*rate/fftSize);
+    if(hz>=20&&hz<=20000)traces[t].push_back({hz,analysis.spectra[t][k]});
+   }
+   editor.setSpectrum(std::move(traces),float(std::min(20000.,rate*.5)));
+   std::array<juce::Image,3> images;
+   const juce::Colour colours[]{juce::Colour(0xff58bde8),juce::Colour(0xffe3ad60),juce::Colour(0xffcb9cea)};
+   for(int t=0;t<3;++t){
+    images[t]=juce::Image(juce::Image::RGB,AnalysisHistory::width,AnalysisHistory::height,true);
+    juce::Image::BitmapData pixels(images[t],juce::Image::BitmapData::writeOnly);
+    for(int x=0;x<AnalysisHistory::width;++x){
+     const auto& col=analysis.column(x);
+     for(int y=0;y<AnalysisHistory::height;++y){
+      auto colour=juce::Colour(0xff09151b);
+      if(col.valid){
+       float v=col.values[t][y];
+       if(t==2)colour=colour.interpolatedWith(v<0?juce::Colour(0xff58bde8):colours[t],std::clamp(std::abs(v)/24.f,0.f,1.f));
+       else colour=colour.interpolatedWith(colours[t],std::clamp((v+100.f)/100.f,0.f,1.f));
+      }
+      pixels.setPixelColour(x,y,colour);
+     }
+    }
+   }
+   editor.setHeatmaps(images[0],images[1],images[2]);
  }
  void chooseModule(int pos){
    controller.select(0);editor.setModuleEditor(nullptr);
@@ -171,7 +216,8 @@ private:
  RackEditor editor; // destroyed before parameters
  AudioRack rack;RackConfig lastSubmitted{};juce::AudioBuffer<float> source;double fileRate=44100.;int cursor=0;
  std::atomic<bool> finished{false},mismatch{false};
- juce::TextButton loadButton{"PLAY WAV"},stopButton{"STOP"};juce::Label status;
+ AnalysisHistory analysis;AnalysisFrame frame;bool moduleScope=false;RackOrder::Id displaySource=0;
+ juce::TextButton loadButton{"PLAY WAV"},stopButton{"STOP"},scopeButton{"MODULE"};juce::Label status;
  std::unique_ptr<juce::FileChooser> chooser;
 };
 
