@@ -25,7 +25,8 @@ public:
   tiles.onMove=[this](int a,int b){if(callbacks.move)callbacks.move(a,b);};
   tiles.onSelect=[this](RackOrder::Id id,int pos){
    selected=id;bands.setEnabled(id!=0);
-   if(callbacks.select)callbacks.select(id,pos);repaint();
+   if(callbacks.select)callbacks.select(id,pos);
+   repaint();
   };
   bands.onSelection=[this](int n){if(selected&&callbacks.band)callbacks.band(selected,n);};
   setSize(1600,1000);
@@ -41,8 +42,10 @@ public:
  void setAnalysisMode(juce::String mode){analysisMode=std::move(mode);repaint();}
  // Editor ownership is transferred; host binds real parameters before calling.
  void setModuleEditor(std::unique_ptr<juce::Component> next){
-  if(module)removeChildComponent(module.get());module=std::move(next);
-  if(module)addAndMakeVisible(*module);resized();
+  if(module)removeChildComponent(module.get());
+  module=std::move(next);
+  if(module)addAndMakeVisible(*module);
+  resized();
  }
  void resized()override{
   auto a=box(1);a.removeFromTop(24);spectrum.setBounds(a.reduced(4));

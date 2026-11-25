@@ -1,6 +1,6 @@
 #include "RackEditor.h"
 #include "RackController.h"
-#include "AudioRack.h"
+#include "ModuleRackHost.h"
 #include "AnalysisHistory.h"
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <atomic>
@@ -11,34 +11,36 @@
 
 namespace ml {
 // Development console: explicit WAV playback only, no microphone or host automation.
-class GainPanel final : public juce::Component {
+class ModulePanel final : public juce::Component {
 public:
- GainPanel(juce::RangedAudioParameter& p,juce::Image cap,juce::Image pointer,
-           std::function<void()> remove)
- : knob(p,0.f,std::move(cap),std::move(pointer),juce::Colour(0xff58bde8)) {
-   addAndMakeVisible(knob);
+ ModulePanel(const MlpModuleDescriptor& descriptor,std::vector<std::unique_ptr<juce::AudioParameterFloat>>& parameters,
+             juce::Image cap,juce::Image pointer,std::function<void()> remove) {
+   title.setText(juce::String::fromUTF8(descriptor.name),juce::dontSendNotification);title.setJustificationType(juce::Justification::centredLeft);addAndMakeVisible(title);
+   for(std::size_t i=0;i<parameters.size();++i){auto control=std::make_unique<RotaryParameterControl>(*parameters[i],float(descriptor.parameters[i].neutral_value),cap,pointer,juce::Colour(0xff58bde8));addAndMakeVisible(*control);knobs.push_back(std::move(control));}
    addAndMakeVisible(removeButton);
    removeButton.onClick=std::move(remove);
  }
  void resized() override {
    auto r=getLocalBounds().reduced(4);
+   title.setBounds(r.removeFromTop(26));
    removeButton.setBounds(r.removeFromRight(juce::jmin(140,r.getWidth()/3)).withHeight(28));
-   knob.setBounds(r.removeFromLeft(juce::jmin(170,r.getWidth())));
+   const int width=knobs.empty()?0:juce::jmin(170,r.getWidth()/int(knobs.size()));for(auto& knob:knobs)knob->setBounds(r.removeFromLeft(width));
  }
 private:
- RotaryParameterControl knob;
- juce::TextButton removeButton{"REMOVE GAIN"};
+ juce::Label title;std::vector<std::unique_ptr<RotaryParameterControl>> knobs;
+ juce::TextButton removeButton{"REMOVE MODULE"};
 };
 class ConsoleContent final : public juce::AudioAppComponent, private juce::Timer {
 public:
- explicit ConsoleContent(AssetLoader& assets)
+ ConsoleContent(AssetLoader& assets,const std::filesystem::path& modules)
  : cap(assets.loadKnobCap()),pointer(assets.loadKnobPointer()),
    editor(controller.order(),assets.loadBands(),{
-   [this](int a,int b){if(controller.move(a,b))editor.refreshRack();},
+   [this](int a,int b){if(controller.move(a,b)){editor.refreshRack();submitConfiguration();}},
    [this](RackOrder::Id id,int pos){if(id)showInstance(id);else chooseModule(pos);},
-   [this](RackOrder::Id id){return params.count(id)?juce::String("GAIN [TEST]"):juce::String("UNKNOWN");},
+   [this](RackOrder::Id id){const auto* d=moduleHost.descriptor(id);return d?juce::String::fromUTF8(d->name):juce::String("UNAVAILABLE");},
    [this](RackOrder::Id id,int){editor.setBandFromController(controller.band(id));}
  },assets.loadPanel()) {
+   moduleHost.scan(modules);
    editor.setRackSkin(assets.loadSlot());
    addAndMakeVisible(editor);
    addAndMakeVisible(loadButton);addAndMakeVisible(stopButton);addAndMakeVisible(scopeButton);
@@ -61,9 +63,9 @@ public:
    deltaButton.setBounds(bar.removeFromLeft(getWidth()*14/100).reduced(2,0));
    status.setBounds(bar);
  }
- void prepareToPlay(int,double sampleRate) override {
+ void prepareToPlay(int samplesPerBlock,double sampleRate) override {
    // Device may choose a different rate. Never silently change pitch.
-   rack.prepare(sampleRate);cursor=0;
+   moduleHost.prepare(sampleRate,uint32_t(std::clamp(samplesPerBlock,1,2048)));submitConfiguration();cursor=0;
    mismatch.store(std::abs(sampleRate-fileRate)>0.5,std::memory_order_release);
  }
  void releaseResources() override {}
@@ -77,12 +79,12 @@ public:
    auto* r=info.buffer->getNumChannels()>1?info.buffer->getWritePointer(1,info.startSample):nullptr;
    std::copy_n(source.getReadPointer(0,cursor),n,l);
    if(r)std::copy_n(source.getReadPointer(source.getNumChannels()>1?1:0,cursor),n,r);
-   rack.process(l,r,static_cast<std::size_t>(n));cursor+=n;
+   moduleHost.process(l,r,static_cast<std::size_t>(n));cursor+=n;
    if(cursor>=source.getNumSamples())finished.store(true,std::memory_order_release);
  }
 private:
  void stopPlayback(){
-   stopTimer();shutdownAudio();deltaButton.setToggleState(false,juce::dontSendNotification);rack.resetWhenStopped();lastSubmitted={};source.setSize(0,0);
+   stopTimer();shutdownAudio();deltaButton.setToggleState(false,juce::dontSendNotification);source.setSize(0,0);
    editor.setGlobalLevels({},{});clearAnalysis();status.setText("STOPPED",juce::dontSendNotification);
  }
  void chooseWav(){
@@ -128,17 +130,14 @@ private:
    if(mismatch.load(std::memory_order_acquire)){stopPlayback();status.setText("DEVICE RATE MISMATCH",juce::dontSendNotification);return;}
    if(finished.load(std::memory_order_acquire)){stopPlayback();return;}
    submitConfiguration();
-   RackMeters latest,m;bool got=false;while(rack.poll(m)){latest=m;got=true;}
+   ModuleRackMeters latest,m;bool got=false;while(moduleHost.pollMeters(m)){latest=m;got=true;}
    if(got)editor.setGlobalLevels(latest.input,latest.output);
    updateAnalysis();
  }
  void submitConfiguration(){
-   RackConfig config;config.deltaId=controller.selection();config.moduleAnalysis=moduleScope;config.listenDelta=deltaButton.getToggleState()&&(!moduleScope||controller.selection()!=0);
-   const auto& slots=controller.order().slots();
-   for(std::size_t i=0;i<slots.size();++i){
-    if(auto it=params.find(slots[i]);it!=params.end())config.stages[i]={slots[i],it->second->get()};
-   }
-   if(config!=lastSubmitted&&rack.submit(config))lastSubmitted=config; // retry if full
+   moduleHost.setAnalysis(controller.selection(),moduleScope,deltaButton.getToggleState()&&(!moduleScope||controller.selection()!=0));
+   for(auto& [id,state]:ui)for(std::size_t i=0;i<state.parameters.size();++i)moduleHost.setParameter(id,state.descriptor->parameters[i].id,state.parameters[i]->get());
+   const auto slots=controller.order().slots();if((graphDirty||slots!=submittedOrder)&&moduleHost.submit(controller.order())){submittedOrder=slots;graphDirty=false;}
  }
  void clearAnalysis(){
    analysis.clear();editor.setSpectrum({},20000);editor.setHeatmaps({},{},{});
@@ -148,7 +147,7 @@ private:
    if(wanted!=displaySource){clearAnalysis();displaySource=wanted;}
    bool got=false;
    // Bound consumer work per timer tick, never FFT in audio callback.
-   for(int i=0;i<4&&rack.pollAnalysis(frame);++i){
+   for(int i=0;i<4&&moduleHost.pollAnalysis(frame);++i){
     if((moduleScope&&!wanted)||frame.sourceId!=wanted)continue;
     got=analysis.accept(frame)||got;
    }
@@ -183,43 +182,43 @@ private:
  }
  void chooseModule(int pos){
    controller.select(0);editor.setModuleEditor(nullptr);
-   juce::PopupMenu menu;menu.addItem(1,"Add Gain (full-band test)");
+   juce::PopupMenu menu;int command=1;for(const auto& type:moduleHost.availableTypes())menu.addItem(command++,"Add "+juce::String::fromUTF8(type.descriptor->name));if(command==1)menu.addItem(999,"No compatible modules found",false,false);
    juce::Component::SafePointer<ConsoleContent> safe(this);
    menu.showMenuAsync(juce::PopupMenu::Options(),[safe,pos](int choice){
-    if(safe!=nullptr&&choice==1)safe->addGain(pos);
+    if(safe!=nullptr&&choice>0&&choice<999)safe->addModule(pos,std::size_t(choice-1));
    });
  }
- void addGain(int pos){
+ void addModule(int pos,std::size_t type){
    if(pos<0||pos>=10)return;
    auto id=controller.add(static_cast<std::size_t>(pos));if(!id)return;
-   params.emplace(id,std::make_unique<juce::AudioParameterFloat>(
-     juce::ParameterID{"gain_"+juce::String(static_cast<juce::int64>(id)),1},
-     "Gain",juce::NormalisableRange<float>(-24.f,24.f,.01f),0.f,
-     juce::AudioParameterFloatAttributes().withLabel("dB")));
+   if(!moduleHost.add(type,id)){controller.remove(static_cast<std::size_t>(pos));return;}const auto* descriptor=moduleHost.descriptor(id);UiState state;state.descriptor=descriptor;
+   for(uint32_t i=0;i<descriptor->parameter_count;++i){const auto& p=descriptor->parameters[i];auto range=juce::NormalisableRange<float>(float(p.minimum),float(p.maximum),float(p.step));state.parameters.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID{"module_"+juce::String(static_cast<juce::int64>(id))+"_"+juce::String(p.id),1},juce::String::fromUTF8(p.name),range,float(p.default_value),juce::AudioParameterFloatAttributes().withLabel(juce::String::fromUTF8(p.unit?p.unit:""))));}
+   ui.emplace(id,std::move(state));graphDirty=true;submitConfiguration();
    showInstance(id);editor.refreshRack();
  }
  void showInstance(RackOrder::Id id){
-   auto it=params.find(id);if(it==params.end()||!controller.select(id))return;
+   auto it=ui.find(id);if(it==ui.end()||!controller.select(id))return;
    editor.setSelection(id);editor.setBandFromController(7);
-   editor.setBandSelectionEnabled(false); // Gain is intentionally full-band only.
+   editor.setBandSelectionEnabled(false); // Technical Package B modules are full-band.
    juce::Component::SafePointer<ConsoleContent> safe(this);
-   editor.setModuleEditor(std::make_unique<GainPanel>(*it->second,cap,pointer,[safe,id]{
-    juce::MessageManager::callAsync([safe,id]{if(safe!=nullptr)safe->removeGain(id);});
+   editor.setModuleEditor(std::make_unique<ModulePanel>(*it->second.descriptor,it->second.parameters,cap,pointer,[safe,id]{
+    juce::MessageManager::callAsync([safe,id]{if(safe!=nullptr)safe->removeModule(id);});
    }));
  }
- void removeGain(RackOrder::Id id){
+ void removeModule(RackOrder::Id id){
    const auto& slots=controller.order().slots();
    auto it=std::find(slots.begin(),slots.end(),id);if(it==slots.end())return;
    const auto pos=static_cast<std::size_t>(it-slots.begin());
    if(controller.selection()==id){editor.setModuleEditor(nullptr);editor.setSelection(0);}
-   if(controller.remove(pos))params.erase(id);
+   if(controller.remove(pos)){moduleHost.remove(id);ui.erase(id);graphDirty=true;submitConfiguration();}
    editor.refreshRack();
  }
  RackController controller;
- std::map<RackOrder::Id,std::unique_ptr<juce::AudioParameterFloat>> params;
+ struct UiState{const MlpModuleDescriptor* descriptor=nullptr;std::vector<std::unique_ptr<juce::AudioParameterFloat>> parameters;};
+ std::map<RackOrder::Id,UiState> ui;
  juce::Image cap,pointer;
  RackEditor editor; // destroyed before parameters
- AudioRack rack;RackConfig lastSubmitted{};juce::AudioBuffer<float> source;double fileRate=44100.;int cursor=0;
+ ModuleRackHost moduleHost;std::array<RackOrder::Id,10> submittedOrder{};bool graphDirty=true;juce::AudioBuffer<float> source;double fileRate=44100.;int cursor=0;
  std::atomic<bool> finished{false},mismatch{false};
  AnalysisHistory analysis;AnalysisFrame frame;bool moduleScope=false;RackOrder::Id displaySource=0;
  juce::TextButton loadButton{"PLAY WAV"},stopButton{"STOP"},scopeButton{"GLOBAL"},deltaButton{"DELTA LISTEN"};juce::Label status;
@@ -253,7 +252,7 @@ public:
    for(int i=0;i+1<args.size();++i)
      if(args[i]=="--assets")root=juce::File(args[i+1].unquoted());
    AssetLoader loader(root);
-   auto content=std::make_unique<ConsoleContent>(loader);
+   auto content=std::make_unique<ConsoleContent>(loader,root.getSiblingFile("modules").getFullPathName().toStdString());
    if(!loader.missingFiles().isEmpty()){
      juce::Logger::writeToLog("Missing GUI assets: "+loader.missingFiles().joinIntoString(", "));
      juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,"GUI assets missing",

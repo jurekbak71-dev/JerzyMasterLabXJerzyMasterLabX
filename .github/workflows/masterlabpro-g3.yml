@@ -28,17 +28,28 @@ jobs:
       - name: Build
         run: cmake --build build-masterlabpro --config Release --parallel 2
       - name: Test
-        run: ctest --test-dir build-masterlabpro -C Release --output-on-failure
+        run: ctest --test-dir build-masterlabpro -C Release --output-on-failure --output-junit reports-tests.xml
       - name: Measure CPU RAM and PDC
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force reports | Out-Null
           & build-masterlabpro/Release/masterlabpro_benchmark.exe | Tee-Object -FilePath reports/performance-windows.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & build-masterlabpro/Release/masterlabpro_module_benchmark.exe | Tee-Object -FilePath reports/performance-modules-windows.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & build-masterlabpro/Release/masterlabpro_modular_graph_test.exe | Tee-Object -FilePath reports/pdc-windows.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Stage approved assets beside executable
         shell: pwsh
         run: |
           Copy-Item -Recurse -Force 'MasterLabPro/assets' 'build-masterlabpro/MasterLabProConsole_artefacts/Release/assets'
+          $package = 'build-masterlabpro/MasterLabProConsole_artefacts/Release'
+          New-Item -ItemType Directory -Force "$package/modules" | Out-Null
+          Copy-Item build-masterlabpro/Release/mlp_unity.dll,build-masterlabpro/Release/mlp_gain.dll,build-masterlabpro/Release/mlp_saturation.dll,build-masterlabpro/Release/mlp_delay.dll "$package/modules"
+          New-Item -ItemType Directory -Force "$package/sdk" | Out-Null
+          Copy-Item MasterLabPro/sdk/masterlabpro_module_abi.h "$package/sdk"
+          New-Item -ItemType Directory -Force "$package/docs" | Out-Null
+          Copy-Item MasterLabPro/ARCHITECTURE.md,MasterLabPro/MODULE_SDK.md,MasterLabPro/MODULE_ABI.md,MasterLabPro/REALTIME_CONTRACT.md,MasterLabPro/PARAMETER_MAPPING.md,MasterLabPro/LATENCY_AND_DELTA.md,MasterLabPro/STATE_FORMAT.md,MasterLabPro/PACKAGE_B_REPORT.md "$package/docs"
       - name: Upload standalone GUI
         uses: actions/upload-artifact@v4
         with:
@@ -64,6 +75,36 @@ jobs:
         with:
           name: MasterLabPro-Performance-Windows
           path: reports/performance-windows.json
+          if-no-files-found: error
+      - name: Upload Package B reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: MasterLabPro-Package-B-Reports
+          path: |
+            reports/*.json
+            reports-tests.xml
+            MasterLabPro/MODULE_ABI.md
+            MasterLabPro/PACKAGE_B_REPORT.md
+          if-no-files-found: error
+      - name: Upload technical modules
+        uses: actions/upload-artifact@v4
+        with:
+          name: MasterLabPro-Technical-Modules-Windows
+          path: build-masterlabpro/MasterLabProConsole_artefacts/Release/modules/*.dll
+          if-no-files-found: error
+      - name: Upload Module SDK and architecture
+        uses: actions/upload-artifact@v4
+        with:
+          name: MasterLabPro-Module-SDK
+          path: |
+            MasterLabPro/sdk/
+            MasterLabPro/ARCHITECTURE.md
+            MasterLabPro/MODULE_SDK.md
+            MasterLabPro/MODULE_ABI.md
+            MasterLabPro/REALTIME_CONTRACT.md
+            MasterLabPro/PARAMETER_MAPPING.md
+            MasterLabPro/LATENCY_AND_DELTA.md
+            MasterLabPro/STATE_FORMAT.md
           if-no-files-found: error
 
   sanitizers:
