@@ -30,6 +30,7 @@ public:
   bands.onSelection=[this](int n){if(selected&&callbacks.band)callbacks.band(selected,n);};
   setSize(1600,1000);
  }
+ void setRackSkin(juce::Image skin){tiles.setSkin(std::move(skin));}
  void refreshRack(){tiles.repaintTiles();}
  void setBandFromController(int n){bands.setSelected(n);}
  void setGlobalLevels(StereoLevels in,StereoLevels out){input.setLevels(in);output.setLevels(out);}
