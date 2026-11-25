@@ -1,8 +1,9 @@
 #include "AudioRack.h"
 #include <array>
 #include <iostream>
+#include <memory>
 int main(){
- ml::AudioRack rack;rack.prepare(48000);
+ auto storage=std::make_unique<ml::AudioRack>();auto& rack=*storage;rack.prepare(48000);
  std::array<float,960> l,r;l.fill(.1f);r.fill(-.2f);
  rack.process(l.data(),r.data(),l.size());
  if(l[0]!=.1f||r.back()!=-.2f)return 1;
