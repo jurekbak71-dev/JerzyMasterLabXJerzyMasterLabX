@@ -7,7 +7,7 @@
 #include <array>
 namespace ml {
 struct GainStage {std::uint64_t id=0;float db=0;bool operator==(const GainStage&)const=default;};
-struct RackConfig {std::array<GainStage,10> stages{};std::uint64_t deltaId=0;bool moduleAnalysis=false;bool operator==(const RackConfig&)const=default;};
+struct RackConfig {std::array<GainStage,10> stages{};std::uint64_t deltaId=0;bool moduleAnalysis=false,listenDelta=false;bool operator==(const RackConfig&)const=default;};
 // One producer (control thread), one consumer (audio thread).
 // Bounded queue; full means retry on control thread, never overwrite unread data.
 template<class T,unsigned N=8> class Spsc {
@@ -29,7 +29,7 @@ class AudioRack {
  Spsc<RackMeters> readings;
  AnalysisCapture capture;
  Spsc<AnalysisFrame,5> analysisFrames;
- double rate=44100.;unsigned ramp=882;
+ double rate=44100.;unsigned ramp=882;float monitorMix=0;
 public:
  bool submit(const RackConfig& c) noexcept {
   for(std::size_t i=0;i<c.stages.size();++i)if(c.stages[i].id){
@@ -42,14 +42,14 @@ public:
  bool pollAnalysis(AnalysisFrame& frame) noexcept {return analysisFrames.pop(frame);}
  void prepare(double sr) noexcept {
   rate=std::clamp(std::isfinite(sr)?sr:44100.,1.,768000.);ramp=std::max(1,int(rate*.02));
-  capture.restart(rate);
+  capture.restart(rate);monitorMix=0;
   nodes={};
   // Device restart: retain last applied configuration; do not consume the GUI's telemetry queue.
   for(std::size_t i=0;i<config.stages.size();++i){auto s=config.stages[i];if(s.id){nodes[i].id=s.id;nodes[i].dsp.prepare(rate);nodes[i].dsp.setGainDb(s.db);}}
  }
  // Only when BOTH threads are stopped (e.g. between playback sessions).
  void resetWhenStopped() noexcept {
-  nodes={};config={};RackConfig c;while(commands.pop(c)){};RackMeters m;while(readings.pop(m)){};AnalysisFrame frame;while(analysisFrames.pop(frame)){};capture.restart(rate);
+  monitorMix=0;nodes={};config={};RackConfig c;while(commands.pop(c)){};RackMeters m;while(readings.pop(m)){};AnalysisFrame frame;while(analysisFrames.pop(frame)){};capture.restart(rate);
  }
  void process(float* l,float* r,std::size_t n) noexcept {
   if(!n)return;
@@ -73,7 +73,7 @@ public:
   const bool module=config.moduleAnalysis && config.deltaId && find(config.deltaId);
   capture.setSource(module?config.deltaId:0);
   RackMeters m;m.input=measure(l,r,n);
-  double squares[2]{};float peaks[2]{};
+  double squares[2]{};float peaks[2]{},outPeaks[2]{};double outSquares[2]{};
   for(std::size_t i=0;i<n;++i){
    float* a=l?l+i:nullptr;float* b=r?r+i:nullptr;
    float dl=0,dr=0;
@@ -86,10 +86,22 @@ public:
    for(auto& x:nodes)if(x.retire){x.dsp.process(a,b,1);if(--x.retire==0)x.id=0;}
    if(!module){al=a?*a:0;ar=b?*b:0;}
    capture.push(bl,br,al,ar,[this](const AnalysisFrame& frame){analysisFrames.push(frame);});
+   // Telemetry is always pre-monitor. DELTA monitoring is not a processor.
+   const float normalL=a?*a:0,normalR=b?*b:0;
+   const float out[]{normalL,normalR};
+   for(int ch=0;ch<2;++ch)if(std::isfinite(out[ch])){outPeaks[ch]=std::max(outPeaks[ch],std::abs(out[ch]));outSquares[ch]+=double(out[ch])*out[ch];}
+   const float target=config.listenDelta?1.f:0.f;
+   const float step=1.f/float(ramp);
+   monitorMix+=std::clamp(target-monitorMix,-step,step);
+   if(monitorMix>0){
+    const float diffL=al-bl,diffR=ar-br;
+    if(a)*a=normalL+(diffL-normalL)*monitorMix;
+    if(b&&b!=a)*b=normalR+(diffR-normalR)*monitorMix;
+   }
    peaks[0]=std::max(peaks[0],std::abs(dl));peaks[1]=std::max(peaks[1],std::abs(dr));
    squares[0]+=double(dl)*dl;squares[1]+=double(dr)*dr;
   }
-  m.output=measure(l,r,n);
+  for(int c=0;c<2;++c){m.output.peak[c]=amplitudeDb(outPeaks[c]);m.output.rms[c]=amplitudeDb(float(std::sqrt(outSquares[c]/n)));m.output.clip[c]=outPeaks[c]>=1.f;}
   for(int c=0;c<2;++c){m.delta.peak[c]=amplitudeDb(peaks[c]);m.delta.rms[c]=amplitudeDb(float(std::sqrt(squares[c]/n)));m.delta.clip[c]=peaks[c]>=1;}
   readings.push(m); // drop telemetry if GUI is behind
  }
