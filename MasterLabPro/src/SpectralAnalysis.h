@@ -18,15 +18,22 @@ struct AnalysisFrame {
 class SpectralAnalysis {
  std::array<std::complex<double>,fftSize> work{};
  std::array<double,fftSize> window{};
+ std::array<std::size_t,fftSize> reversed{};
+ std::array<std::complex<double>,fftSize/2> roots{};
  double windowSum=0;
 public:
- SpectralAnalysis(){for(std::size_t i=0;i<fftSize;++i){window[i]=.5-.5*std::cos(2*std::numbers::pi*double(i)/double(fftSize));windowSum+=window[i];}}
+ SpectralAnalysis(){
+  for(std::size_t i=0;i<fftSize;++i){
+   window[i]=.5-.5*std::cos(2*std::numbers::pi*double(i)/double(fftSize));windowSum+=window[i];
+   std::size_t x=i,r=0;for(std::size_t n=fftSize;n>1;n>>=1){r=(r<<1)|(x&1);x>>=1;}reversed[i]=r;
+  }
+  for(std::size_t k=0;k<roots.size();++k)roots[k]=std::polar(1.,-2*std::numbers::pi*double(k)/double(fftSize));
+ }
  Spectrum power(const Samples& input) noexcept {
-  for(std::size_t i=0;i<fftSize;++i)work[i]={std::isfinite(input[i])?input[i]*window[i]:0.,0.};
-  for(std::size_t i=1,j=0;i<fftSize;++i){std::size_t bit=fftSize/2;for(;j&bit;bit>>=1)j^=bit;j^=bit;if(i<j)std::swap(work[i],work[j]);}
+  for(std::size_t i=0;i<fftSize;++i)work[reversed[i]]={std::isfinite(input[i])?input[i]*window[i]:0.,0.};
   for(std::size_t len=2;len<=fftSize;len*=2){
-   auto root=std::polar(1.,-2*std::numbers::pi/double(len));
-   for(std::size_t i=0;i<fftSize;i+=len){std::complex<double> w=1.;for(std::size_t j=0;j<len/2;++j){auto u=work[i+j],v=work[i+j+len/2]*w;work[i+j]=u+v;work[i+j+len/2]=u-v;w*=root;}}
+   const auto stride=fftSize/len;
+   for(std::size_t i=0;i<fftSize;i+=len)for(std::size_t j=0;j<len/2;++j){auto u=work[i+j],v=work[i+j+len/2]*roots[j*stride];work[i+j]=u+v;work[i+j+len/2]=u-v;}
   }
   Spectrum out{};for(std::size_t k=0;k<fftBins;++k){double scale=(k==0||k==fftSize/2?1.:2.)/windowSum;out[k]=float(std::norm(work[k])*scale*scale);}return out;
  }
