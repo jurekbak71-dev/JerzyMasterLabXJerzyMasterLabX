@@ -120,7 +120,8 @@ MlpResult MLP_CALL load(MlpInstance* p,const void* source,uint32_t bytes){
  const auto* b=static_cast<const unsigned char*>(source);
  if(get32(b)!=0x31504c4d||get32(b+4)!=kKind)return MLP_ERROR_STATE;
  const double v=std::bit_cast<double>(get64(b+8));
- if(kParameterCount==0){if(v!=0)return MLP_ERROR_STATE;return MLP_OK;}return setParameter(p,1,v);
+ if constexpr(kParameterCount==0){if(v!=0)return MLP_ERROR_STATE;return MLP_OK;}
+ else return setParameter(p,1,v);
 }
 }
 
