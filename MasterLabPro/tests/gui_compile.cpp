@@ -3,6 +3,7 @@
 #include "RotaryParameterControl.h"
 #include "MeasurementViews.h"
 #include "RackEditor.h"
+#include "AssetLoader.h"
 // Compile-only gate; not an interactive GUI test.
 static_assert(sizeof(ml::FrequencyBandSelector)>0);
 static_assert(sizeof(ml::RackTiles)>0);
