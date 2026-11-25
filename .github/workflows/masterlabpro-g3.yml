@@ -15,8 +15,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure independent project
-        run: cmake -S MasterLabPro -B build-masterlabpro -A x64 -DMASTERLABPRO_GUI_CHECK=ON
+        run: cmake -S MasterLabPro -B build-masterlabpro -A x64 -DMASTERLABPRO_GUI_CHECK=ON -DMASTERLABPRO_CONSOLE=ON
       - name: Build
         run: cmake --build build-masterlabpro --config Release --parallel 2
       - name: Test
         run: ctest --test-dir build-masterlabpro -C Release --output-on-failure
+      - name: Upload standalone GUI
+        uses: actions/upload-artifact@v4
+        with:
+          name: MasterLabPro-GUI-Windows
+          path: build-masterlabpro/MasterLabProConsole_artefacts/Release/*.exe
+          if-no-files-found: error
