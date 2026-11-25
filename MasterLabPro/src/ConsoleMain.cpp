@@ -60,8 +60,9 @@ public:
  }
  void releaseResources() override {}
  void getNextAudioBlock(const juce::AudioSourceChannelInfo& info) override {
+   if(!info.buffer||info.buffer->getNumChannels()<1)return;
    info.clearActiveBufferRegion();
-   if(mismatch.load(std::memory_order_acquire)||!info.buffer)return;
+   if(mismatch.load(std::memory_order_acquire))return;
    const int n=juce::jmin(info.numSamples,source.getNumSamples()-cursor);
    if(n<=0){finished.store(true,std::memory_order_release);return;}
    auto* l=info.buffer->getWritePointer(0,info.startSample);
@@ -73,7 +74,7 @@ public:
  }
 private:
  void stopPlayback(){
-   stopTimer();shutdownAudio();source.setSize(0,0);
+   stopTimer();shutdownAudio();rack.resetWhenStopped();lastSubmitted={};source.setSize(0,0);
    editor.setGlobalLevels({},{});status.setText("STOPPED",juce::dontSendNotification);
  }
  void chooseWav(){
@@ -93,7 +94,7 @@ private:
    stopPlayback();
    juce::AudioFormatManager formats;formats.registerBasicFormats();
    std::unique_ptr<juce::AudioFormatReader> reader(formats.createReaderFor(file));
-   if(!reader||reader->numChannels<1||reader->numChannels>2||reader->sampleRate<8000||
+   if(!reader||reader->numChannels<1||reader->numChannels>2||!std::isfinite(reader->sampleRate)||reader->sampleRate<8000||
       reader->sampleRate>192000||reader->lengthInSamples<=0||
       reader->lengthInSamples>reader->sampleRate*60){
     status.setText("WAV: mono/stereo, max 60 s",juce::dontSendNotification);return;
@@ -104,6 +105,7 @@ private:
     source.setSize(0,0);status.setText("READ FAILED",juce::dontSendNotification);return;
    }
    finished.store(false);mismatch.store(false);
+   submitConfiguration();
    setAudioChannels(0,2); // never open microphone
    if(auto* device=deviceManager.getCurrentAudioDevice()){
     if(std::abs(device->getCurrentSampleRate()-fileRate)>0.5){
@@ -117,14 +119,17 @@ private:
  void timerCallback() override {
    if(mismatch.load(std::memory_order_acquire)){stopPlayback();status.setText("DEVICE RATE MISMATCH",juce::dontSendNotification);return;}
    if(finished.load(std::memory_order_acquire)){stopPlayback();return;}
+   submitConfiguration();
+   RackMeters latest,m;bool got=false;while(rack.poll(m)){latest=m;got=true;}
+   if(got)editor.setGlobalLevels(latest.input,latest.output);
+ }
+ void submitConfiguration(){
    RackConfig config;config.deltaId=controller.selection();
    const auto& slots=controller.order().slots();
    for(std::size_t i=0;i<slots.size();++i){
     if(auto it=params.find(slots[i]);it!=params.end())config.stages[i]={slots[i],it->second->get()};
    }
-   rack.submit(config); // retry next tick if queue full
-   RackMeters latest,m;bool got=false;while(rack.poll(m)){latest=m;got=true;}
-   if(got)editor.setGlobalLevels(latest.input,latest.output);
+   if(config!=lastSubmitted&&rack.submit(config))lastSubmitted=config; // retry if full
  }
  void chooseModule(int pos){
    controller.select(0);editor.setModuleEditor(nullptr);
@@ -164,7 +169,7 @@ private:
  std::map<RackOrder::Id,std::unique_ptr<juce::AudioParameterFloat>> params;
  juce::Image cap,pointer;
  RackEditor editor; // destroyed before parameters
- AudioRack rack;juce::AudioBuffer<float> source;double fileRate=44100.;int cursor=0;
+ AudioRack rack;RackConfig lastSubmitted{};juce::AudioBuffer<float> source;double fileRate=44100.;int cursor=0;
  std::atomic<bool> finished{false},mismatch{false};
  juce::TextButton loadButton{"PLAY WAV"},stopButton{"STOP"};juce::Label status;
  std::unique_ptr<juce::FileChooser> chooser;
