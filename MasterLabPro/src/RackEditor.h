@@ -33,6 +33,7 @@ public:
  void setSelection(RackOrder::Id id){selected=id;tiles.setSelection(id);bands.setEnabled(id!=0);repaint();}
  void setRackSkin(juce::Image skin){tiles.setSkin(std::move(skin));}
  void refreshRack(){tiles.repaintTiles();}
+ void setBandSelectionEnabled(bool enabled){bands.setEnabled(enabled && selected!=0);}
  void setBandFromController(int n){bands.setSelected(n);}
  void setGlobalLevels(StereoLevels in,StereoLevels out){input.setLevels(in);output.setLevels(out);}
  void setSpectrum(std::array<std::vector<SpectrumBin>,3> measured,float maxHz){spectrum.setTraces(std::move(measured),maxHz);}
