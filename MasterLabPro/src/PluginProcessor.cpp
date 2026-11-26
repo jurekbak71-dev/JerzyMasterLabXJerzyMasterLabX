@@ -223,7 +223,7 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
    bypass.setBounds(header.removeFromRight(width).reduced(2,0));
    analog.setBounds(header.removeFromRight(width).reduced(2,0));
    area.removeFromBottom(23);
-   auto plots=area.removeFromTop(juce::jmax(38,area.getHeight()*55/100)).reduced(1,2);
+   auto plots=area.removeFromTop(juce::jmax(38,juce::jmin(area.getHeight()*55/100,juce::jmax(38,area.getHeight()-140)))).reduced(1,2);
    transfer=plots.removeFromLeft(plots.getWidth()*38/100).reduced(2).toFloat();
    timeline=plots.reduced(4,2).toFloat();
    for(size_t i=0;i<knobs.size();++i){

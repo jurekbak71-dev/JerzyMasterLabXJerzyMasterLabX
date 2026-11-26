@@ -27,9 +27,12 @@ juce::MouseEvent mouse(juce::Component& c,juce::ModifierKeys mods,juce::Point<fl
 }
 }
 int main(int argc,char** argv){
+ std::cout<<std::unitbuf;std::cerr<<std::unitbuf;
+ std::cout<<"Starting native editor fixture\n";
  juce::ScopedJuceInitialiser_GUI gui;
  auto create=[&]{return std::unique_ptr<juce::AudioProcessor>(argc==2?createMasterLabProEditorFixture(juce::File::getCurrentWorkingDirectory().getChildFile(juce::String::fromUTF8(argv[1]))):createPluginFilter());};
  auto p=create();p->prepareToPlay(48000,256);
+ std::cout<<"Gain processor prepared\n";
  ml::RackState state;ml::SavedModule m;m.instance=1;m.typeHi=0x4d4c505445434800ull;m.typeLo=0x6761696e00000002ull;m.version=1;m.lane=0;m.slot=0;m.parameters.push_back({1,6});state.modules.push_back(m);
  std::vector<uint8_t> bytes;if(!ml::RackStateCodec::encode(state,bytes))return 1;p->setStateInformation(bytes.data(),int(bytes.size()));
  std::unique_ptr<juce::AudioProcessorEditor> editor(p->createEditor());if(!editor)return 2;
@@ -53,6 +56,7 @@ int main(int argc,char** argv){
  }
  editor.reset();p->releaseResources();
  std::cout<<"PASS actual plugin editor: 100 selections and knob resets\n";
+ std::cout<<"Creating compressor fixture\n";
  auto compressor=create();
  compressor->prepareToPlay(48000,256);
  state.modules[0].typeHi=MLP_INPUT_COMPRESSOR_HI;
@@ -66,7 +70,7 @@ int main(int argc,char** argv){
  auto* tile=tiles->getChildComponent(0);tile->mouseDown(mouse(*tile,juce::ModifierKeys::leftButtonModifier));
  auto* panel=named(*editor,"Input Compressor Panel");
  if(!panel||!named(*panel,"Stereo Link"))return 11;
- if(auto* dial=find<ml::RotaryParameterControl>(*panel);!dial||dial->dialDiameter()<75.f)return 15;
+ if(auto* dial=find<ml::RotaryParameterControl>(*panel);!dial||dial->dialDiameter()<75.f){std::cerr<<"Compressor dial diameter: "<<(dial?dial->dialDiameter():0.f)<<'\n';return 15;}
  juce::AudioBuffer<float> audio(2,256);juce::MidiBuffer midi;
  for(int block=0;block<120;++block){
   for(int ch=0;ch<2;++ch)for(int i=0;i<256;++i)audio.setSample(ch,i,0.5f);
@@ -104,13 +108,13 @@ int main(int argc,char** argv){
  tile=tiles->getChildComponent(0);tile->mouseDown(mouse(*tile,juce::ModifierKeys::leftButtonModifier));
  auto* stereoPanel=named(*editor,"Stereo Architect Panel");if(!stereoPanel)return 18;
  // Exercise real editor gesture, not just screenshot creation.
- const auto widthBefore=stereo->getParameters()[3]->getValue();
+ std::array<float,7> widthsBefore{};for(int i=0;i<7;++i)widthsBefore[size_t(i)]=stereo->getParameters()[i]->getValue();
  const auto point=juce::Point<float>(float(stereoPanel->getWidth())*.59f,float(stereoPanel->getHeight())*.27f);
  const auto down=mouse(*stereoPanel,juce::ModifierKeys::leftButtonModifier,point);
  stereoPanel->mouseDown(down);stereoPanel->mouseUp(down);
- bool changed=false;for(int i=0;i<7;++i)if(stereo->getParameters()[i]->getValue()!=std::array<float,7>{0.f,.375f,.5f,.5f,.5f,.7f,.625f}[size_t(i)])changed=true;
+ bool changed=false;for(int i=0;i<7;++i)if(stereo->getParameters()[i]->getValue()!=widthsBefore[size_t(i)])changed=true;
  if(!changed){std::cerr<<"Stereo band mouse gesture did not change a parameter\n";return 21;}
- (void)widthBefore;
+ std::cout<<"PASS Stereo band gesture\n";
  for(int block=0;block<64;++block){
   for(int i=0;i<256;++i){
    const auto time=double(block*256+i)/48000.;

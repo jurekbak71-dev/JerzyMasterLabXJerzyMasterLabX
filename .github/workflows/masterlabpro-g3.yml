@@ -116,10 +116,16 @@ jobs:
       - name: Exercise actual plugin module editor
         shell: pwsh
         run: |
-          & build-masterlabpro/Release/masterlabpro_plugin_editor_regression.exe 2>&1 | Tee-Object -FilePath reports/plugin-editor-regression.log
-          if ($LASTEXITCODE -ne 0) {
-            $code = $LASTEXITCODE
-            $detail = ((Get-Content reports/plugin-editor-regression.log -Tail 8) -join ' ').Replace('%','%25')
+          $exe = (Resolve-Path build-masterlabpro/Release/masterlabpro_plugin_editor_regression.exe).Path
+          $log = Join-Path (Resolve-Path reports).Path 'plugin-editor-regression.log'
+          $err = "$log.stderr"
+          $process = Start-Process -FilePath $exe -Wait -PassThru -NoNewWindow -RedirectStandardOutput $log -RedirectStandardError $err
+          $code = $process.ExitCode
+          Add-Content $log (Get-Content $err -Raw)
+          Write-Output "Native editor exit: $code"
+          Get-Content $log
+          if ($code -ne 0) {
+            $detail = ((Get-Content $log -Tail 8) -join ' ').Replace('%','%25')
             Write-Output "::error title=Plugin editor regression::Exit $code. $detail"
             exit $code
           }
