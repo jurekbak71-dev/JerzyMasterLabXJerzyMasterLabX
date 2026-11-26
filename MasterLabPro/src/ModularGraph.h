@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <memory>
 
 namespace ml {
 template<class T,unsigned N> class GraphSpsc{
@@ -23,14 +24,15 @@ struct GraphTap{uint64_t instanceId=0;float* alignedBeforeLeft=nullptr;float* al
 
 class StereoDelayAligner{
  static constexpr uint32_t capacity=65537;
- std::array<std::array<float,capacity>,2> line{};uint32_t position=0,delay=0;
+ using Storage=std::array<std::array<float,capacity>,2>;
+ std::unique_ptr<Storage> line=std::make_unique<Storage>();uint32_t position=0,delay=0;
 public:
  bool setDelay(uint32_t samples)noexcept{if(samples>=capacity)return false;delay=samples;return true;}
- void reset()noexcept{for(auto& c:line)c.fill(0);position=0;}
+ void reset()noexcept{for(auto& c:*line)c.fill(0);position=0;}
  void process(float inL,float inR,float& outL,float& outR)noexcept{
   const uint32_t read=(position+capacity-delay)%capacity;
-  outL=delay?line[0][read]:inL;outR=delay?line[1][read]:inR;
-  line[0][position]=inL;line[1][position]=inR;position=(position+1)%capacity;
+  outL=delay?(*line)[0][read]:inL;outR=delay?(*line)[1][read]:inR;
+  (*line)[0][position]=inL;(*line)[1][position]=inR;position=(position+1)%capacity;
  }
 };
 
