@@ -2,6 +2,8 @@
 #include "RackController.h"
 #include "ModuleRackHost.h"
 #include "AnalysisHistory.h"
+#include "SpectralDisplay.h"
+#include "StudioControls.h"
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <atomic>
 #include "RotaryParameterControl.h"
@@ -28,7 +30,7 @@ public:
  }
 private:
  juce::Label title;std::vector<std::unique_ptr<RotaryParameterControl>> knobs;
- juce::TextButton removeButton{"REMOVE MODULE"};
+ StudioButton removeButton{"REMOVE MODULE"};
 };
 class ConsoleContent final : public juce::AudioAppComponent, private juce::Timer {
 public:
@@ -141,7 +143,7 @@ private:
    const auto slots=controller.order().slots();if((graphDirty||slots!=submittedOrder)&&moduleHost.submit(controller.order())){submittedOrder=slots;graphDirty=false;}
  }
  void clearAnalysis(){
-   analysis.clear();editor.setSpectrum({},20000);editor.setHeatmaps({},{},{});
+   analysis.clear();spectralDisplay.clear();editor.setSpectrum({},20000);editor.setHeatmaps({},{},{});
  }
  void updateAnalysis(){
    const auto wanted=moduleScope?controller.selection():0;
@@ -153,32 +155,8 @@ private:
     got=analysis.accept(frame)||got;
    }
    if(!got)return;
-   const auto rate=analysis.sampleRate();
-   std::array<std::vector<SpectrumBin>,3> traces;
-   for(auto& trace:traces)trace.reserve(fftBins);
-   for(int t=0;t<3;++t)for(std::size_t k=1;k<fftBins;++k){
-    const auto hz=float(k*rate/fftSize);
-    if(hz>=20&&hz<=20000)traces[t].push_back({hz,analysis.spectra[t][k]});
-   }
-   editor.setSpectrum(std::move(traces),float(std::min(20000.,rate*.5)));
-   std::array<juce::Image,3> images;
-   const juce::Colour colours[]{juce::Colour(0xff58bde8),juce::Colour(0xffe3ad60),juce::Colour(0xffcb9cea)};
-   for(int t=0;t<3;++t){
-    images[t]=juce::Image(juce::Image::RGB,AnalysisHistory::width,AnalysisHistory::height,true);
-    juce::Image::BitmapData pixels(images[t],juce::Image::BitmapData::writeOnly);
-    for(int x=0;x<AnalysisHistory::width;++x){
-     const auto& col=analysis.column(x);
-     for(int y=0;y<AnalysisHistory::height;++y){
-      auto colour=juce::Colour(0xff09151b);
-      if(col.valid){
-       float v=col.values[t][y];
-       if(t==2)colour=colour.interpolatedWith(v<0?juce::Colour(0xff58bde8):colours[t],std::clamp(std::abs(v)/24.f,0.f,1.f));
-       else colour=colour.interpolatedWith(colours[t],std::clamp((v+100.f)/100.f,0.f,1.f));
-      }
-      pixels.setPixelColour(x,y,colour);
-     }
-    }
-   }
+   editor.setSpectrum(spectralDisplay.traces(analysis,1./30.),float(std::min(20000.,analysis.sampleRate()*.5)));
+   auto images=renderSpectralCurtain(analysis);
    editor.setHeatmaps(images[0],images[1],images[2]);
  }
  void chooseModule(int pos){
@@ -222,7 +200,8 @@ private:
  ModuleRackHost moduleHost;std::array<RackOrder::Id,10> submittedOrder{};bool graphDirty=true;juce::AudioBuffer<float> source;double fileRate=44100.;int cursor=0;
  std::atomic<bool> finished{false},mismatch{false};
  AnalysisHistory analysis;AnalysisFrame frame;bool moduleScope=false;RackOrder::Id displaySource=0;
- juce::TextButton loadButton{"PLAY WAV"},stopButton{"STOP"},scopeButton{"GLOBAL"},deltaButton{"DELTA LISTEN"};juce::Label status;
+ StudioButton loadButton{"PLAY WAV"},stopButton{"STOP"},scopeButton{"GLOBAL"},deltaButton{"DELTA LISTEN"};juce::Label status;
+ SpectralDisplay spectralDisplay;
  std::unique_ptr<juce::FileChooser> chooser;
 };
 

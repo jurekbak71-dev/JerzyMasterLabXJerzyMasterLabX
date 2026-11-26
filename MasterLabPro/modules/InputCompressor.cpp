@@ -1,4 +1,5 @@
 #include "masterlabpro_input_compressor.h"
+#include "CompressorCurve.h"
 #include "InputCompressorCrossover.h"
 #include <algorithm>
 #include <array>
@@ -40,15 +41,6 @@ constexpr MlpModuleDescriptor descriptor{sizeof(MlpModuleDescriptor),MLP_ABI_MAJ
 constexpr uint32_t stateBytes=4+4*uint32_t(parameters.size());
 static_assert(std::atomic<float>::is_always_lock_free && sizeof(float)==4);
 
-float reduction(float level, float threshold, float ratio, float knee) noexcept {
- const float over=level-threshold;
- const float slope=1-1/ratio;
- if (knee>0 && std::abs(over)<knee*.5f) {
-  const float offset=over+knee*.5f;
-  return slope*offset*offset/(2*knee);
- }
- return slope*std::max(0.f,over);
-}
 float clean(float x) noexcept {return std::clamp(ml::flushCompressorSample(x),-64.f,64.f);}
 float amplitude(float db) noexcept {return std::exp(db*0.1151292546497023f);}
 }
@@ -58,6 +50,8 @@ struct MlpInstance {
  std::array<float,parameters.size()> values{};
  std::array<std::atomic<float>,4> meters{};
  std::array<std::array<float,2>,4> envelopes{};
+ std::array<std::array<float,2>,4> rms{},memory{};
+ std::array<std::atomic<uint64_t>,4> dynamics{};
  std::array<ml::CompressorCrossover,2> crossovers{};
  float rate=48000, smoothing=0;
  uint32_t maximumFrames=0, channels=0;
@@ -76,8 +70,9 @@ MlpResult MLP_CALL create(MlpInstance** p) {
 void MLP_CALL destroy(MlpInstance* p) {delete p;}
 void MLP_CALL reset(MlpInstance* p) {
  if (!p) return;
- p->envelopes={}; p->crossovers={};
+ p->envelopes={}; p->crossovers={};p->rms={};p->memory={};
  for (auto& meter:p->meters) meter.store(0,std::memory_order_relaxed);
+ for(auto& capture:p->dynamics)capture.store(0,std::memory_order_relaxed);
  for (size_t i=0;i<parameters.size();++i) p->values[i]=p->targets[i].load(std::memory_order_relaxed);
 }
 MlpResult MLP_CALL prepare(MlpInstance* p,double rate,uint32_t frames,uint32_t channels) {
@@ -106,18 +101,26 @@ MlpResult MLP_CALL get(const MlpInstance* p,uint32_t id,double* value) {
 using Pair=std::array<float,2>;
 Pair compress(MlpInstance& p,uint32_t band,Pair signal,float analog,Pair& applied) noexcept {
  const float* v=p.values.data()+6+band*7;
- const float threshold=v[0], ratio=v[1], knee=v[4]+analog*4;
+ const float threshold=v[0], ratio=v[1], knee=v[4];
  const float maximum=std::max(std::abs(signal[0]),std::abs(signal[1]));
  if(ratio==1.f&&p.envelopes[band][0]==0&&p.envelopes[band][1]==0){applied={};return signal;}
  const float attack=float(-std::expm1(-1000./(p.rate*v[2])));
  const float release=float(-std::expm1(-1000./(p.rate*v[3])));
  for (size_t ch=0;ch<2;++ch) {
   const float peak=std::lerp(std::abs(signal[ch]),maximum,v[6]*.01f);
-  const float level=20*std::log10(std::max(1e-10f,peak));
-  const float target=reduction(level,threshold,ratio,knee);
+  if(analog>0){
+   auto& rms=p.rms[band][ch];
+   rms=ml::flushCompressorSample(std::lerp(rms,peak*peak,std::min(1.f,100.f/p.rate)));
+  }
+  const float detection=analog>0?std::lerp(peak,std::sqrt(p.rms[band][ch]),analog*.32f):peak;
+  const float level=20*std::log10(std::max(1e-10f,detection));
+  const float target=ml::compressorReduction(level,threshold,ratio,knee,analog);
   auto& envelope=p.envelopes[band][ch];
-  const float releaseScale=1+analog*std::min(2.f,envelope*.13f);
-  envelope=std::lerp(envelope,target,target>envelope?attack:release/releaseScale);
+  auto& memory=p.memory[band][ch];
+  if(analog>0)memory=ml::flushCompressorSample(std::lerp(memory,target,std::min(1.f,4.f/p.rate)));
+  const float attackScale=1+analog*(.45f+std::min(2.f,(target-envelope)*.15f));
+  const float releaseScale=std::lerp(1.f,std::clamp(.55f+memory*.22f,.55f,4.f),analog);
+  envelope=std::lerp(envelope,target,target>envelope?std::min(1.f,attack*attackScale):std::min(1.f,release/releaseScale));
   if (envelope<1e-9f) envelope=0;
   const float gain=std::lerp(1.f,amplitude(-envelope),v[5]*.01f);
   signal[ch]*=gain;
@@ -131,6 +134,7 @@ MlpResult MLP_CALL process(MlpInstance* p,const MlpProcessContext* ctx) {
      (ctx->channels==2&&(!ctx->audio[1]||ctx->audio[0]==ctx->audio[1]))) return MLP_ERROR_ARGUMENT;
  std::array<float,parameters.size()> target{};
  std::array<Pair,4> reductions{};
+ std::array<Pair,4> peaks{};
  for (size_t i=0;i<target.size();++i) target[i]=p->targets[i].load(std::memory_order_relaxed);
  for (uint32_t i=0;i<ctx->frames;++i) {
   for (size_t j=0;j<target.size();++j) {
@@ -154,16 +158,25 @@ MlpResult MLP_CALL process(MlpInstance* p,const MlpProcessContext* ctx) {
   Pair sum{};
   for (size_t ch=0;ch<2;++ch)
    sum[ch]=driven[ch]+(lowWet[ch]-low[ch])+(midWet[ch]-mid[ch])+(highWet[ch]-high[ch]);
+  const auto sumDry=sum;
   sum=compress(*p,3,sum,analog,reductions[3]);
+  const std::array<Pair,4> before{low,mid,high,sumDry},after{lowWet,midWet,highWet,sum};
+  for(size_t b=0;b<peaks.size();++b)for(size_t ch=0;ch<2;++ch){
+   peaks[b][0]=std::max(peaks[b][0],std::abs(before[b][ch]));
+   peaks[b][1]=std::max(peaks[b][1],std::abs(std::lerp(after[b][ch],before[b][ch],p->values[5])));
+  }
   for (size_t ch=0;ch<ctx->channels;++ch) {
    const float wet=sum[ch]*makeup;
-   // Mild parallel saturation. Unity slope near zero, no hard clipping at 0 dBFS.
-   const float colored=analog>0?std::lerp(wet,2.f*std::tanh(wet*.5f),analog*.18f):wet;
+   const float drive=.76f+.032f*std::min(15.f,reductions[3][ch]);
+   constexpr float bias=.19f,biasValue=.1877462f,slope=1-biasValue*biasValue;
+   const float colored=analog>0?std::lerp(wet,(std::tanh(wet*drive+bias)-biasValue)/(drive*slope),analog*.31f):wet;
    ctx->audio[ch][i]=std::lerp(colored,dry[ch],p->values[5]);
   }
  }
- if(ctx->frames)for(size_t i=0;i<reductions.size();++i)
+ if(ctx->frames)for(size_t i=0;i<reductions.size();++i){
   p->meters[i].store(std::max(reductions[i][0],reductions[i][1])*(1-p->values[5]),std::memory_order_relaxed);
+  p->dynamics[i].store((uint64_t(std::bit_cast<uint32_t>(peaks[i][0]))<<32)|std::bit_cast<uint32_t>(peaks[i][1]),std::memory_order_relaxed);
+ }
  return MLP_OK;
 }
 uint32_t MLP_CALL latency(const MlpInstance*) {return 0;}
@@ -198,6 +211,9 @@ MlpResult MLP_CALL load(MlpInstance* p,const void* data,uint32_t size) {
 
 extern "C" MLP_EXPORT float MLP_CALL masterlabpro_read_gain_reduction_v1(const MlpInstance* p,uint32_t band) {
  return p&&band<4?p->meters[band].load(std::memory_order_relaxed):0.f;
+}
+extern "C" MLP_EXPORT uint64_t MLP_CALL masterlabpro_read_dynamics_v1(const MlpInstance* p,uint32_t band) {
+ return p&&band<4?p->dynamics[band].load(std::memory_order_relaxed):0;
 }
 extern "C" MLP_EXPORT MlpResult MLP_CALL masterlabpro_get_module_api(uint32_t major,uint32_t,MlpModuleApi* api) {
  if (!api||api->struct_size<sizeof(*api)) return MLP_ERROR_ARGUMENT;

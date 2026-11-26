@@ -16,8 +16,11 @@ public:
  const MlpModuleApi* api()const noexcept{return handle?&functions:nullptr;}
  unsigned liveInstances()const noexcept{return instances;}
  MlpReadGainReductionV1 gainReduction()const noexcept{return readReduction;}
+ using ReadDynamics=uint64_t (MLP_CALL *)(const MlpInstance*,uint32_t);
+ ReadDynamics dynamics()const noexcept{return readDynamics;}
 private:
  MlpReadGainReductionV1 readReduction=nullptr;
+ ReadDynamics readDynamics=nullptr;
  void* handle=nullptr;MlpModuleApi functions{};unsigned instances=0;
 };
 }

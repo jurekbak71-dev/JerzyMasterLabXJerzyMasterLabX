@@ -84,7 +84,7 @@ int main(int argc, char** argv) {
   api.set_parameter(instance,113,1);
   auto harmonic=[&](int mode){
    api.set_parameter(instance,5,mode);api.reset(instance);
-   std::array<double,20> harmonics{};
+   std::array<double,20> harmonics{},quadrature{};
    double maxUs=0;
    for(int b=0;b<150;++b){
     for(size_t i=0;i<l.size();++i)r[i]=l[i]=float(.9*std::sin(2*std::numbers::pi*double(b*128+int(i))/48));
@@ -93,14 +93,19 @@ int main(int argc, char** argv) {
     maxUs=std::max(maxUs,std::chrono::duration<double,std::micro>(std::chrono::steady_clock::now()-start).count());
     for(size_t i=0;i<l.size();++i){
      const auto phase=2*std::numbers::pi*double(b*128+int(i))/48;
-     for(size_t h=0;h<harmonics.size();++h)harmonics[h]+=l[i]*std::sin(double(h+1)*phase);
+     for(size_t h=0;h<harmonics.size();++h){
+      harmonics[h]+=l[i]*std::sin(double(h+1)*phase);
+      quadrature[h]+=l[i]*std::cos(double(h+1)*phase);
+     }
     }
    }
-   const double ratio=std::abs(harmonics[2]/harmonics[0]);
+   const double fundamental=std::hypot(harmonics[0],quadrature[0]);
+   const double ratio=std::hypot(harmonics[2],quadrature[2])/fundamental;
+   const double second=std::hypot(harmonics[1],quadrature[1])/fundamental;
    double harmonicPower=0;
-   for(size_t h=1;h<harmonics.size();++h)harmonicPower+=harmonics[h]*harmonics[h];
-   const double thd=std::sqrt(harmonicPower)/std::abs(harmonics[0]);
-   std::cout<<"Mode "<<mode<<" H3/fundamental: "<<ratio<<" THD (H2–H20): "<<thd<<" max 128-frame block (us): "<<maxUs<<'\n';
+   for(size_t h=1;h<harmonics.size();++h)harmonicPower+=harmonics[h]*harmonics[h]+quadrature[h]*quadrature[h];
+   const double thd=std::sqrt(harmonicPower)/fundamental;
+   std::cout<<"Mode "<<mode<<" H2/fundamental: "<<second<<" H3/fundamental: "<<ratio<<" THD (H2–H20): "<<thd<<" max 128-frame block (us): "<<maxUs<<'\n';
    return ratio;
   };
   const auto digital=harmonic(0),analog=harmonic(1);

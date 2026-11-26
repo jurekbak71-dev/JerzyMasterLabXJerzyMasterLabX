@@ -7,7 +7,7 @@ class AnalysisHistory {
 public:
  static constexpr int width=300,height=128;
  using Column=std::array<std::array<float,height>,3>;
- struct Cell {Column values{};bool valid=false;};
+ struct Cell {Column values{};std::array<float,height> audioDelta{};bool valid=false;};
  std::array<Spectrum,3> spectra{};
  std::array<Cell,width> history{};
  bool accept(const AnalysisFrame& f){
@@ -30,6 +30,7 @@ public:
    const auto k=std::clamp<std::size_t>(std::size_t(std::llround(hz*fftSize/rate)),1,fftBins-1);
    col.values[0][y]=spectra[0][k];col.values[1][y]=spectra[1][k];
    col.values[2][y]=std::max(spectra[0][k],spectra[1][k]) < -100.f ? 0.f : std::clamp(spectra[1][k]-spectra[0][k],-24.f,24.f);
+   col.audioDelta[y]=spectra[2][k];
   }
   return true;
  }

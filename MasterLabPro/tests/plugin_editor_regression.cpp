@@ -3,6 +3,7 @@
 #include "RackState.h"
 #include "RotaryParameterControl.h"
 #include "masterlabpro_input_compressor.h"
+#include "StereoArchitectSettings.h"
 #include <memory>
 #include <vector>
 #include <iostream>
@@ -91,4 +92,34 @@ int main(int argc,char** argv){
  }
  editor.reset();compressor->releaseResources();
  std::cout<<"PASS Input Compressor editor and three scaled renders\n";
+ auto stereo=create();
+ stereo->prepareToPlay(48000,256);
+ state.modules[0].typeHi=ml::stereoTypeHi;state.modules[0].typeLo=ml::stereoTypeLo;
+ state.modules[0].parameters={{1,0},{2,75},{6,140},{7,125}};
+ if(!ml::RackStateCodec::encode(state,bytes))return 16;
+ stereo->setStateInformation(bytes.data(),int(bytes.size()));
+ editor.reset(stereo->createEditor());
+ tiles=find<ml::RackTiles>(*editor);
+ if(!tiles)return 17;
+ tile=tiles->getChildComponent(0);tile->mouseDown(mouse(*tile,juce::ModifierKeys::leftButtonModifier));
+ if(!named(*editor,"Stereo Architect Panel"))return 18;
+ for(int block=0;block<64;++block){
+  for(int i=0;i<256;++i){
+   const auto time=double(block*256+i)/48000.;
+   const auto mid=float(.25*std::sin(2*std::numbers::pi*200*time));
+   const auto side=float(.18*std::sin(2*std::numbers::pi*4500*time));
+   audio.setSample(0,i,mid+side);audio.setSample(1,i,mid-side);
+  }
+  stereo->processBlock(audio,midi);
+  if(block%8==7){juce::Thread::sleep(35);juce::Timer::callPendingTimersSynchronously();}
+ }
+ for(int scale:{100,150,200}){
+  const auto snapshot=editor->createComponentSnapshot(editor->getLocalBounds(),true,float(scale)/100);
+  auto file=juce::File::getCurrentWorkingDirectory().getChildFile("stereo-architect-"+juce::String(scale)+".png");
+  if(!file.deleteFile())return 19;
+  juce::FileOutputStream stream(file);
+  if(!snapshot.isValid()||!stream.openedOk()||!juce::PNGImageFormat().writeImageToStream(snapshot,stream))return 20;
+ }
+ editor.reset();stereo->releaseResources();
+ std::cout<<"PASS Stereo Architect editor and three scaled renders\n";
 }

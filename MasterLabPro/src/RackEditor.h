@@ -69,13 +69,23 @@ public:
    }else{g.setColour(juce::Colour(0xff272d34));g.fillRoundedRectangle(r.toFloat(),5);g.setColour(juce::Colour(0xff65717c));g.drawRoundedRectangle(r.toFloat(),5,1);}}
   const char* names[]{"JERZY MASTERLAB PRO","SPECTRAL MONITOR","SPECTRAL HEAT MAP","INPUT","OUTPUT","SIGNAL ROUTING","MODULE EDITOR"};
   g.setColour(juce::Colours::whitesmoke);g.setFont(14.f);
-  for(int i=0;i<7;++i)g.drawText(names[i],box(i).removeFromTop(24).reduced(8,0),juce::Justification::centredLeft,true);
-  g.drawText(footer,box(7).removeFromTop(24).reduced(8,0),juce::Justification::centredLeft,true);
+  for(int i=0;i<7;++i)g.drawFittedText(names[i],box(i).removeFromTop(24).reduced(24,1),juce::Justification::centredLeft,1,.62f);
+  g.drawFittedText(footer,box(7).removeFromTop(24).reduced(24,1),juce::Justification::centredLeft,1,.62f);
   if(analysisMode.isNotEmpty())g.drawText(analysisMode,box(0).removeFromTop(24).reduced(8,0),juce::Justification::centredRight,true);
   if(!module){auto r=box(6);r.removeFromTop(76*getHeight()/1000);g.drawText(selected?"MODULE EDITOR NOT CONNECTED":"SELECT A MODULE",r,juce::Justification::centred);}
  }
 private:
- juce::Rectangle<int> box(int i)const{auto r=scale(rackLayout[static_cast<std::size_t>(i)],getWidth(),getHeight());return {r.x,r.y,r.w,r.h};}
+ juce::Rectangle<int> box(int i)const{
+  auto raw=rackLayout[static_cast<std::size_t>(i)];
+  if(moduleOwnsBandArea){
+   if(i==1||i==2)raw.h-=68;
+   if(i==2)raw.y-=68;
+   if(i==3||i==4)raw.h-=136;
+   if(i==5||i==6)raw.y-=136;
+   if(i==6)raw.h+=136;
+  }
+  const auto r=scale(raw,getWidth(),getHeight());return {r.x,r.y,r.w,r.h};
+ }
  Callbacks callbacks;RackTiles tiles;FrequencyBandSelector bands;SpectrumView spectrum;HeatMapView heatmap;StereoLevelMeter input,output;
  juce::Image panelSkin;juce::String analysisMode,footer{"DEVELOPMENT / GAIN TEST RACK"};RackOrder::Id selected=0;std::unique_ptr<juce::Component> module;bool moduleOwnsBandArea=false;
 };

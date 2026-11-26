@@ -71,7 +71,7 @@ jobs:
           Copy-Item -Recurse -Force 'MasterLabPro/assets' 'build-masterlabpro/MasterLabProConsole_artefacts/Release/assets'
           $package = 'build-masterlabpro/MasterLabProConsole_artefacts/Release'
           New-Item -ItemType Directory -Force "$package/modules" | Out-Null
-          Copy-Item build-masterlabpro/Release/mlp_unity.dll,build-masterlabpro/Release/mlp_gain.dll,build-masterlabpro/Release/mlp_saturation.dll,build-masterlabpro/Release/mlp_delay.dll,build-masterlabpro/Release/mlp_z_input_compressor.dll "$package/modules"
+          Copy-Item build-masterlabpro/Release/mlp_unity.dll,build-masterlabpro/Release/mlp_gain.dll,build-masterlabpro/Release/mlp_saturation.dll,build-masterlabpro/Release/mlp_delay.dll,build-masterlabpro/Release/mlp_z_input_compressor.dll,build-masterlabpro/Release/mlp_z_stereo_architect.dll "$package/modules"
           New-Item -ItemType Directory -Force "$package/sdk" | Out-Null
           Copy-Item MasterLabPro/sdk/*.h "$package/sdk"
           New-Item -ItemType Directory -Force "$package/docs" | Out-Null
@@ -109,7 +109,7 @@ jobs:
           $p = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
           if ($p.ExitCode -ne 0) { exit $p.ExitCode }
           $root = Join-Path $env:ProgramData 'Jerzy/MasterLabPro'
-          foreach ($name in @('mlp_unity.dll','mlp_gain.dll','mlp_saturation.dll','mlp_delay.dll','mlp_z_input_compressor.dll')) {
+          foreach ($name in @('mlp_unity.dll','mlp_gain.dll','mlp_saturation.dll','mlp_delay.dll','mlp_z_input_compressor.dll','mlp_z_stereo_architect.dll')) {
             if (-not (Test-Path "$root/modules/$name")) { throw "Missing installed module $name" }
           }
           if (-not (Test-Path "$root/assets/manifest.json")) { throw 'Missing installed assets' }
@@ -158,6 +158,7 @@ jobs:
             reports/vst3-instances.json
             reports/vst3-compressor-instances.json
             input-compressor-*.png
+            stereo-architect-*.png
             reports/input-compressor-transfer.csv
             reports/input-compressor-transfer.csv.bands.csv
             reports/input-compressor-dsp.log

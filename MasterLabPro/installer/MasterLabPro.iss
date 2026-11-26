@@ -22,3 +22,4 @@ Source: "..\..\build-masterlabpro\Release\mlp_gain.dll"; DestDir: "{commonappdat
 Source: "..\..\build-masterlabpro\Release\mlp_saturation.dll"; DestDir: "{commonappdata}\Jerzy\MasterLabPro\modules"; Flags: ignoreversion
 Source: "..\..\build-masterlabpro\Release\mlp_delay.dll"; DestDir: "{commonappdata}\Jerzy\MasterLabPro\modules"; Flags: ignoreversion
 Source: "..\..\build-masterlabpro\Release\mlp_z_input_compressor.dll"; DestDir: "{commonappdata}\Jerzy\MasterLabPro\modules"; Flags: ignoreversion
+Source: "..\..\build-masterlabpro\Release\mlp_z_stereo_architect.dll"; DestDir: "{commonappdata}\Jerzy\MasterLabPro\modules"; Flags: ignoreversion

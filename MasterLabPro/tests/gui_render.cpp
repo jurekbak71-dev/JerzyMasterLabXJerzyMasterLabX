@@ -4,6 +4,7 @@
 #include "AudioRack.h"
 #include "ModuleRackHost.h"
 #include "AnalysisHistory.h"
+#include "SpectralDisplay.h"
 #include <juce_gui_basics/juce_gui_basics.h>
 #include <iostream>
 #include <memory>
@@ -65,18 +66,9 @@ int main(int argc,char** argv){
    }
    if(!gotLevels)return 9;
    editor.setGlobalLevels(latest.input,latest.output);
-   std::array<std::vector<ml::SpectrumBin>,3> traces;
-   for(int t=0;t<3;++t)for(std::size_t k=1;k<ml::fftBins;++k){const auto hz=float(k*48000./ml::fftSize);if(hz>=20&&hz<=20000)traces[t].push_back({hz,history->spectra[t][k]});}
-   editor.setSpectrum(std::move(traces),20000.f);
-   std::array<juce::Image,3> images;
-   const juce::Colour colours[]{juce::Colour(0xff58bde8),juce::Colour(0xffe3ad60),juce::Colour(0xffcb9cea)};
-   for(int t=0;t<3;++t){
-    images[t]=juce::Image(juce::Image::RGB,ml::AnalysisHistory::width,ml::AnalysisHistory::height,true);
-    juce::Image::BitmapData pixels(images[t],juce::Image::BitmapData::writeOnly);
-    for(int x=0;x<ml::AnalysisHistory::width;++x){const auto& col=history->column(x);for(int y=0;y<ml::AnalysisHistory::height;++y){
-     auto colour=juce::Colour(0xff09151b);if(col.valid){const float v=col.values[t][y];colour=colour.interpolatedWith(t==2&&v<0?juce::Colour(0xff58bde8):colours[t],t==2?std::clamp(std::abs(v)/24.f,0.f,1.f):std::clamp((v+100.f)/100.f,0.f,1.f));}pixels.setPixelColour(x,y,colour);
-    }}
-   }
+   ml::SpectralDisplay spectralDisplay;
+   editor.setSpectrum(spectralDisplay.traces(*history,1./30.),20000.f);
+   auto images=ml::renderSpectralCurtain(*history);
    editor.setHeatmaps(images[0],images[1],images[2]);
    editor.setAnalysisMode(scenario.contains("module")?"MODULE / ID 1":scenario.contains("delta")?"GLOBAL / DELTA LISTEN":"GLOBAL");
   }else editor.setAnalysisMode(scenario.toUpperCase());
