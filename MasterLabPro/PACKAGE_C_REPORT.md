@@ -9,3 +9,5 @@ Intermediate state access: removed explicit getCallbackLock from state callbacks
 Live host replacement implemented with a 256-sample crossfade and deferred reclamation. Equal-latency continuity unit test added. Actual VST3/DAW tests, unequal latency transitions and legacy save remain open.
 
 Added warm-up, dual-path delay compensation and effective-latency reporting. A regression verifies equal latency amplitude continuity and faster replacement with retained 7-sample delay. Slower replacement time-reference change and DAW PDC remain acceptance blockers.
+
+Added two-tap delay transition and warm-up restart on reported latency changes; regression includes slower replacement, impulse delay and mid-fade latency change. CI and actual DAW behavior remain unverified.

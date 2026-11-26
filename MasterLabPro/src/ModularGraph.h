@@ -37,9 +37,11 @@ class StereoDelayAligner{
 public:
  bool setDelay(uint32_t samples)noexcept{if(samples>=capacity)return false;delay=samples;return true;}
  void reset()noexcept{position=0;valid=0;}
- void process(float inL,float inR,float& outL,float& outR)noexcept{
-  const uint32_t read=(position+capacity-delay)%capacity;
-  outL=delay?(valid>=delay?(*line)[0][read]:0.f):inL;outR=delay?(valid>=delay?(*line)[1][read]:0.f):inR;
+ void process(float inL,float inR,float& outL,float& outR)noexcept{processBlend(inL,inR,delay,delay,1.f,outL,outR);}
+ void processBlend(float inL,float inR,uint32_t from,uint32_t to,float mix,float& outL,float& outR)noexcept{
+  const auto read=[&](unsigned channel,uint32_t d,float input){if(d==0)return input;if(d>=capacity||valid<d)return 0.f;return (*line)[channel][(position+capacity-d)%capacity];};
+  const float a=read(0,from,inL),b=read(1,from,inR);
+  outL=a+mix*(read(0,to,inL)-a);outR=b+mix*(read(1,to,inR)-b);
   (*line)[0][position]=inL;(*line)[1][position]=inR;position=(position+1)%capacity;if(valid<capacity)++valid;
  }
 };

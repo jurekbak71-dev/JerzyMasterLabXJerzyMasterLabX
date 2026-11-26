@@ -33,3 +33,6 @@ State restore constructs a separate host, prepares modules and installs its init
 
 ## Replacement warm-up and latency compensation
 Both hosts run in parallel for at least 256 samples or the larger latency before the fade starts. Each output is passed through a preallocated history line. Crossfade aligns paths to their larger latency, and effective PDC retains the maximum observed latency until prepareToPlay. Increasing latency at the fade boundary changes the audible time reference; artifact-free transitions in that direction, variable latency during the fade, and DAW synchronization remain unverified. This is a deliberate conservative latency policy, not a fixed-latency guarantee.
+
+## Delay growth during live exchange
+Delay taps transition linearly over 256 samples without clearing their history. The old path retains its previous time reference during initial warm-up; fade advancement waits for both compensation taps to settle. A reported latency change during fade holds the current mix and restarts warm-up, with no premature retirement. Increasing latency necessarily changes the time reference and two-tap blending can create comb filtering on nonstationary signals. The module's own latency transitions can still affect output, so artifact-free audio and DAW PDC synchronization are not claimed.
