@@ -44,7 +44,7 @@ constexpr MlpParameterDescriptor kParameter=[]{
  return p;
 }();
 constexpr MlpModuleDescriptor kDescriptor{sizeof(MlpModuleDescriptor),MLP_ABI_MAJOR,MLP_ABI_MINOR,1,
- 0x4d4c505445434800ull,kTypeLo,kCaps,1,2,kParameterCount,0,kName,
+ 0x4d4c505445434800ull,kTypeLo,kCaps|MLP_CAP_CONCURRENT_STATE_READ,1,2,kParameterCount,0,kName,
  "MasterLabPro SDK validation processor; not a production mastering effect","Technical",
  kParameterCount?&kParameter:nullptr};
 

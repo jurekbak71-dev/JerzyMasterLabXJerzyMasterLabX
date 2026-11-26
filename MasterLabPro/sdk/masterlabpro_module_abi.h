@@ -49,7 +49,8 @@ typedef enum MlpModuleCapabilities {
   MLP_CAP_STEREO = 1ull << 0,
   MLP_CAP_STATE = 1ull << 1,
   MLP_CAP_VARIABLE_LATENCY = 1ull << 2,
-  MLP_CAP_NONLINEAR = 1ull << 3
+  MLP_CAP_NONLINEAR = 1ull << 3,
+  MLP_CAP_CONCURRENT_STATE_READ = 1ull << 4
 } MlpModuleCapabilities;
 
 typedef struct MlpParameterDescriptor {

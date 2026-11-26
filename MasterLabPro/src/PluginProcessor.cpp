@@ -1,6 +1,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "ModuleRackHost.h"
 #include "ParameterRegistry.h"
+#include "StateAccessGate.h"
 #include "RackEditor.h"
 #include "AssetLoader.h"
 #include "RotaryParameterControl.h"
@@ -47,6 +48,7 @@ public:
  void releaseResources() override{}
  void processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuffer&) override{
   juce::ScopedNoDenormals noDenormals;
+  StateAccessGate::AudioGuard access(stateGate);if(!access){buffer.clear();return;}
   if(buffer.getNumChannels()>=2&&!host->process(buffer.getWritePointer(0),buffer.getWritePointer(1),size_t(buffer.getNumSamples())))buffer.clear();
  }
  bool hasEditor() const override{return true;}
@@ -81,14 +83,20 @@ public:
  uint64_t editorEpoch()const noexcept{return epoch.load();}
 
  void getStateInformation(juce::MemoryBlock& dest) override{
-  const juce::ScopedLock lock(getCallbackLock());
   const std::lock_guard<std::mutex> control(controlMutex);
-  std::vector<uint8_t> bytes;if(RackStateCodec::encode(host->saveState(order),bytes))dest.replaceAll(bytes.data(),bytes.size());
+  RackState state;
+  if(host->supportsConcurrentStateRead())state=host->saveState(order);
+  else {StateAccessGate::ControlGuard access(stateGate);state=host->saveState(order);}
+  // Host automation is authoritative even before the next audio block.
+  for(auto& m:state.modules)if(const auto* d=host->descriptor(m.instance)){
+   for(auto& saved:m.parameters)for(uint32_t i=0;i<d->parameter_count;++i)if(d->parameters[i].id==saved.id)saved.value=automationValue(d->parameters[i],params[m.lane*64+i]->get());
+  }
+  std::vector<uint8_t> bytes;if(RackStateCodec::encode(state,bytes))dest.replaceAll(bytes.data(),bytes.size());
  }
  void setStateInformation(const void* data,int size) override{
   RackState state;if(size<0||!RackStateCodec::decode(static_cast<const uint8_t*>(data),size_t(size),state))return;
-  const juce::ScopedLock lock(getCallbackLock());
   const std::lock_guard<std::mutex> control(controlMutex);
+  StateAccessGate::ControlGuard access(stateGate);
   host->restoreStateWhenStopped(state,order);
   for(const auto& m:state.modules)if(m.instance>=nextId)nextId=m.instance==std::numeric_limits<uint64_t>::max()?m.instance:m.instance+1;
   epoch.fetch_add(1);
@@ -109,7 +117,7 @@ private:
   const std::lock_guard<std::mutex> lock(controlMutex);host->collectRetired();if(dirty&&host->submit(order))dirty=false;
  }
  std::unique_ptr<ModuleRackHost> host=std::make_unique<ModuleRackHost>();
- std::mutex controlMutex;RackOrder order;uint64_t nextId=1;bool dirty=false;std::atomic<uint64_t> epoch{0};std::array<juce::AudioParameterFloat*,640> params{};
+ StateAccessGate stateGate;std::mutex controlMutex;RackOrder order;uint64_t nextId=1;bool dirty=false;std::atomic<uint64_t> epoch{0};std::array<juce::AudioParameterFloat*,640> params{};
 };
 class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Timer {
  class Panel final:public juce::Component{
