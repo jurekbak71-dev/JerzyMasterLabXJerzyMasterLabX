@@ -11,3 +11,5 @@ Live host replacement implemented with a 256-sample crossfade and deferred recla
 Added warm-up, dual-path delay compensation and effective-latency reporting. A regression verifies equal latency amplitude continuity and faster replacement with retained 7-sample delay. Slower replacement time-reference change and DAW PDC remain acceptance blockers.
 
 Added two-tap delay transition and warm-up restart on reported latency changes; regression includes slower replacement, impulse delay and mid-fade latency change. CI and actual DAW behavior remain unverified.
+
+Validation: fixed GCC misleading-indentation error in LiveHostExchange. Added eight independent exchange instances with 100 replacement cycles each; measured elapsed wall time and maximum sample jump. This tests the exchange algorithm, not eight loaded VST3 instances. Added unsigned development Inno Setup package and CI artifact; installer build and installation remain unverified. Pluginval not yet integrated.

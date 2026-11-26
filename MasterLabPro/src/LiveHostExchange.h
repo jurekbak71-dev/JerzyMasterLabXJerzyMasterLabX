@@ -32,7 +32,8 @@ template<class Host> class LiveHostExchange {
 public:
  void resetWhenStopped(Host* host)noexcept{
   active=host;target=nullptr;progress=warmRemaining=0;requested.store(nullptr);acknowledged.store(nullptr);activeLine=0;
-  for(auto& line:lines)line.reset();for(auto& tap:taps)tap.reset();
+  for(auto& line:lines){line.reset();}
+  for(auto& tap:taps){tap.reset();}
   heldLatency=host?latencyOf(host):0;lastOld=heldLatency;lastNew=0;effectiveLatency.store(heldLatency);
  }
  void publish(Host* host)noexcept{requested.store(host,std::memory_order_release);}

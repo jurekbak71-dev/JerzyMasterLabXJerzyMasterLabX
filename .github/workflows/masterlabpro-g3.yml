@@ -74,6 +74,32 @@ jobs:
           Copy-Item MasterLabPro/sdk/masterlabpro_module_abi.h "$package/sdk"
           New-Item -ItemType Directory -Force "$package/docs" | Out-Null
           Copy-Item MasterLabPro/ARCHITECTURE.md,MasterLabPro/MODULE_SDK.md,MasterLabPro/MODULE_ABI.md,MasterLabPro/REALTIME_CONTRACT.md,MasterLabPro/PARAMETER_MAPPING.md,MasterLabPro/LATENCY_AND_DELTA.md,MasterLabPro/STATE_FORMAT.md,MasterLabPro/PACKAGE_B_REPORT.md "$package/docs"
+      - name: Measure live host exchange
+        shell: pwsh
+        run: |
+          & build-masterlabpro/Release/masterlabpro_live_host_exchange_test.exe | Tee-Object -FilePath reports/live-exchange-windows.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build development installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          & $iscc MasterLabPro/installer/MasterLabPro.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $setup = 'reports/MasterLabPro-C-development-Setup.exe'
+          if (-not (Test-Path $setup)) { throw 'Installer missing' }
+          Get-FileHash $setup -Algorithm SHA256 | Format-List | Out-File reports/installer-sha256.txt
+      - name: Upload development installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: MasterLabPro-C-Installer-Windows
+          path: |
+            reports/MasterLabPro-C-development-Setup.exe
+            reports/installer-sha256.txt
+          if-no-files-found: error
       - name: Upload experimental MasterLabPro VST3
         uses: actions/upload-artifact@v4
         with:
