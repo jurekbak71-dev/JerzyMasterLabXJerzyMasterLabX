@@ -59,14 +59,14 @@ public:
  juce::AudioProcessorEditor* createEditor() override;
  static juce::File dataRoot(){return juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory).getChildFile("Jerzy").getChildFile("MasterLabPro");}
  RackOrder editorOrder(){const std::lock_guard<std::mutex> lock(controlMutex);return order;}
- struct EditorParameterInfo{juce::AudioParameterFloat* parameter;float neutral;};
+ struct EditorParameterInfo{juce::AudioParameterFloat* parameter;float neutral;juce::String name,unit;double minimum,maximum,step;uint32_t flags;};
  struct EditorModuleInfo{juce::String name;std::vector<EditorParameterInfo> parameters;};
  std::optional<EditorModuleInfo> editorModule(uint64_t id){
   if(!id)return std::nullopt;
   const std::lock_guard<std::mutex> lock(controlMutex);const auto* d=host->descriptor(id);const auto lane=host->automationLane(id);
   if(!d||lane>=10||d->parameter_count>64)return std::nullopt;
   EditorModuleInfo result;result.name=juce::String::fromUTF8(d->name);
-  for(uint32_t i=0;i<d->parameter_count;++i)result.parameters.push_back({params[lane*64+i],float(normalize(d->parameters[i],d->parameters[i].neutral_value))});
+  for(uint32_t i=0;i<d->parameter_count;++i){const auto& v=d->parameters[i];result.parameters.push_back({params[lane*64+i],float(normalize(v,v.neutral_value)),juce::String::fromUTF8(v.name),juce::String::fromUTF8(v.unit?v.unit:""),v.minimum,v.maximum,v.step,v.flags});}
   return result;
  }
  juce::String editorLabel(uint64_t id){const std::lock_guard<std::mutex> lock(controlMutex);const auto* d=host->descriptor(id);return d?juce::String::fromUTF8(d->name):juce::String("UNAVAILABLE");}
@@ -162,13 +162,13 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
   Panel(const PluginProcessor::EditorModuleInfo& info,juce::Image cap,juce::Image pointer,std::function<void()> remove){
    setName("MasterLabPro Module Panel");title.setText(info.name,juce::dontSendNotification);addAndMakeVisible(title);
    for(const auto& parameter:info.parameters)if(parameter.parameter){
-    auto knob=std::make_unique<RotaryParameterControl>(*parameter.parameter,parameter.neutral,cap,pointer,juce::Colour(0xff58bde8));
-    addAndMakeVisible(*knob);knobs.push_back(std::move(knob));
+    auto knob=std::make_unique<RotaryParameterControl>(*parameter.parameter,parameter.neutral,cap,pointer,juce::Colour(0xff58bde8),parameter.name,[parameter](float normalized){MlpParameterDescriptor d{};d.minimum=parameter.minimum;d.maximum=parameter.maximum;d.step=parameter.step;d.flags=parameter.flags;const double value=automationValue(d,normalized);const int decimals=(d.flags&MLP_PARAMETER_INTEGER)?0:2;return juce::String(value,decimals)+(parameter.unit.isEmpty()?juce::String():" "+parameter.unit);});
+    controlStrip.addAndMakeVisible(*knob);knobs.push_back(std::move(knob));
    }
-   addAndMakeVisible(button);button.onClick=std::move(remove);
+   addAndMakeVisible(button);button.onClick=std::move(remove);addAndMakeVisible(viewport);viewport.setViewedComponent(&controlStrip,false);viewport.setScrollBarsShown(false,true);
   }
-  void resized()override{auto r=getLocalBounds().reduced(4);title.setBounds(r.removeFromTop(24));button.setBounds(r.removeFromRight(120).withHeight(28));const int w=knobs.empty()?0:juce::jmin(170,r.getWidth()/int(knobs.size()));for(auto& k:knobs)k->setBounds(r.removeFromLeft(w));}
- private:juce::Label title;juce::TextButton button{"REMOVE"};std::vector<std::unique_ptr<RotaryParameterControl>> knobs;
+  void resized()override{auto r=getLocalBounds().reduced(4);auto header=r.removeFromTop(26);button.setBounds(header.removeFromRight(110));title.setBounds(header);viewport.setBounds(r);const int cell=juce::jlimit(96,180,r.getHeight()+12);const int width=juce::jmax(r.getWidth(),cell*int(knobs.size()));const int height=juce::jmax(1,r.getHeight()-(width>r.getWidth()?viewport.getScrollBarThickness():0));controlStrip.setSize(width,height);auto area=controlStrip.getLocalBounds();for(auto& k:knobs)k->setBounds(area.removeFromLeft(cell).reduced(4,0));}
+ private:juce::Label title;juce::TextButton button{"REMOVE"};juce::Component controlStrip;juce::Viewport viewport;std::vector<std::unique_ptr<RotaryParameterControl>> knobs;
  };
 public:
  explicit PluginRackEditor(PluginProcessor& processor):AudioProcessorEditor(processor),p(processor),assets(PluginProcessor::dataRoot().getChildFile("assets")),order(p.editorOrder()),cap(assets.loadKnobCap()),pointer(assets.loadKnobPointer()),

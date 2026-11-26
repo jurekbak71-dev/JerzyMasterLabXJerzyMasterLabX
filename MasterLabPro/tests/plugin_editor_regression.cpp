@@ -32,8 +32,8 @@ int main(){
  for(int i=0;i<100;++i){
   auto* tile=tiles->getChildComponent(0);tile->mouseDown(mouse(*tile,juce::ModifierKeys::leftButtonModifier));
   auto* panel=named(*editor,"MasterLabPro Module Panel");if(!panel)return 4;
-  auto* knob=find<ml::RotaryParameterControl>(*panel);if(!knob)return 5;
-  knob->mouseDown(mouse(*knob,juce::ModifierKeys::rightButtonModifier));
+  auto* knob=find<ml::RotaryParameterControl>(*panel);if(!knob)return 5;if(knob->getName()!="Gain"||!knob->valueText().endsWith(" dB")||knob->dialDiameter()<65.f)return 7;
+  knob->mouseDown(mouse(*knob,juce::ModifierKeys::rightButtonModifier));if(knob->valueText()!="0.00 dB")return 8;
  }
  // Empty tile must clear selection and open a menu without dereferencing ID zero.
  auto* empty=tiles->getChildComponent(1);empty->mouseDown(mouse(*empty,juce::ModifierKeys::leftButtonModifier));
