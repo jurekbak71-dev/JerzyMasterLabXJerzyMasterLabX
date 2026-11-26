@@ -25,3 +25,7 @@ Automated impulse tests cover the technical delay. After alignment, a delay-only
 `1e-6` in the tested floating-point path. Changing latency from 3 to 7 samples is also tested. A future VST3
 wrapper must forward the graph latency and issue the host's latency-change notification; that wrapper is
 Package C scope.
+
+## Package C alignment corrections
+
+Delay-line reset invalidates history in constant time without clearing the storage. The current block's alignment and tap calculations run before graph retirement and latency refresh, so a new graph cannot reset the alignment of an already processed block. Global and selected-module aligned input buffers are separate. The global aligner advances even when no analysis output was requested. Dynamic-latency transition behavior and DAW PDC still require validation; bypass currently removes the module's latency.
