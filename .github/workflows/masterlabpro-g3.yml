@@ -20,7 +20,7 @@ jobs:
           if (-not (Test-Path 'MasterLabPro/assets/manifest.json')) {
             throw 'Approved Package A assets are mandatory for the strict Windows build.'
           }
-          $options = @('-DMASTERLABPRO_GUI_CHECK=ON','-DMASTERLABPRO_CONSOLE=ON')
+          $options = @('-DMASTERLABPRO_GUI_CHECK=ON','-DMASTERLABPRO_CONSOLE=ON','-DMASTERLABPRO_VST3=ON')
           $root = (Resolve-Path 'MasterLabPro/assets').Path
           $options += "-DMASTERLABPRO_ASSET_ROOT=$root"
           cmake -S MasterLabPro -B build-masterlabpro -A x64 @options
@@ -74,6 +74,12 @@ jobs:
           Copy-Item MasterLabPro/sdk/masterlabpro_module_abi.h "$package/sdk"
           New-Item -ItemType Directory -Force "$package/docs" | Out-Null
           Copy-Item MasterLabPro/ARCHITECTURE.md,MasterLabPro/MODULE_SDK.md,MasterLabPro/MODULE_ABI.md,MasterLabPro/REALTIME_CONTRACT.md,MasterLabPro/PARAMETER_MAPPING.md,MasterLabPro/LATENCY_AND_DELTA.md,MasterLabPro/STATE_FORMAT.md,MasterLabPro/PACKAGE_B_REPORT.md "$package/docs"
+      - name: Upload experimental MasterLabPro VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: MasterLabPro-VST3-C-development
+          path: build-masterlabpro/MasterLabPro_artefacts/Release/VST3/
+          if-no-files-found: error
       - name: Upload standalone GUI
         uses: actions/upload-artifact@v4
         with:

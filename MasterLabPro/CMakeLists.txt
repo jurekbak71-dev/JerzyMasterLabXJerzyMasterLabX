@@ -159,7 +159,8 @@ endif()
 
 option(MASTERLABPRO_GUI_CHECK "Compile JUCE GUI components" OFF)
 option(MASTERLABPRO_CONSOLE "Build standalone development GUI" OFF)
-if(MASTERLABPRO_GUI_CHECK OR MASTERLABPRO_CONSOLE)
+option(MASTERLABPRO_VST3 "Build independent MasterLabPro VST3" OFF)
+if(MASTERLABPRO_GUI_CHECK OR MASTERLABPRO_CONSOLE OR MASTERLABPRO_VST3)
   find_package(JUCE 8.0.6 CONFIG QUIET)
   if(NOT JUCE_FOUND)
     include(FetchContent)
@@ -204,4 +205,26 @@ if(MASTERLABPRO_CONSOLE)
   target_include_directories(MasterLabProConsole PRIVATE src)
   target_link_libraries(MasterLabProConsole PRIVATE juce::juce_gui_extra juce::juce_audio_utils juce::juce_audio_processors)
   target_compile_definitions(MasterLabProConsole PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+endif()
+
+if(MASTERLABPRO_VST3)
+  juce_add_plugin(MasterLabPro
+    COMPANY_NAME "Jerzy"
+    BUNDLE_ID "com.jerzy.masterlabpro"
+    PLUGIN_MANUFACTURER_CODE Jzml
+    PLUGIN_CODE MlpC
+    FORMATS VST3
+    PRODUCT_NAME "Jerzy MasterLabPro"
+    IS_SYNTH FALSE
+    NEEDS_MIDI_INPUT FALSE
+    NEEDS_MIDI_OUTPUT FALSE
+    COPY_PLUGIN_AFTER_BUILD FALSE)
+  target_sources(MasterLabPro PRIVATE src/PluginProcessor.cpp src/ModuleLoader.cpp src/RackState.cpp)
+  target_include_directories(MasterLabPro PRIVATE src sdk)
+  target_link_libraries(MasterLabPro PRIVATE juce::juce_audio_utils juce::juce_gui_extra)
+  target_compile_definitions(MasterLabPro PRIVATE JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+  if(NOT WIN32)
+    target_link_libraries(MasterLabPro PRIVATE ${CMAKE_DL_LIBS})
+  endif()
+  add_dependencies(MasterLabPro mlp_unity mlp_gain mlp_saturation mlp_delay)
 endif()
