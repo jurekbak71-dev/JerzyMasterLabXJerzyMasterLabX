@@ -1,6 +1,10 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 #include "ModuleRackHost.h"
 #include "ParameterRegistry.h"
+#include "RackEditor.h"
+#include "AssetLoader.h"
+#include "RotaryParameterControl.h"
+#include "AnalysisHistory.h"
 #include <array>
 #include <atomic>
 #include <cmath>
@@ -57,7 +61,36 @@ public:
   if(buffer.getNumChannels()>=2&&!host->process(buffer.getWritePointer(0),buffer.getWritePointer(1),size_t(buffer.getNumSamples())))buffer.clear();
  }
  bool hasEditor() const override{return true;}
- juce::AudioProcessorEditor* createEditor() override{return new juce::GenericAudioProcessorEditor(*this);}
+ juce::AudioProcessorEditor* createEditor() override;
+ static juce::File dataRoot(){return juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory).getChildFile("Jerzy").getChildFile("MasterLabPro");}
+ RackOrder editorOrder(){const juce::ScopedLock lock(getCallbackLock());return order;}
+ const MlpModuleDescriptor* editorDescriptor(uint64_t id){const juce::ScopedLock lock(getCallbackLock());return host->descriptor(id);}
+ juce::StringArray moduleNames(){juce::StringArray names;for(const auto& t:host->availableTypes())names.add(juce::String::fromUTF8(t.descriptor->name));return names;}
+ static double normalize(const MlpParameterDescriptor& d,double value){
+  if(d.maximum<=d.minimum)return 0;
+  if((d.flags&MLP_PARAMETER_LOGARITHMIC)&&d.minimum>0&&value>0)return std::clamp(std::log(value/d.minimum)/std::log(d.maximum/d.minimum),0.,1.);
+  return std::clamp((value-d.minimum)/(d.maximum-d.minimum),0.,1.);
+ }
+ juce::AudioParameterFloat* editorParameter(uint64_t id,uint32_t index){
+  const juce::ScopedLock lock(getCallbackLock());const auto lane=host->automationLane(id);return lane<10&&index<64?params[lane*64+index]:nullptr;
+ }
+ bool addModule(int slot,size_t type){
+  const juce::ScopedLock lock(getCallbackLock());
+  if(slot<0||slot>=10||order.slots()[size_t(slot)]||nextId==std::numeric_limits<uint64_t>::max())return false;
+  for(const auto& missing:host->unavailable())if(missing.slot==uint32_t(slot))return false;
+  const auto id=nextId++;if(!host->add(type,id))return false;
+  const auto* d=host->descriptor(id);const auto lane=host->automationLane(id);
+  for(uint32_t i=0;i<d->parameter_count;++i)*params[lane*64+i]=float(normalize(d->parameters[i],d->parameters[i].default_value));
+  if(!order.insert(size_t(slot),id)){host->remove(id);return false;}
+  dirty=true;return true;
+ }
+ bool moveModule(int from,int to){const juce::ScopedLock lock(getCallbackLock());if(from<0||to<0||!host->unavailable().empty()||!order.move(size_t(from),size_t(to)))return false;dirty=true;return true;}
+ bool removeModule(uint64_t id){const juce::ScopedLock lock(getCallbackLock());for(size_t i=0;i<10;++i)if(order.slots()[i]==id&&host->remove(id)){order.remove(i);dirty=true;return true;}return false;}
+ void analysisSource(uint64_t id,bool module,bool delta){host->setAnalysis(id,module,delta);}
+ bool readMeters(ModuleRackMeters& m){return host->pollMeters(m);}
+ bool readAnalysis(AnalysisFrame& f){return host->pollAnalysis(f);}
+ uint64_t editorEpoch()const noexcept{return epoch.load();}
+
  void getStateInformation(juce::MemoryBlock& dest) override{
   const juce::ScopedLock lock(getCallbackLock());
   std::vector<uint8_t> bytes;if(RackStateCodec::encode(host->saveState(order),bytes))dest.replaceAll(bytes.data(),bytes.size());
@@ -66,13 +99,15 @@ public:
   RackState state;if(size<0||!RackStateCodec::decode(static_cast<const uint8_t*>(data),size_t(size),state))return;
   const juce::ScopedLock lock(getCallbackLock());
   host->restoreStateWhenStopped(state,order);
+  for(const auto& m:state.modules)if(m.instance>=nextId)nextId=m.instance==std::numeric_limits<uint64_t>::max()?m.instance:m.instance+1;
+  epoch.fetch_add(1);
   for(const auto id:order.slots())if(id){
    const auto* d=host->descriptor(id);const auto lane=host->automationLane(id);if(!d||lane>=10)continue;
    for(uint32_t p=0;p<d->parameter_count;++p){const auto& desc=d->parameters[p];double value=desc.default_value;host->getParameter(id,desc.id,value);
     double normalized=desc.maximum>desc.minimum?(value-desc.minimum)/(desc.maximum-desc.minimum):0;
     if((desc.flags&MLP_PARAMETER_LOGARITHMIC)&&desc.minimum>0&&desc.maximum>desc.minimum&&value>0)
      normalized=std::log(value/desc.minimum)/std::log(desc.maximum/desc.minimum);
-    params[lane*64+p]->setValue(float(std::clamp(normalized,0.,1.)));
+    *params[lane*64+p]=float(std::clamp(normalized,0.,1.));
    }
   }
   host->submit(order);
@@ -80,10 +115,60 @@ public:
 private:
  void timerCallback() override{
   const auto latency=int(host->diagnostics().latency);if(latency!=getLatencySamples())setLatencySamples(latency);
-  const juce::ScopedLock lock(getCallbackLock());host->collectRetired();
+  const juce::ScopedLock lock(getCallbackLock());host->collectRetired();if(dirty&&host->submit(order))dirty=false;
  }
  std::unique_ptr<ModuleRackHost> host=std::make_unique<ModuleRackHost>();
- RackOrder order;std::array<juce::AudioParameterFloat*,640> params{};
+ RackOrder order;uint64_t nextId=1;bool dirty=false;std::atomic<uint64_t> epoch{0};std::array<juce::AudioParameterFloat*,640> params{};
 };
+class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Timer {
+ class Panel final:public juce::Component{
+ public:
+  Panel(PluginProcessor& p,uint64_t id,const MlpModuleDescriptor& d,juce::Image cap,juce::Image pointer,std::function<void()> remove){
+   title.setText(juce::String::fromUTF8(d.name),juce::dontSendNotification);addAndMakeVisible(title);
+   for(uint32_t i=0;i<d.parameter_count;++i)if(auto* param=p.editorParameter(id,i)){
+    auto knob=std::make_unique<RotaryParameterControl>(*param,float(PluginProcessor::normalize(d.parameters[i],d.parameters[i].neutral_value)),cap,pointer,juce::Colour(0xff58bde8));
+    addAndMakeVisible(*knob);knobs.push_back(std::move(knob));
+   }
+   addAndMakeVisible(button);button.onClick=std::move(remove);
+  }
+  void resized()override{auto r=getLocalBounds().reduced(4);title.setBounds(r.removeFromTop(24));button.setBounds(r.removeFromRight(120).withHeight(28));const int w=knobs.empty()?0:juce::jmin(170,r.getWidth()/int(knobs.size()));for(auto& k:knobs)k->setBounds(r.removeFromLeft(w));}
+ private:juce::Label title;juce::TextButton button{"REMOVE"};std::vector<std::unique_ptr<RotaryParameterControl>> knobs;
+ };
+public:
+ explicit PluginRackEditor(PluginProcessor& processor):AudioProcessorEditor(processor),p(processor),assets(PluginProcessor::dataRoot().getChildFile("assets")),order(p.editorOrder()),cap(assets.loadKnobCap()),pointer(assets.loadKnobPointer()),
+ rack(order,assets.loadBands(),{
+ [this](int a,int b){if(p.moveModule(a,b))refresh();},
+ [this](uint64_t id,int pos){if(id)select(id);else menu(pos);},
+ [this](uint64_t id){auto* d=p.editorDescriptor(id);return d?juce::String::fromUTF8(d->name):juce::String("UNAVAILABLE");},
+ [](uint64_t,int){}
+ },assets.loadPanel()){
+  rack.setRackSkin(assets.loadSlot());addAndMakeVisible(rack);addAndMakeVisible(scope);addAndMakeVisible(delta);
+  scope.setClickingTogglesState(true);delta.setClickingTogglesState(true);scope.onClick=[this]{scope.setButtonText(scope.getToggleState()?"MODULE":"GLOBAL");sourceChanged();};delta.onClick=[this]{sourceChanged();};
+  setResizable(true,false);setResizeLimits(800,500,3200,2000);if(auto* c=getConstrainer())c->setFixedAspectRatio(1.6);setSize(1200,750);seenEpoch=p.editorEpoch();startTimerHz(30);
+ }
+ ~PluginRackEditor()override{stopTimer();p.analysisSource(0,false,false);}
+ void resized()override{rack.setBounds(getLocalBounds());scope.setBounds(getWidth()*44/100,8,100,24);delta.setBounds(getWidth()*44/100+105,8,120,24);}
+private:
+ void refresh(){order=p.editorOrder();rack.refreshRack();}
+ void sourceChanged(){history.clear();rack.setSpectrum({},20000);rack.setHeatmaps({},{},{});p.analysisSource(selected,scope.getToggleState(),delta.getToggleState());}
+ void select(uint64_t id){selected=id;rack.setSelection(id);rack.setBandFromController(7);rack.setBandSelectionEnabled(false);auto* d=p.editorDescriptor(id);if(!d){rack.setModuleEditor(nullptr);sourceChanged();return;}
+  juce::Component::SafePointer<PluginRackEditor> safe(this);
+  rack.setModuleEditor(std::make_unique<Panel>(p,id,*d,cap,pointer,[safe,id]{juce::MessageManager::callAsync([safe,id]{if(safe!=nullptr&&safe->p.removeModule(id)){safe->select(0);safe->refresh();}});}));sourceChanged();
+ }
+ void menu(int slot){select(0);auto names=p.moduleNames();juce::PopupMenu m;for(int i=0;i<names.size();++i)m.addItem(i+1,"Add "+names[i]);if(names.isEmpty())m.addItem(999,"No compatible modules installed",false,false);juce::Component::SafePointer<PluginRackEditor> safe(this);m.showMenuAsync(juce::PopupMenu::Options(),[safe,slot](int choice){if(safe!=nullptr&&choice>0&&choice<999&&safe->p.addModule(slot,size_t(choice-1))){safe->refresh();safe->select(safe->order.slots()[size_t(slot)]);}});}
+ void timerCallback()override{
+  if(seenEpoch!=p.editorEpoch()){seenEpoch=p.editorEpoch();select(0);refresh();}
+  ModuleRackMeters m;for(int i=0;i<7&&p.readMeters(m);++i)rack.setGlobalLevels(m.input,m.output);
+  bool got=false;for(int i=0;i<4&&p.readAnalysis(frame);++i)if(frame.sourceId==(scope.getToggleState()?selected:0))got=history.accept(frame)||got;
+  if(!got)return;const auto rate=history.sampleRate();std::array<std::vector<SpectrumBin>,3> traces;
+  for(int t=0;t<3;++t)for(size_t k=1;k<fftBins;++k){const auto hz=float(k*rate/fftSize);if(hz>=20&&hz<=20000)traces[t].push_back({hz,history.spectra[t][k]});}
+  rack.setSpectrum(std::move(traces),float(std::min(20000.,rate*.5)));
+  std::array<juce::Image,3> images;const juce::Colour colours[]{juce::Colour(0xff58bde8),juce::Colour(0xffe3ad60),juce::Colour(0xffcb9cea)};
+  for(int t=0;t<3;++t){images[t]=juce::Image(juce::Image::RGB,AnalysisHistory::width,AnalysisHistory::height,true);juce::Image::BitmapData pixels(images[t],juce::Image::BitmapData::writeOnly);for(int x=0;x<AnalysisHistory::width;++x)for(int y=0;y<AnalysisHistory::height;++y){auto colour=juce::Colour(0xff09151b);const auto& col=history.column(x);if(col.valid){const auto v=col.values[t][y];colour=colour.interpolatedWith(t==2&&v<0?colours[0]:colours[t],t==2?std::clamp(std::abs(v)/24.f,0.f,1.f):std::clamp((v+100.f)/100.f,0.f,1.f));}pixels.setPixelColour(x,y,colour);}}
+  rack.setHeatmaps(images[0],images[1],images[2]);
+ }
+ PluginProcessor& p;AssetLoader assets;RackOrder order;juce::Image cap,pointer;RackEditor rack;juce::TextButton scope{"GLOBAL"},delta{"DELTA LISTEN"};uint64_t selected=0,seenEpoch=0;AnalysisHistory history;AnalysisFrame frame;
+};
+juce::AudioProcessorEditor* PluginProcessor::createEditor(){return new PluginRackEditor(*this);}
 }
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter(){return new ml::PluginProcessor();}
