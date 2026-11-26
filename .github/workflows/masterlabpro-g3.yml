@@ -100,6 +100,44 @@ jobs:
             reports/MasterLabPro-C-development-Setup.exe
             reports/installer-sha256.txt
           if-no-files-found: error
+      - name: Install development package on disposable runner
+        shell: pwsh
+        run: |
+          $setup = (Resolve-Path 'reports/MasterLabPro-C-development-Setup.exe').Path
+          $p = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { exit $p.ExitCode }
+          $root = Join-Path $env:ProgramData 'Jerzy/MasterLabPro'
+          foreach ($name in @('mlp_unity.dll','mlp_gain.dll','mlp_saturation.dll','mlp_delay.dll')) {
+            if (-not (Test-Path "$root/modules/$name")) { throw "Missing installed module $name" }
+          }
+          if (-not (Test-Path "$root/assets/manifest.json")) { throw 'Missing installed assets' }
+      - name: Load eight real VST3 instances
+        shell: pwsh
+        run: |
+          $bundle = Join-Path $env:CommonProgramFiles 'VST3/Jerzy MasterLabPro.vst3'
+          if (-not (Test-Path $bundle)) { throw 'Installed VST3 missing' }
+          & build-masterlabpro/Release/masterlabpro_vst3_instances.exe $bundle | Tee-Object -FilePath reports/vst3-instances.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Validate installed VST3 with pluginval
+        shell: pwsh
+        run: |
+          Invoke-WebRequest 'https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Windows.zip' -OutFile pluginval.zip
+          Expand-Archive pluginval.zip -DestinationPath pluginval -Force
+          $exe = Get-ChildItem pluginval -Recurse -Filter pluginval.exe | Select-Object -First 1
+          if (-not $exe) { throw 'pluginval executable missing' }
+          $bundle = Join-Path $env:CommonProgramFiles 'VST3/Jerzy MasterLabPro.vst3'
+          & $exe.FullName --strictness-level 5 --validate $bundle 2>&1 | Tee-Object -FilePath reports/pluginval.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload VST3 validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MasterLabPro-C-VST3-Validation
+          path: |
+            reports/vst3-instances.json
+            reports/pluginval.log
+            reports/live-exchange-windows.json
+          if-no-files-found: warn
       - name: Upload experimental MasterLabPro VST3
         uses: actions/upload-artifact@v4
         with:
