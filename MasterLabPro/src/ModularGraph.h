@@ -51,6 +51,7 @@ public:
   for(uint32_t i=0;i<graph.count;++i){const auto& n=graph.nodes[i];if(!n.instanceId||!n.api||!n.instance||!n.api->process)return false;if(n.readAutomation&&(!n.descriptor||n.descriptor->parameter_count>64||n.lane>=10||!n.api->set_parameter))return false;for(uint32_t j=0;j<i;++j)if(graph.nodes[j].instanceId==n.instanceId)return false;}
   if(!incoming.push(graph)){queueOverloads.fetch_add(1,std::memory_order_relaxed);return false;}return true;
  }
+ void installWhenStopped(const GraphSnapshot& snapshot)noexcept{resetWhenStopped();active=snapshot;activeRevision.store(active.revision,std::memory_order_release);refreshLatency();}
  bool pollRetired(GraphSnapshot& graph)noexcept{return retired.pop(graph);}
  void prepare(uint32_t maximumFrames)noexcept{maxFrames=std::min<uint32_t>(maximumFrames,2048);phase=Phase::running;aligner.reset();}
  void resetWhenStopped()noexcept{GraphSnapshot value;while(incoming.pop(value)){}while(retired.pop(value)){}active={};pending={};activeRevision.store(0,std::memory_order_release);phase=Phase::running;transition=0;pendingLatency=0;latency.store(0,std::memory_order_relaxed);aligner.reset();tapAligner.reset();tapSource=0;tapLatency=0;bypassIds.fill(0);for(auto& line:bypassLines)line.reset();}

@@ -2,6 +2,7 @@
 #include "ModuleRackHost.h"
 #include "ParameterRegistry.h"
 #include "StateAccessGate.h"
+#include "LiveHostExchange.h"
 #include "RackEditor.h"
 #include "AssetLoader.h"
 #include "RotaryParameterControl.h"
@@ -11,6 +12,7 @@
 #include <cmath>
 #include <limits>
 #include <mutex>
+#include <optional>
 
 namespace ml {
 // Initial VST3 integration: fixed normalized automation lanes, no dynamic host parameter IDs.
@@ -22,9 +24,10 @@ public:
       "Lane "+juce::String(i/64+1)+" Parameter "+juce::String(i%64+1),0.f,1.f,0.f);
    addParameter(p);params[i]=p;
   }
-  host->bindAutomation(this,[](const void* context,uint32_t index) noexcept {return static_cast<const PluginProcessor*>(context)->params[index]->get();});
+  bindHost(*host,*automation);
   const auto root=juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory).getChildFile("Jerzy").getChildFile("MasterLabPro").getChildFile("modules");
   host->scan(std::filesystem::path(root.getFullPathName().toWideCharPointer()));
+  exchange.resetWhenStopped(host.get());
   startTimerHz(20);
  }
  ~PluginProcessor() override {stopTimer();}
@@ -43,20 +46,21 @@ public:
  }
  void prepareToPlay(double rate,int block) override{
   const std::lock_guard<std::mutex> lock(controlMutex);
-  host->resetGraphWhenStopped();host->prepare(rate,uint32_t(std::max(1,block)));host->submit(order);
+  exchange.resetWhenStopped(host.get());oldHost.reset();oldAutomation.reset();currentRate=rate;currentBlock=uint32_t(std::max(1,block));
+  host->resetGraphWhenStopped();host->prepare(rate,currentBlock);host->submit(order,true);
  }
  void releaseResources() override{}
  void processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuffer&) override{
   juce::ScopedNoDenormals noDenormals;
   StateAccessGate::AudioGuard access(stateGate);if(!access){buffer.clear();return;}
-  if(buffer.getNumChannels()>=2&&!host->process(buffer.getWritePointer(0),buffer.getWritePointer(1),size_t(buffer.getNumSamples())))buffer.clear();
+  if(buffer.getNumChannels()>=2&&!exchange.process(buffer.getWritePointer(0),buffer.getWritePointer(1),unsigned(buffer.getNumSamples())))buffer.clear();
  }
  bool hasEditor() const override{return true;}
  juce::AudioProcessorEditor* createEditor() override;
  static juce::File dataRoot(){return juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory).getChildFile("Jerzy").getChildFile("MasterLabPro");}
  RackOrder editorOrder(){const std::lock_guard<std::mutex> lock(controlMutex);return order;}
  const MlpModuleDescriptor* editorDescriptor(uint64_t id){const std::lock_guard<std::mutex> lock(controlMutex);return host->descriptor(id);}
- juce::StringArray moduleNames(){juce::StringArray names;for(const auto& t:host->availableTypes())names.add(juce::String::fromUTF8(t.descriptor->name));return names;}
+ juce::StringArray moduleNames(){const std::lock_guard<std::mutex> lock(controlMutex);juce::StringArray names;for(const auto& t:host->availableTypes())names.add(juce::String::fromUTF8(t.descriptor->name));return names;}
  static double normalize(const MlpParameterDescriptor& d,double value){
   if(d.maximum<=d.minimum)return 0;
   if((d.flags&MLP_PARAMETER_LOGARITHMIC)&&d.minimum>0&&value>0)return std::clamp(std::log(value/d.minimum)/std::log(d.maximum/d.minimum),0.,1.);
@@ -77,9 +81,9 @@ public:
  }
  bool moveModule(int from,int to){const std::lock_guard<std::mutex> lock(controlMutex);if(from<0||to<0||!host->unavailable().empty()||!order.move(size_t(from),size_t(to)))return false;dirty=true;return true;}
  bool removeModule(uint64_t id){const std::lock_guard<std::mutex> lock(controlMutex);for(size_t i=0;i<10;++i)if(order.slots()[i]==id&&host->remove(id)){order.remove(i);dirty=true;return true;}return false;}
- void analysisSource(uint64_t id,bool module,bool delta){host->setAnalysis(id,module,delta);}
- bool readMeters(ModuleRackMeters& m){return host->pollMeters(m);}
- bool readAnalysis(AnalysisFrame& f){return host->pollAnalysis(f);}
+ void analysisSource(uint64_t id,bool module,bool delta){const std::lock_guard<std::mutex> lock(controlMutex);host->setAnalysis(id,module,delta);}
+ bool readMeters(ModuleRackMeters& m){const std::lock_guard<std::mutex> lock(controlMutex);return host->pollMeters(m);}
+ bool readAnalysis(AnalysisFrame& f){const std::lock_guard<std::mutex> lock(controlMutex);return host->pollAnalysis(f);}
  uint64_t editorEpoch()const noexcept{return epoch.load();}
 
  void getStateInformation(juce::MemoryBlock& dest) override{
@@ -96,8 +100,25 @@ public:
  void setStateInformation(const void* data,int size) override{
   RackState state;if(size<0||!RackStateCodec::decode(static_cast<const uint8_t*>(data),size_t(size),state))return;
   const std::lock_guard<std::mutex> control(controlMutex);
-  StateAccessGate::ControlGuard access(stateGate);
-  host->restoreStateWhenStopped(state,order);
+  collectReplacement();
+  // If an earlier transition is still in flight, retain the latest request for the control timer.
+  if(oldHost){deferredState=std::move(state);return;}
+  replaceHost(state);
+ }
+private:
+ void replaceHost(const RackState& state){
+  auto replacement=std::make_unique<ModuleRackHost>();
+  const auto root=dataRoot().getChildFile("modules");
+  replacement->scan(std::filesystem::path(root.getFullPathName().toWideCharPointer()));
+  replacement->prepare(currentRate,currentBlock);
+  RackOrder restored;replacement->restoreStateWhenStopped(state,restored);
+  // Freeze automation of the outgoing host at its current module values.
+  // Existing snapshots retain the old reader; during the transition use a per-host context below.
+  for(unsigned i=0;i<params.size();++i)automation->frozenValues[i]=params[i]->get();
+  automation->frozen.store(true,std::memory_order_release);
+  oldAutomation=std::move(automation);automation=std::make_unique<AutomationContext>();
+  oldHost=std::move(host);host=std::move(replacement);order=restored;dirty=false;
+  bindHost(*host,*automation);
   for(const auto& m:state.modules)if(m.instance>=nextId)nextId=m.instance==std::numeric_limits<uint64_t>::max()?m.instance:m.instance+1;
   epoch.fetch_add(1);
   for(const auto id:order.slots())if(id){
@@ -109,14 +130,20 @@ public:
     *params[lane*64+p]=float(std::clamp(normalized,0.,1.));
    }
   }
-  host->submit(order);
+  host->submit(order,true);
+  exchange.publish(host.get());
  }
-private:
+ struct AutomationContext{PluginProcessor* owner=nullptr;std::atomic<bool> frozen{false};std::array<float,640> frozenValues{};};
+ void bindHost(ModuleRackHost& h,AutomationContext& context){context.owner=this;h.bindAutomation(&context,[](const void* raw,uint32_t index)noexcept{const auto& c=*static_cast<const AutomationContext*>(raw);return c.frozen.load(std::memory_order_acquire)?c.frozenValues[index]:c.owner->params[index]->get();});}
+ void collectReplacement(){if(auto* retired=exchange.takeRetired();retired&&retired==oldHost.get()){oldHost.reset();oldAutomation.reset();}}
  void timerCallback() override{
-  const auto latency=int(host->diagnostics().latency);if(latency!=getLatencySamples())setLatencySamples(latency);
-  const std::lock_guard<std::mutex> lock(controlMutex);host->collectRetired();if(dirty&&host->submit(order))dirty=false;
+  int latency=0;
+  {const std::lock_guard<std::mutex> lock(controlMutex);collectReplacement();if(!oldHost&&deferredState){auto state=std::move(*deferredState);deferredState.reset();replaceHost(state);}host->collectRetired();if(dirty&&host->submit(order))dirty=false;latency=int(host->diagnostics().latency);}
+  if(latency!=getLatencySamples())setLatencySamples(latency);
  }
  std::unique_ptr<ModuleRackHost> host=std::make_unique<ModuleRackHost>();
+ std::unique_ptr<ModuleRackHost> oldHost;std::unique_ptr<AutomationContext> automation=std::make_unique<AutomationContext>(),oldAutomation;
+ LiveHostExchange<ModuleRackHost> exchange;std::optional<RackState> deferredState;double currentRate=44100.;uint32_t currentBlock=512;
  StateAccessGate stateGate;std::mutex controlMutex;RackOrder order;uint64_t nextId=1;bool dirty=false;std::atomic<uint64_t> epoch{0};std::array<juce::AudioParameterFloat*,640> params{};
 };
 class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Timer {
