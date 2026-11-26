@@ -112,8 +112,8 @@ int main(int argc, char** argv) {
   if(digital<0||digital>1e-6||analog<.001||analog>.01)return false;
   api.set_parameter(instance,5,0);api.reset(instance);
   l.fill(0);r.fill(0);l[0]=.5f;r[0]=-.25f;
-  if(api.process(instance,&block)!=MLP_OK||l[0]!=.5f||r[0]!=-.25f)return false;
-  for(size_t i=1;i<l.size();++i)if(l[i]!=0||r[i]!=0)return false;
+  if(api.process(instance,&block)!=MLP_OK||l[0]!=.5f||r[0]!=-.25f){std::cerr<<"Neutral impulse mismatch "<<l[0]<<" "<<r[0]<<'\n';return false;}
+  for(size_t i=1;i<l.size();++i)if(l[i]!=0||r[i]!=0){std::cerr<<"Neutral impulse tail at "<<i<<'\n';return false;}
   std::cout<<"Attack reading at 18.7 ms: "<<attackReading<<" dB; release at 98.7 ms: "<<releaseReading<<" dB\n";
   for(double rate:{44100.,48000.,88200.,96000.,176400.,192000.}){
    for(uint32_t size:{1u,17u,64u,127u,128u}){

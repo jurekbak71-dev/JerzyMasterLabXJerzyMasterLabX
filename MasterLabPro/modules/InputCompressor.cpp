@@ -132,8 +132,9 @@ Pair compress(MlpInstance& p,uint32_t band,Pair signal,float analog,Pair& applie
   applied[ch]=-20*std::log10(gain);
  }
  const float active=p.values[38+band],makeup=amplitude(p.values[34+band]),width=p.values[42+band]*.01f;
- const float mid=(signal[0]+signal[1])*.5f,side=(signal[0]-signal[1])*.5f*width;
- signal={std::lerp(dry[0],(mid+side)*makeup,active),std::lerp(dry[1],(mid-side)*makeup,active)};
+ // Width is a Side-only correction; preserve exact identity at 100%.
+ const float correction=(signal[0]-signal[1])*.5f*(width-1.f);
+ signal={std::lerp(dry[0],(signal[0]+correction)*makeup,active),std::lerp(dry[1],(signal[1]-correction)*makeup,active)};
  for(auto& gr:applied)gr*=active;
  return signal;
 }
