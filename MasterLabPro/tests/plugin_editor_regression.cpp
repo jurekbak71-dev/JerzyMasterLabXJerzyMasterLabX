@@ -6,7 +6,9 @@
 #include <memory>
 #include <vector>
 #include <iostream>
+#include <numbers>
 extern juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter();
+extern juce::AudioProcessor* createMasterLabProEditorFixture(const juce::File&);
 namespace {
 template<class T> T* find(juce::Component& c){
  if(auto* result=dynamic_cast<T*>(&c))return result;
@@ -23,9 +25,10 @@ juce::MouseEvent mouse(juce::Component& c,juce::ModifierKeys mods){
  return {juce::Desktop::getInstance().getMainMouseSource(),{10.f,10.f},mods,1.f,0.f,0.f,0.f,0.f,&c,&c,now,{10.f,10.f},now,1,false};
 }
 }
-int main(){
+int main(int argc,char** argv){
  juce::ScopedJuceInitialiser_GUI gui;
- std::unique_ptr<juce::AudioProcessor> p(createPluginFilter());p->prepareToPlay(48000,256);
+ auto create=[&]{return std::unique_ptr<juce::AudioProcessor>(argc==2?createMasterLabProEditorFixture(juce::File::getCurrentWorkingDirectory().getChildFile(juce::String::fromUTF8(argv[1]))):createPluginFilter());};
+ auto p=create();p->prepareToPlay(48000,256);
  ml::RackState state;ml::SavedModule m;m.instance=1;m.typeHi=0x4d4c505445434800ull;m.typeLo=0x6761696e00000002ull;m.version=1;m.lane=0;m.slot=0;m.parameters.push_back({1,6});state.modules.push_back(m);
  std::vector<uint8_t> bytes;if(!ml::RackStateCodec::encode(state,bytes))return 1;p->setStateInformation(bytes.data(),int(bytes.size()));
  std::unique_ptr<juce::AudioProcessorEditor> editor(p->createEditor());if(!editor)return 2;
@@ -41,11 +44,15 @@ int main(){
   if(knob->valueText()!="0.00 dB"){std::cerr<<"Reset: "<<knob->valueText()<<'\n';return 8;}
  }
  // Empty tile must clear selection and open a menu without dereferencing ID zero.
- auto* empty=tiles->getChildComponent(1);empty->mouseDown(mouse(*empty,juce::ModifierKeys::leftButtonModifier));
- if(named(*editor,"MasterLabPro Module Panel"))return 6;
- juce::PopupMenu::dismissAllActiveMenus();editor.reset();p->releaseResources();
- std::cout<<"PASS actual plugin editor: 100 selections, knob resets, empty tile\n";
- std::unique_ptr<juce::AudioProcessor> compressor(createPluginFilter());
+ if(argc==1){
+  auto* empty=tiles->getChildComponent(1);empty->mouseDown(mouse(*empty,juce::ModifierKeys::leftButtonModifier));
+  if(named(*editor,"MasterLabPro Module Panel"))return 6;
+  juce::PopupMenu::dismissAllActiveMenus();
+  std::cout<<"PASS native empty-slot popup\n";
+ }
+ editor.reset();p->releaseResources();
+ std::cout<<"PASS actual plugin editor: 100 selections and knob resets\n";
+ auto compressor=create();
  compressor->prepareToPlay(48000,256);
  state.modules[0].typeHi=MLP_INPUT_COMPRESSOR_HI;
  state.modules[0].typeLo=MLP_INPUT_COMPRESSOR_LO;
@@ -58,12 +65,22 @@ int main(){
  auto* tile=tiles->getChildComponent(0);tile->mouseDown(mouse(*tile,juce::ModifierKeys::leftButtonModifier));
  auto* panel=named(*editor,"Input Compressor Panel");
  if(!panel||!named(*panel,"Stereo Link"))return 11;
+ if(auto* dial=find<ml::RotaryParameterControl>(*panel);!dial||dial->dialDiameter()<75.f)return 15;
  juce::AudioBuffer<float> audio(2,256);juce::MidiBuffer midi;
  for(int block=0;block<120;++block){
   for(int ch=0;ch<2;++ch)for(int i=0;i<256;++i)audio.setSample(ch,i,0.5f);
   compressor->processBlock(audio,midi);
  }
  if(audio.getSample(0,255)>.2f)return 12;
+ for(int block=0;block<64;++block){
+  for(int i=0;i<256;++i){
+   const auto time=double(block*256+i)/48000.;
+   const auto value=float(.55*std::sin(2*std::numbers::pi*997*time)+.15*std::sin(2*std::numbers::pi*120*time));
+   audio.setSample(0,i,value);audio.setSample(1,i,value*.85f);
+  }
+  compressor->processBlock(audio,midi);
+  if(block%8==7){juce::Thread::sleep(35);juce::Timer::callPendingTimersSynchronously();}
+ }
  juce::Timer::callPendingTimersSynchronously();
  for(int scale:{100,150,200}){
   auto snapshot=editor->createComponentSnapshot(editor->getLocalBounds(),true,float(scale)/100);

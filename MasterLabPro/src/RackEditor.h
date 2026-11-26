@@ -40,10 +40,13 @@ public:
  void setSpectrum(std::array<std::vector<SpectrumBin>,3> measured,float maxHz){spectrum.setTraces(std::move(measured),maxHz);}
  void setHeatmaps(juce::Image before,juce::Image after,juce::Image delta){heatmap.setImages(std::move(before),std::move(after),std::move(delta));}
  void setAnalysisMode(juce::String mode){analysisMode=std::move(mode);repaint();}
+ void setFooter(juce::String text){footer=std::move(text);repaint();}
  // Editor ownership is transferred; host binds real parameters before calling.
- void setModuleEditor(std::unique_ptr<juce::Component> next){
+ void setModuleEditor(std::unique_ptr<juce::Component> next,bool ownsBandArea=false){
   if(module)removeChildComponent(module.get());
   module=std::move(next);
+  moduleOwnsBandArea=module&&ownsBandArea;
+  bands.setVisible(!moduleOwnsBandArea);
   if(module)addAndMakeVisible(*module);
   resized();
  }
@@ -54,7 +57,7 @@ public:
   a=box(4);a.removeFromTop(24);output.setBounds(a.reduced(4));
   a=box(5);a.removeFromTop(24);tiles.setBounds(a.reduced(4));
   bands.setBounds(box(8));
-  if(module){a=box(6);a.removeFromTop(76*getHeight()/1000);module->setBounds(a.reduced(8));}
+  if(module){a=box(6);a.removeFromTop(moduleOwnsBandArea?24:76*getHeight()/1000);module->setBounds(a.reduced(8));}
  }
  void paint(juce::Graphics& g)override{
   g.fillAll(juce::Colour(0xff171b21));
@@ -64,15 +67,16 @@ public:
       g.drawImage(panelSkin,slice.target.x,slice.target.y,slice.target.w,slice.target.h,
                   slice.source.x,slice.source.y,slice.source.w,slice.source.h);
    }else{g.setColour(juce::Colour(0xff272d34));g.fillRoundedRectangle(r.toFloat(),5);g.setColour(juce::Colour(0xff65717c));g.drawRoundedRectangle(r.toFloat(),5,1);}}
-  const char* names[]{"JERZY MASTERLAB PRO","SPECTRAL MONITOR","SPECTRAL HEAT MAP","INPUT","OUTPUT","SIGNAL ROUTING","MODULE EDITOR","DEVELOPMENT / GAIN TEST RACK"};
+  const char* names[]{"JERZY MASTERLAB PRO","SPECTRAL MONITOR","SPECTRAL HEAT MAP","INPUT","OUTPUT","SIGNAL ROUTING","MODULE EDITOR"};
   g.setColour(juce::Colours::whitesmoke);g.setFont(14.f);
-  for(int i=0;i<8;++i)g.drawText(names[i],box(i).removeFromTop(24).reduced(8,0),juce::Justification::centredLeft,true);
+  for(int i=0;i<7;++i)g.drawText(names[i],box(i).removeFromTop(24).reduced(8,0),juce::Justification::centredLeft,true);
+  g.drawText(footer,box(7).removeFromTop(24).reduced(8,0),juce::Justification::centredLeft,true);
   if(analysisMode.isNotEmpty())g.drawText(analysisMode,box(0).removeFromTop(24).reduced(8,0),juce::Justification::centredRight,true);
   if(!module){auto r=box(6);r.removeFromTop(76*getHeight()/1000);g.drawText(selected?"MODULE EDITOR NOT CONNECTED":"SELECT A MODULE",r,juce::Justification::centred);}
  }
 private:
  juce::Rectangle<int> box(int i)const{auto r=scale(rackLayout[static_cast<std::size_t>(i)],getWidth(),getHeight());return {r.x,r.y,r.w,r.h};}
  Callbacks callbacks;RackTiles tiles;FrequencyBandSelector bands;SpectrumView spectrum;HeatMapView heatmap;StereoLevelMeter input,output;
- juce::Image panelSkin;juce::String analysisMode;RackOrder::Id selected=0;std::unique_ptr<juce::Component> module;
+ juce::Image panelSkin;juce::String analysisMode,footer{"DEVELOPMENT / GAIN TEST RACK"};RackOrder::Id selected=0;std::unique_ptr<juce::Component> module;bool moduleOwnsBandArea=false;
 };
 }

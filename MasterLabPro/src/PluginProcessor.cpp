@@ -18,15 +18,15 @@ namespace ml {
 // Initial VST3 integration: fixed normalized automation lanes, no dynamic host parameter IDs.
 class PluginProcessor final : public juce::AudioProcessor, private juce::Timer {
 public:
- PluginProcessor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)){
+ explicit PluginProcessor(juce::File root=installedRoot())
+  :AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)),dataDirectory(std::move(root)){
   for(unsigned i=0;i<params.size();++i){
    auto* p=new juce::AudioParameterFloat(juce::ParameterID{"lane_"+juce::String(i),1},
       "Lane "+juce::String(i/64+1)+" Parameter "+juce::String(i%64+1),juce::NormalisableRange<float>{0.f,1.f,0.f},0.f);
    addParameter(p);params[i]=p;
   }
   bindHost(*host,*automation);
-  const auto root=juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory).getChildFile("Jerzy").getChildFile("MasterLabPro").getChildFile("modules");
-  host->scan(std::filesystem::path(root.getFullPathName().toWideCharPointer()));
+  host->scan(std::filesystem::path(dataDirectory.getChildFile("modules").getFullPathName().toWideCharPointer()));
   exchange.resetWhenStopped(host.get());
   startTimerHz(20);
  }
@@ -57,7 +57,8 @@ public:
  }
  bool hasEditor() const override{return true;}
  juce::AudioProcessorEditor* createEditor() override;
- static juce::File dataRoot(){return juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory).getChildFile("Jerzy").getChildFile("MasterLabPro");}
+ static juce::File installedRoot(){return juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory).getChildFile("Jerzy").getChildFile("MasterLabPro");}
+ const juce::File& dataRoot()const noexcept{return dataDirectory;}
  RackOrder editorOrder(){const std::lock_guard<std::mutex> lock(controlMutex);return order;}
  struct EditorParameterInfo{juce::AudioParameterFloat* parameter;float neutral;juce::String name,unit;double minimum,maximum,step;uint32_t flags;};
  struct EditorModuleInfo{juce::String name;std::vector<EditorParameterInfo> parameters;bool compressor=false;};
@@ -153,6 +154,7 @@ private:
   {const std::lock_guard<std::mutex> lock(controlMutex);collectReplacement();if(!oldHost&&deferredState){auto state=std::move(*deferredState);deferredState.reset();replaceHost(state);}host->collectRetired();if(dirty&&host->submit(order))dirty=false;latency=int(exchange.latency());}
   if(latency!=getLatencySamples())setLatencySamples(latency);
  }
+ const juce::File dataDirectory;
  std::unique_ptr<ModuleRackHost> host=std::make_unique<ModuleRackHost>();
  std::unique_ptr<ModuleRackHost> oldHost;std::unique_ptr<AutomationContext> automation=std::make_unique<AutomationContext>(),oldAutomation;
  LiveHostExchange<ModuleRackHost> exchange;std::optional<RackState> deferredState;double currentRate=44100.;uint32_t currentBlock=512;
@@ -205,6 +207,7 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
    }
   }
   void paint(juce::Graphics& g) override {
+   const auto meter=p.gainReduction(instance,uint32_t(std::min<size_t>(bank,3)));
    auto strip=getLocalBounds().reduced(6,2).removeFromBottom(18);
    g.setColour(juce::Colours::whitesmoke);
    g.drawText("GAIN REDUCTION",strip.removeFromLeft(140),juce::Justification::centredLeft);
@@ -235,9 +238,9 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
    else for(size_t i=0;i<7;++i)add(6+bank*7+i);
    resized();repaint();
   }
-  void timerCallback()override {meter=p.gainReduction(instance,uint32_t(std::min<size_t>(bank,3)));repaint();}
+  void timerCallback()override {repaint();}
   PluginProcessor& p;uint64_t instance;PluginProcessor::EditorModuleInfo info;
-  juce::Image cap,pointer;size_t bank=3;float meter=0;
+  juce::Image cap,pointer;size_t bank=3;
   std::array<juce::TextButton,5> banks;
   ResetButton analog,bypass;
   juce::TextButton removeButton{"REMOVE"};
@@ -254,18 +257,18 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
    }
    addAndMakeVisible(button);button.onClick=std::move(remove);addAndMakeVisible(viewport);viewport.setViewedComponent(&controlStrip,false);viewport.setScrollBarsShown(false,true);
   }
-  void resized()override{auto r=getLocalBounds().reduced(4);auto header=r.removeFromTop(26);button.setBounds(header.removeFromRight(110));title.setBounds(header);viewport.setBounds(r);const int cell=juce::jlimit(96,180,r.getHeight()+12);const int width=juce::jmax(r.getWidth(),cell*int(knobs.size()));const int height=juce::jmax(1,r.getHeight()-(width>r.getWidth()?viewport.getScrollBarThickness():0));controlStrip.setSize(width,height);auto area=controlStrip.getLocalBounds();for(auto& k:knobs)k->setBounds(area.removeFromLeft(cell).reduced(4,0));}
+  void resized()override{auto r=getLocalBounds().reduced(4);auto header=r.removeFromTop(24);button.setBounds(header.removeFromRight(110));title.setBounds(header);viewport.setBounds(r);const int cell=juce::jlimit(96,180,r.getHeight()+12);const int width=juce::jmax(r.getWidth(),cell*int(knobs.size()));const int height=juce::jmax(1,r.getHeight()-(width>r.getWidth()?viewport.getScrollBarThickness():0));controlStrip.setSize(width,height);auto area=controlStrip.getLocalBounds();for(auto& k:knobs)k->setBounds(area.removeFromLeft(cell).reduced(4,0));}
  private:juce::Label title;juce::TextButton button{"REMOVE"};juce::Component controlStrip;juce::Viewport viewport;std::vector<std::unique_ptr<RotaryParameterControl>> knobs;
  };
 public:
- explicit PluginRackEditor(PluginProcessor& processor):AudioProcessorEditor(processor),p(processor),assets(PluginProcessor::dataRoot().getChildFile("assets")),order(p.editorOrder()),cap(assets.loadKnobCap()),pointer(assets.loadKnobPointer()),
+ explicit PluginRackEditor(PluginProcessor& processor):AudioProcessorEditor(processor),p(processor),assets(p.dataRoot().getChildFile("assets")),order(p.editorOrder()),cap(assets.loadKnobCap()),pointer(assets.loadKnobPointer()),
  rack(order,assets.loadBands(),{
  [this](int a,int b){if(p.moveModule(a,b))refresh();},
  [this](uint64_t id,int pos){if(id)select(id);else menu(pos);},
  [this](uint64_t id){return p.editorLabel(id);},
  [](uint64_t,int){}
  },assets.loadPanel()){
-  rack.setRackSkin(assets.loadSlot());addAndMakeVisible(rack);addAndMakeVisible(scope);addAndMakeVisible(delta);
+  rack.setRackSkin(assets.loadSlot());rack.setFooter("MASTERLABPRO / DEVELOPMENT BUILD");addAndMakeVisible(rack);addAndMakeVisible(scope);addAndMakeVisible(delta);
   scope.setClickingTogglesState(true);delta.setClickingTogglesState(true);scope.onClick=[this]{scope.setButtonText(scope.getToggleState()?"MODULE":"GLOBAL");sourceChanged();};delta.onClick=[this]{sourceChanged();};
   setResizable(true,false);setResizeLimits(800,500,3200,2000);if(auto* c=getConstrainer())c->setFixedAspectRatio(1.6);setSize(1200,750);seenEpoch=p.editorEpoch();startTimerHz(30);
  }
@@ -277,7 +280,7 @@ private:
  void select(uint64_t id){selected=id;rack.setSelection(id);rack.setBandFromController(7);rack.setBandSelectionEnabled(false);auto info=p.editorModule(id);if(!info){rack.setModuleEditor(nullptr);sourceChanged();return;}
   juce::Component::SafePointer<PluginRackEditor> safe(this);
   auto remove=[safe,id]{juce::MessageManager::callAsync([safe,id]{if(safe!=nullptr&&safe->p.removeModule(id)){safe->select(0);safe->refresh();}});};
-  if(info->compressor)rack.setModuleEditor(std::make_unique<CompressorPanel>(p,id,std::move(*info),cap,pointer,std::move(remove)));
+  if(info->compressor)rack.setModuleEditor(std::make_unique<CompressorPanel>(p,id,std::move(*info),cap,pointer,std::move(remove)),true);
   else rack.setModuleEditor(std::make_unique<Panel>(*info,cap,pointer,std::move(remove)));
   sourceChanged();
  }
@@ -298,3 +301,6 @@ private:
 juce::AudioProcessorEditor* PluginProcessor::createEditor(){return new PluginRackEditor(*this);}
 }
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter(){return new ml::PluginProcessor();}
+#if defined(MLP_EDITOR_TEST)
+juce::AudioProcessor* createMasterLabProEditorFixture(const juce::File& root){return new ml::PluginProcessor(root);}
+#endif
