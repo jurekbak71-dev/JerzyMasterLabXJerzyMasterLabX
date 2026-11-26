@@ -47,7 +47,7 @@ public:
  void prepareToPlay(double rate,int block) override{
   const std::lock_guard<std::mutex> lock(controlMutex);
   exchange.resetWhenStopped(host.get());oldHost.reset();oldAutomation.reset();currentRate=rate;currentBlock=uint32_t(std::max(1,block));
-  host->resetGraphWhenStopped();host->prepare(rate,currentBlock);host->submit(order,true);
+  host->resetGraphWhenStopped();host->prepare(rate,currentBlock);host->submit(order,true);exchange.resetWhenStopped(host.get());
  }
  void releaseResources() override{}
  void processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuffer&) override{
@@ -138,7 +138,7 @@ private:
  void collectReplacement(){if(auto* retired=exchange.takeRetired();retired&&retired==oldHost.get()){oldHost.reset();oldAutomation.reset();}}
  void timerCallback() override{
   int latency=0;
-  {const std::lock_guard<std::mutex> lock(controlMutex);collectReplacement();if(!oldHost&&deferredState){auto state=std::move(*deferredState);deferredState.reset();replaceHost(state);}host->collectRetired();if(dirty&&host->submit(order))dirty=false;latency=int(host->diagnostics().latency);}
+  {const std::lock_guard<std::mutex> lock(controlMutex);collectReplacement();if(!oldHost&&deferredState){auto state=std::move(*deferredState);deferredState.reset();replaceHost(state);}host->collectRetired();if(dirty&&host->submit(order))dirty=false;latency=int(exchange.latency());}
   if(latency!=getLatencySamples())setLatencySamples(latency);
  }
  std::unique_ptr<ModuleRackHost> host=std::make_unique<ModuleRackHost>();

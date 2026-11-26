@@ -30,3 +30,6 @@ MLP_CAP_CONCURRENT_STATE_READ opts into concurrent get_parameter/state_size/save
 
 ## Live host replacement (development)
 State restore constructs a separate host, prepares modules and installs its initial graph on the control side. One outstanding pointer publication is acquired at an audio block boundary. Old and new hosts render independently into fixed buffers and crossfade over 256 samples. The control side destroys the old host only after audio acknowledgement. The outgoing automation context is frozen. Legacy state reads still use the exclusion gate. Unequal latency alignment, module warm-up, repeated restore while stopped and GUI descriptor lifetime need further validation; this is not production acceptance.
+
+## Replacement warm-up and latency compensation
+Both hosts run in parallel for at least 256 samples or the larger latency before the fade starts. Each output is passed through a preallocated history line. Crossfade aligns paths to their larger latency, and effective PDC retains the maximum observed latency until prepareToPlay. Increasing latency at the fade boundary changes the audible time reference; artifact-free transitions in that direction, variable latency during the fade, and DAW synchronization remain unverified. This is a deliberate conservative latency policy, not a fixed-latency guarantee.
