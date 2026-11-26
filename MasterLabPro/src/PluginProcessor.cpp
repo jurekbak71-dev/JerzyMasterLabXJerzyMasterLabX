@@ -160,6 +160,14 @@ private:
 };
 class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Timer {
  class CompressorPanel final:public juce::Component,private juce::Timer {
+  class ResetButton final:public juce::TextButton {
+  public:
+   std::function<void()> reset;
+   void mouseDown(const juce::MouseEvent& event)override{
+    if(event.mods.isRightButtonDown()){if(reset)reset();return;}
+    juce::TextButton::mouseDown(event);
+   }
+  };
  public:
   CompressorPanel(PluginProcessor& processor,uint64_t id,PluginProcessor::EditorModuleInfo descriptor,
                   juce::Image metal,juce::Image indicator,std::function<void()> remove)
@@ -172,9 +180,11 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
     banks[i].setButtonText(names[i]);addAndMakeVisible(banks[i]);
     banks[i].onClick=[this,i]{bank=i;rebuild();};
    }
-   for(auto* button:{&analog,&bypass,&removeButton})addAndMakeVisible(*button);
+   addAndMakeVisible(analog);addAndMakeVisible(bypass);addAndMakeVisible(removeButton);
    analog.onClick=[this]{mode.setValueAsCompleteGesture(info.parameters[4].parameter->get()<.5f?1.f:0.f);};
    bypass.onClick=[this]{bypassAttachment.setValueAsCompleteGesture(info.parameters[5].parameter->get()<.5f?1.f:0.f);};
+   analog.reset=[this]{mode.setValueAsCompleteGesture(info.parameters[4].neutral);};
+   bypass.reset=[this]{bypassAttachment.setValueAsCompleteGesture(info.parameters[5].neutral);};
    removeButton.onClick=std::move(remove);
    mode.sendInitialUpdate();bypassAttachment.sendInitialUpdate();rebuild();startTimerHz(30);
   }
@@ -184,7 +194,9 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
    auto header=area.removeFromTop(24);
    const int width=juce::jmin(110,header.getWidth()/9);
    for(auto& button:banks)button.setBounds(header.removeFromLeft(width).reduced(2,0));
-   for(auto* button:{&removeButton,&bypass,&analog})button->setBounds(header.removeFromRight(width).reduced(2,0));
+   removeButton.setBounds(header.removeFromRight(width).reduced(2,0));
+   bypass.setBounds(header.removeFromRight(width).reduced(2,0));
+   analog.setBounds(header.removeFromRight(width).reduced(2,0));
    area.removeFromBottom(23);
    for(size_t i=0;i<knobs.size();++i){
     const auto left=area.getX()+area.getWidth()*int(i)/int(knobs.size());
@@ -227,7 +239,8 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
   PluginProcessor& p;uint64_t instance;PluginProcessor::EditorModuleInfo info;
   juce::Image cap,pointer;size_t bank=3;float meter=0;
   std::array<juce::TextButton,5> banks;
-  juce::TextButton analog,bypass,removeButton{"REMOVE"};
+  ResetButton analog,bypass;
+  juce::TextButton removeButton{"REMOVE"};
   juce::ParameterAttachment mode,bypassAttachment;
   std::vector<std::unique_ptr<RotaryParameterControl>> knobs;
  };

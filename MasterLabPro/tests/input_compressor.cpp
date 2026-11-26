@@ -1,13 +1,19 @@
 #include "ModuleLoader.h"
+#include "ModularGraph.h"
+#include "../modules/InputCompressorCrossover.h"
 #include <array>
 #include <cmath>
 #include <iostream>
 #include <limits>
 #include <numbers>
 #include <chrono>
+#include <fstream>
+#include <thread>
+#include <atomic>
+#include <complex>
 
 int main(int argc, char** argv) {
- if (argc != 2) return 1;
+ if (argc < 2 || argc > 3) return 1;
  ml::ModuleLibrary library;
  const auto path = std::filesystem::path(argv[1]);
  std::string error;
@@ -78,7 +84,8 @@ int main(int argc, char** argv) {
   api.set_parameter(instance,113,1);
   auto harmonic=[&](int mode){
    api.set_parameter(instance,5,mode);api.reset(instance);
-   double fundamental=0, third=0, maxUs=0;
+   std::array<double,20> harmonics{};
+   double maxUs=0;
    for(int b=0;b<150;++b){
     for(size_t i=0;i<l.size();++i)r[i]=l[i]=float(.9*std::sin(2*std::numbers::pi*double(b*128+int(i))/48));
     const auto start=std::chrono::steady_clock::now();
@@ -86,11 +93,14 @@ int main(int argc, char** argv) {
     maxUs=std::max(maxUs,std::chrono::duration<double,std::micro>(std::chrono::steady_clock::now()-start).count());
     for(size_t i=0;i<l.size();++i){
      const auto phase=2*std::numbers::pi*double(b*128+int(i))/48;
-     fundamental+=l[i]*std::sin(phase);third+=l[i]*std::sin(3*phase);
+     for(size_t h=0;h<harmonics.size();++h)harmonics[h]+=l[i]*std::sin(double(h+1)*phase);
     }
    }
-   const double ratio=std::abs(third/fundamental);
-   std::cout<<"Mode "<<mode<<" H3/fundamental: "<<ratio<<" max 128-frame block (us): "<<maxUs<<'\n';
+   const double ratio=std::abs(harmonics[2]/harmonics[0]);
+   double harmonicPower=0;
+   for(size_t h=1;h<harmonics.size();++h)harmonicPower+=harmonics[h]*harmonics[h];
+   const double thd=std::sqrt(harmonicPower)/std::abs(harmonics[0]);
+   std::cout<<"Mode "<<mode<<" H3/fundamental: "<<ratio<<" THD (H2–H20): "<<thd<<" max 128-frame block (us): "<<maxUs<<'\n';
    return ratio;
   };
   const auto digital=harmonic(0),analog=harmonic(1);
@@ -109,6 +119,88 @@ int main(int argc, char** argv) {
     if(api.process(instance,&block)!=MLP_OK||l[0]!=0||r[0]!=0)return false;
     for(uint32_t i=0;i<size;++i)if(!std::isfinite(l[i])||!std::isfinite(r[i]))return false;
    }
+  }
+  if(api.prepare(instance,48000,128,2)!=MLP_OK)return false;
+  block.frames=128;
+  const auto* descriptor=api.get_descriptor();
+  std::atomic<bool> writtenAll{false},valid{true};
+  std::thread automation([&] {
+   for(int pass=0;pass<100;++pass)for(uint32_t i=0;i<descriptor->parameter_count;++i){
+    const auto& parameter=descriptor->parameters[i];
+    const auto value=pass%2==0?parameter.maximum:parameter.minimum;
+    double actual=0;
+    if(api.set_parameter(instance,parameter.id,value)!=MLP_OK||
+       api.get_parameter(instance,parameter.id,&actual)!=MLP_OK||std::abs(actual-value)>1e-5)
+     valid.store(false,std::memory_order_relaxed);
+   }
+   writtenAll.store(true,std::memory_order_release);
+  });
+  do {
+   l.fill(.32f);r.fill(-.24f);
+   if(api.process(instance,&block)!=MLP_OK||!std::isfinite(l.back())||!std::isfinite(r.back()))
+    valid.store(false,std::memory_order_relaxed);
+  }while(!writtenAll.load(std::memory_order_acquire));
+  automation.join();
+  if(!valid.load(std::memory_order_relaxed))return false;
+  for(uint32_t i=0;i<descriptor->parameter_count;++i){
+   const auto& parameter=descriptor->parameters[i];api.set_parameter(instance,parameter.id,parameter.neutral_value);
+  }
+  api.set_parameter(instance,103,-20);api.set_parameter(instance,113,2);
+  api.reset(instance);
+  ml::ModularGraph graph;
+  graph.prepare(128);
+  ml::GraphSnapshot snapshot;
+  snapshot.count=1;
+  snapshot.nodes[0]={1,&api,instance,false};
+  graph.installWhenStopped(snapshot);
+  std::array<float,128> delta{};
+  for(int i=0;i<400;++i){
+   l.fill(.5f);r.fill(.5f);
+   if(!graph.process(l.data(),r.data(),128,delta.data()))return false;
+  }
+  if(std::abs(delta.back()+.276393f)>.0004f||graph.diagnostics().latency!=0)return false;
+  graph.resetWhenStopped();
+  ml::CompressorCrossover crossover;
+  const float low=ml::CompressorCrossover::coefficient(180,48000);
+  const float high=ml::CompressorCrossover::coefficient(3200,48000);
+  std::array<std::array<float,8192>,3> impulse{};
+  float reconstructionError=0;
+  for(size_t i=0;i<impulse[0].size();++i){
+   auto bands=crossover.process(i==0?1.f:0.f,low,high);
+   for(size_t b=0;b<bands.size();++b)impulse[b][i]=bands[b];
+   reconstructionError=std::max(reconstructionError,std::abs(bands[0]+bands[1]+bands[2]-(i==0?1.f:0.f)));
+  }
+  if(reconstructionError>1e-6f)return false;
+  auto response=[&](double hz,size_t band){
+   std::complex<double> value{};
+   const auto phase=-2*std::numbers::pi*hz/48000;
+   for(size_t i=0;i<impulse[band].size();++i)value+=double(impulse[band][i])*std::polar(1.,phase*double(i));
+   return value;
+  };
+  if(std::abs(std::abs(response(180,0))-.707107)>.001||
+     std::abs(std::abs(response(3200,2))-.707107)>.001)return false;
+  if(argc==3){
+   api.set_parameter(instance,103,-20);api.set_parameter(instance,113,4);
+   std::ofstream curve(argv[2]);
+   curve<<"mode,knee_db,input_dbfs,output_dbfs\n";
+   for(int mode:{0,1})for(int knee:{0,12})for(int level=-45;level<=0;++level){
+    api.set_parameter(instance,5,mode);api.set_parameter(instance,143,knee);api.reset(instance);
+    const float result=run(std::pow(10.f,float(level)/20),325);
+    if(!std::isfinite(result)||result<=0)return false;
+    curve<<mode<<','<<knee<<','<<level<<','<<20*std::log10(result)<<'\n';
+   }
+   if(!curve.good())return false;
+   std::ofstream bands(std::string(argv[2])+".bands.csv");
+   bands<<"hz,low_db,mid_db,high_db,low_phase_deg,mid_phase_deg,high_phase_deg\n";
+   for(int i=0;i<=100;++i){
+    const double hz=20*std::pow(1000.,double(i)/100);
+    std::array<std::complex<double>,3> measured{response(hz,0),response(hz,1),response(hz,2)};
+    bands<<hz;
+    for(const auto& v:measured)bands<<','<<20*std::log10(std::abs(v));
+    for(const auto& v:measured)bands<<','<<std::arg(v)*180/std::numbers::pi;
+    bands<<'\n';
+   }
+   if(!bands.good())return false;
   }
   return true;
  };

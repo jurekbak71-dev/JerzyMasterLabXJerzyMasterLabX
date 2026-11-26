@@ -1,11 +1,11 @@
 #include "masterlabpro_input_compressor.h"
+#include "InputCompressorCrossover.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
 #include <bit>
 #include <cmath>
 #include <new>
-#include <numbers>
 
 namespace {
 constexpr auto parameters = [] {
@@ -49,7 +49,7 @@ float reduction(float level, float threshold, float ratio, float knee) noexcept 
  }
  return slope*std::max(0.f,over);
 }
-float clean(float x) noexcept {return std::isfinite(x)&&std::abs(x)>=1e-25f ? std::clamp(x,-64.f,64.f) : 0.f;}
+float clean(float x) noexcept {return std::clamp(ml::flushCompressorSample(x),-64.f,64.f);}
 float amplitude(float db) noexcept {return std::exp(db*0.1151292546497023f);}
 }
 
@@ -58,7 +58,7 @@ struct MlpInstance {
  std::array<float,parameters.size()> values{};
  std::array<std::atomic<float>,4> meters{};
  std::array<std::array<float,2>,4> envelopes{};
- std::array<float,2> lowState{}, upperState{};
+ std::array<ml::CompressorCrossover,2> crossovers{};
  float rate=48000, smoothing=0;
  uint32_t maximumFrames=0, channels=0;
  MlpInstance() noexcept {
@@ -76,7 +76,7 @@ MlpResult MLP_CALL create(MlpInstance** p) {
 void MLP_CALL destroy(MlpInstance* p) {delete p;}
 void MLP_CALL reset(MlpInstance* p) {
  if (!p) return;
- p->envelopes={}; p->lowState={}; p->upperState={};
+ p->envelopes={}; p->crossovers={};
  for (auto& meter:p->meters) meter.store(0,std::memory_order_relaxed);
  for (size_t i=0;i<parameters.size();++i) p->values[i]=p->targets[i].load(std::memory_order_relaxed);
 }
@@ -140,19 +140,13 @@ MlpResult MLP_CALL process(MlpInstance* p,const MlpProcessContext* ctx) {
   }
   const Pair dry{clean(ctx->audio[0][i]),clean(ctx->audio[ctx->channels-1][i])};
   const float input=amplitude(p->values[0]), makeup=amplitude(p->values[1]), analog=p->values[4];
-  const auto lowpass=[&](float hz) {
-   const float g=std::tan(std::numbers::pi_v<float>*std::min(hz,p->rate*.45f)/p->rate);
-   return g/(1+g);
-  };
-  const float lowCoefficient=lowpass(p->values[2]), highCoefficient=lowpass(p->values[3]);
+  const float lowCoefficient=ml::CompressorCrossover::coefficient(p->values[2],p->rate);
+  const float highCoefficient=ml::CompressorCrossover::coefficient(p->values[3],p->rate);
   Pair low{}, mid{}, high{}, driven{};
   for (size_t ch=0;ch<2;++ch) {
    driven[ch]=dry[ch]*input;
-   const float l=(driven[ch]-p->lowState[ch])*lowCoefficient;
-   low[ch]=l+p->lowState[ch]; p->lowState[ch]=clean(low[ch]+l);
-   const float h=(driven[ch]-p->upperState[ch])*highCoefficient;
-   const float upper=h+p->upperState[ch]; p->upperState[ch]=clean(upper+h);
-   mid[ch]=upper-low[ch]; high[ch]=driven[ch]-upper;
+   const auto bands=p->crossovers[ch].process(driven[ch],lowCoefficient,highCoefficient);
+   low[ch]=bands[0];mid[ch]=bands[1];high[ch]=bands[2];
   }
   const auto lowWet=compress(*p,0,low,analog,reductions[0]);
   const auto midWet=compress(*p,1,mid,analog,reductions[1]);

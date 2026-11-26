@@ -64,6 +64,8 @@ target_compile_definitions(mlp_z_input_compressor PRIVATE MLP_MODULE_BUILD=1)
 add_executable(masterlabpro_input_compressor_test tests/input_compressor.cpp src/ModuleLoader.cpp)
 target_include_directories(masterlabpro_input_compressor_test PRIVATE src sdk)
 target_link_libraries(masterlabpro_input_compressor_test PRIVATE ${CMAKE_DL_LIBS})
+find_package(Threads REQUIRED)
+target_link_libraries(masterlabpro_input_compressor_test PRIVATE Threads::Threads)
 add_dependencies(masterlabpro_input_compressor_test mlp_z_input_compressor)
 add_test(NAME input_compressor COMMAND masterlabpro_input_compressor_test "$<TARGET_FILE:mlp_z_input_compressor>")
 
@@ -103,7 +105,6 @@ target_compile_definitions(masterlabpro_modular_graph_test PRIVATE
 add_dependencies(masterlabpro_modular_graph_test mlp_unity mlp_gain mlp_saturation mlp_delay)
 add_test(NAME modular_graph COMMAND masterlabpro_modular_graph_test)
 
-find_package(Threads REQUIRED)
 add_executable(masterlabpro_state_access_gate_test tests/state_access_gate.cpp)
 target_include_directories(masterlabpro_state_access_gate_test PRIVATE src)
 target_link_libraries(masterlabpro_state_access_gate_test PRIVATE Threads::Threads)

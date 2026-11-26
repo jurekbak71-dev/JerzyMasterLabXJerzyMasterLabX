@@ -63,15 +63,17 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & build-masterlabpro/Release/masterlabpro_modular_graph_test.exe | Tee-Object -FilePath reports/pdc-windows.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & build-masterlabpro/Release/masterlabpro_input_compressor_test.exe build-masterlabpro/Release/mlp_z_input_compressor.dll reports/input-compressor-transfer.csv | Tee-Object -FilePath reports/input-compressor-dsp.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Stage approved assets beside executable
         shell: pwsh
         run: |
           Copy-Item -Recurse -Force 'MasterLabPro/assets' 'build-masterlabpro/MasterLabProConsole_artefacts/Release/assets'
           $package = 'build-masterlabpro/MasterLabProConsole_artefacts/Release'
           New-Item -ItemType Directory -Force "$package/modules" | Out-Null
-          Copy-Item build-masterlabpro/Release/mlp_unity.dll,build-masterlabpro/Release/mlp_gain.dll,build-masterlabpro/Release/mlp_saturation.dll,build-masterlabpro/Release/mlp_delay.dll "$package/modules"
+          Copy-Item build-masterlabpro/Release/mlp_unity.dll,build-masterlabpro/Release/mlp_gain.dll,build-masterlabpro/Release/mlp_saturation.dll,build-masterlabpro/Release/mlp_delay.dll,build-masterlabpro/Release/mlp_z_input_compressor.dll "$package/modules"
           New-Item -ItemType Directory -Force "$package/sdk" | Out-Null
-          Copy-Item MasterLabPro/sdk/masterlabpro_module_abi.h "$package/sdk"
+          Copy-Item MasterLabPro/sdk/*.h "$package/sdk"
           New-Item -ItemType Directory -Force "$package/docs" | Out-Null
           Copy-Item MasterLabPro/ARCHITECTURE.md,MasterLabPro/MODULE_SDK.md,MasterLabPro/MODULE_ABI.md,MasterLabPro/REALTIME_CONTRACT.md,MasterLabPro/PARAMETER_MAPPING.md,MasterLabPro/LATENCY_AND_DELTA.md,MasterLabPro/STATE_FORMAT.md,MasterLabPro/PACKAGE_B_REPORT.md "$package/docs"
       - name: Measure live host exchange
@@ -151,6 +153,9 @@ jobs:
             reports/vst3-instances.json
             reports/vst3-compressor-instances.json
             input-compressor-*.png
+            reports/input-compressor-transfer.csv
+            reports/input-compressor-transfer.csv.bands.csv
+            reports/input-compressor-dsp.log
             reports/pluginval.log
             reports/plugin-editor-regression.log
             reports/live-exchange-windows.json

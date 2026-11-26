@@ -10,10 +10,16 @@ Development validation is ongoing.
 
 ## Local development measurements
 
-At 48 kHz, 128 samples, −6.02 dBFS input, −20 dB threshold, 2:1 and hard knee, measured output was −13.0101 dBFS. The SUM attack reading after 18.7 ms was 4.241 dB (20 ms setting). After 98.7 ms of release the reading was 2.606 dB (100 ms setting). For a 1 kHz sine at 0.9 FS and unity ratio, H3/fundamental was 1.04e−9 in Digital and 0.002778 in Analog. These figures describe H3, not full THD.
+At 48 kHz, 128 samples, −6.02 dBFS input, −20 dB threshold, 2:1 and hard knee, measured output was −13.0101 dBFS. The SUM attack reading after 18.7 ms was 4.241 dB (20 ms setting). After 98.7 ms of release the reading was 2.606 dB (100 ms setting). For a 1 kHz sine at 0.9 FS and unity ratio, THD over H2–H20 was 0.0000019% in Digital and 0.2779% in Analog. One local run measured maxima of 29.3 and 68.2 µs per 128 sample block for this signal, respectively. Peak RSS of the entire test process was 8,448 KiB.
+
+The native test exercises all 34 parameter targets concurrently with processing, state restore, aligned graph DELTA, unity impulse reconstruction and the crossover cutoff magnitudes. Pass the CSV destination as a second argument after the library path to export measured static transfer and crossover magnitude/phase. Use `tools/plot_d1.py` to render both.
+
+## Prior design context
+
+The earlier [Smart Dynamics audit](../docs/smart-dynamics/PHASE2B.md) documents a stereo peak detector, continuous knee and mild analog colour. D1 retains these concepts and implements a separate signal path. Analog release depends on the current amount of reduction, a design choice distinct from a measured variable-mu tube model. Its mild saturation runs at base rate, so near-Nyquist aliasing and listening acceptance still require separate evaluation.
 
 ## Evidence pending
 
 - Windows CI and the D1 development installer, installed VST3 validation, visual review of scaled captures.
 - Actual FL Studio automation and musical listening acceptance.
-- Full crossover plots, full THD and a controlled CPU/RAM comparison.
+- Controlled CPU/RAM comparison with equivalent workloads and separate allocation attribution.
