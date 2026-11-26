@@ -21,7 +21,7 @@ public:
  PluginProcessor():AudioProcessor(BusesProperties().withInput("Input",juce::AudioChannelSet::stereo(),true).withOutput("Output",juce::AudioChannelSet::stereo(),true)){
   for(unsigned i=0;i<params.size();++i){
    auto* p=new juce::AudioParameterFloat(juce::ParameterID{"lane_"+juce::String(i),1},
-      "Lane "+juce::String(i/64+1)+" Parameter "+juce::String(i%64+1),0.f,1.f,0.f);
+      "Lane "+juce::String(i/64+1)+" Parameter "+juce::String(i%64+1),juce::NormalisableRange<float>{0.f,1.f,0.f},0.f);
    addParameter(p);params[i]=p;
   }
   bindHost(*host,*automation);

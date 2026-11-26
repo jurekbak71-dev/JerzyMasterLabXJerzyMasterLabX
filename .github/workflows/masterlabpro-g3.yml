@@ -167,10 +167,15 @@ jobs:
           path: build-masterlabpro/rack-ac*.png
           if-no-files-found: error
       - name: Upload performance report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: MasterLabPro-Performance-Windows
-          path: reports/performance-windows.json
+          path: |
+            reports/performance-windows.json
+            reports/performance-modules-windows.json
+            reports/pdc-windows.json
+            reports/live-exchange-windows.json
           if-no-files-found: error
       - name: Upload Package B reports
         uses: actions/upload-artifact@v4
