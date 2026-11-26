@@ -59,7 +59,17 @@ public:
  juce::AudioProcessorEditor* createEditor() override;
  static juce::File dataRoot(){return juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory).getChildFile("Jerzy").getChildFile("MasterLabPro");}
  RackOrder editorOrder(){const std::lock_guard<std::mutex> lock(controlMutex);return order;}
- const MlpModuleDescriptor* editorDescriptor(uint64_t id){const std::lock_guard<std::mutex> lock(controlMutex);return host->descriptor(id);}
+ struct EditorParameterInfo{juce::AudioParameterFloat* parameter;float neutral;};
+ struct EditorModuleInfo{juce::String name;std::vector<EditorParameterInfo> parameters;};
+ std::optional<EditorModuleInfo> editorModule(uint64_t id){
+  if(!id)return std::nullopt;
+  const std::lock_guard<std::mutex> lock(controlMutex);const auto* d=host->descriptor(id);const auto lane=host->automationLane(id);
+  if(!d||lane>=10||d->parameter_count>64)return std::nullopt;
+  EditorModuleInfo result;result.name=juce::String::fromUTF8(d->name);
+  for(uint32_t i=0;i<d->parameter_count;++i)result.parameters.push_back({params[lane*64+i],float(normalize(d->parameters[i],d->parameters[i].neutral_value))});
+  return result;
+ }
+ juce::String editorLabel(uint64_t id){const std::lock_guard<std::mutex> lock(controlMutex);const auto* d=host->descriptor(id);return d?juce::String::fromUTF8(d->name):juce::String("UNAVAILABLE");}
  juce::StringArray moduleNames(){const std::lock_guard<std::mutex> lock(controlMutex);juce::StringArray names;for(const auto& t:host->availableTypes())names.add(juce::String::fromUTF8(t.descriptor->name));return names;}
  static double normalize(const MlpParameterDescriptor& d,double value){
   if(d.maximum<=d.minimum)return 0;
@@ -149,10 +159,10 @@ private:
 class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Timer {
  class Panel final:public juce::Component{
  public:
-  Panel(PluginProcessor& p,uint64_t id,const MlpModuleDescriptor& d,juce::Image cap,juce::Image pointer,std::function<void()> remove){
-   title.setText(juce::String::fromUTF8(d.name),juce::dontSendNotification);addAndMakeVisible(title);
-   for(uint32_t i=0;i<d.parameter_count;++i)if(auto* param=p.editorParameter(id,i)){
-    auto knob=std::make_unique<RotaryParameterControl>(*param,float(PluginProcessor::normalize(d.parameters[i],d.parameters[i].neutral_value)),cap,pointer,juce::Colour(0xff58bde8));
+  Panel(const PluginProcessor::EditorModuleInfo& info,juce::Image cap,juce::Image pointer,std::function<void()> remove){
+   setName("MasterLabPro Module Panel");title.setText(info.name,juce::dontSendNotification);addAndMakeVisible(title);
+   for(const auto& parameter:info.parameters)if(parameter.parameter){
+    auto knob=std::make_unique<RotaryParameterControl>(*parameter.parameter,parameter.neutral,cap,pointer,juce::Colour(0xff58bde8));
     addAndMakeVisible(*knob);knobs.push_back(std::move(knob));
    }
    addAndMakeVisible(button);button.onClick=std::move(remove);
@@ -165,7 +175,7 @@ public:
  rack(order,assets.loadBands(),{
  [this](int a,int b){if(p.moveModule(a,b))refresh();},
  [this](uint64_t id,int pos){if(id)select(id);else menu(pos);},
- [this](uint64_t id){auto* d=p.editorDescriptor(id);return d?juce::String::fromUTF8(d->name):juce::String("UNAVAILABLE");},
+ [this](uint64_t id){return p.editorLabel(id);},
  [](uint64_t,int){}
  },assets.loadPanel()){
   rack.setRackSkin(assets.loadSlot());addAndMakeVisible(rack);addAndMakeVisible(scope);addAndMakeVisible(delta);
@@ -177,9 +187,9 @@ public:
 private:
  void refresh(){order=p.editorOrder();rack.refreshRack();}
  void sourceChanged(){history.clear();rack.setSpectrum({},20000);rack.setHeatmaps({},{},{});p.analysisSource(selected,scope.getToggleState(),delta.getToggleState());}
- void select(uint64_t id){selected=id;rack.setSelection(id);rack.setBandFromController(7);rack.setBandSelectionEnabled(false);auto* d=p.editorDescriptor(id);if(!d){rack.setModuleEditor(nullptr);sourceChanged();return;}
+ void select(uint64_t id){selected=id;rack.setSelection(id);rack.setBandFromController(7);rack.setBandSelectionEnabled(false);auto info=p.editorModule(id);if(!info){rack.setModuleEditor(nullptr);sourceChanged();return;}
   juce::Component::SafePointer<PluginRackEditor> safe(this);
-  rack.setModuleEditor(std::make_unique<Panel>(p,id,*d,cap,pointer,[safe,id]{juce::MessageManager::callAsync([safe,id]{if(safe!=nullptr&&safe->p.removeModule(id)){safe->select(0);safe->refresh();}});}));sourceChanged();
+  rack.setModuleEditor(std::make_unique<Panel>(*info,cap,pointer,[safe,id]{juce::MessageManager::callAsync([safe,id]{if(safe!=nullptr&&safe->p.removeModule(id)){safe->select(0);safe->refresh();}});}));sourceChanged();
  }
  void menu(int slot){select(0);auto names=p.moduleNames();juce::PopupMenu m;for(int i=0;i<names.size();++i)m.addItem(i+1,"Add "+names[i]);if(names.isEmpty())m.addItem(999,"No compatible modules installed",false,false);juce::Component::SafePointer<PluginRackEditor> safe(this);m.showMenuAsync(juce::PopupMenu::Options(),[safe,slot](int choice){if(safe!=nullptr&&choice>0&&choice<999&&safe->p.addModule(slot,size_t(choice-1))){safe->refresh();safe->select(safe->order.slots()[size_t(slot)]);}});}
  void timerCallback()override{

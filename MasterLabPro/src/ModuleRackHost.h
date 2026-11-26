@@ -84,7 +84,7 @@ private:
   const bool listen=listenDelta.load(std::memory_order_acquire)&&(!module||useModule);const float target=listen?1.f:0.f,step=1.f/float(std::max(1u,uint32_t(sampleRate*.02)));for(uint32_t i=0;i<frames;++i){monitorMix+=std::clamp(target-monitorMix,-step,step);const float dl=(useModule?tapped[0][i]-moduleAligned[0][i]:delta[0][i]);const float dr=(useModule?tapped[1][i]-moduleAligned[1][i]:delta[1][i]);left[i]+=monitorMix*(dl-left[i]);if(right)right[i]+=monitorMix*(dr-right[i]);}
   return true;
  }
- Instance* find(uint64_t id)noexcept{for(auto& item:instances)if(item.id==id)return &item;return nullptr;}const Instance* find(uint64_t id)const noexcept{for(const auto& item:instances)if(item.id==id)return &item;return nullptr;}
+ Instance* find(uint64_t id)noexcept{if(!id)return nullptr;for(auto& item:instances)if(item.id==id)return &item;return nullptr;}const Instance* find(uint64_t id)const noexcept{if(!id)return nullptr;for(const auto& item:instances)if(item.id==id)return &item;return nullptr;}
  std::filesystem::path moduleDirectory;std::vector<Type> types;std::vector<std::string> errors;std::vector<SavedModule> unavailableStates;std::array<Instance,32> instances{};ModularGraph graph;double sampleRate=44100;uint32_t maximumFrames=512;uint64_t revision=0,retiredThrough=0;const void* automationContext=nullptr;ReadAutomation readAutomation=nullptr;
  std::array<std::array<float,2048>,2> raw{},aligned{},moduleAligned{},tapped{},delta{};AnalysisCapture capture;GraphSpsc<ModuleRackMeters,8> meters;GraphSpsc<AnalysisFrame,5> analysisFrames;std::atomic<uint64_t> analysisId{0};std::atomic<bool> moduleAnalysis{false},listenDelta{false};float monitorMix=0;
 };

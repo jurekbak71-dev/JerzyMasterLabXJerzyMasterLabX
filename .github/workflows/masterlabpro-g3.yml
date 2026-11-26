@@ -111,6 +111,11 @@ jobs:
             if (-not (Test-Path "$root/modules/$name")) { throw "Missing installed module $name" }
           }
           if (-not (Test-Path "$root/assets/manifest.json")) { throw 'Missing installed assets' }
+      - name: Exercise actual plugin module editor
+        shell: pwsh
+        run: |
+          & build-masterlabpro/Release/masterlabpro_plugin_editor_regression.exe | Tee-Object -FilePath reports/plugin-editor-regression.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Load eight real VST3 instances
         id: vst3_instances
         shell: pwsh
@@ -138,6 +143,7 @@ jobs:
           path: |
             reports/vst3-instances.json
             reports/pluginval.log
+            reports/plugin-editor-regression.log
             reports/live-exchange-windows.json
           if-no-files-found: warn
       - name: Upload experimental MasterLabPro VST3
