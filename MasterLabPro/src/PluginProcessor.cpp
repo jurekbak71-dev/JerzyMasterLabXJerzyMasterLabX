@@ -9,6 +9,7 @@
 #include <atomic>
 #include <cmath>
 #include <limits>
+#include <mutex>
 
 namespace ml {
 // Initial VST3 integration: fixed normalized automation lanes, no dynamic host parameter IDs.
@@ -20,6 +21,7 @@ public:
       "Lane "+juce::String(i/64+1)+" Parameter "+juce::String(i%64+1),0.f,1.f,0.f);
    addParameter(p);params[i]=p;
   }
+  host->bindAutomation(this,[](const void* context,uint32_t index) noexcept {return static_cast<const PluginProcessor*>(context)->params[index]->get();});
   const auto root=juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory).getChildFile("Jerzy").getChildFile("MasterLabPro").getChildFile("modules");
   host->scan(std::filesystem::path(root.getFullPathName().toWideCharPointer()));
   startTimerHz(20);
@@ -39,32 +41,19 @@ public:
   return layout.getMainInputChannelSet()==juce::AudioChannelSet::stereo()&&layout.getMainOutputChannelSet()==juce::AudioChannelSet::stereo();
  }
  void prepareToPlay(double rate,int block) override{
+  const std::lock_guard<std::mutex> lock(controlMutex);
   host->resetGraphWhenStopped();host->prepare(rate,uint32_t(std::max(1,block)));host->submit(order);
  }
  void releaseResources() override{}
  void processBlock(juce::AudioBuffer<float>& buffer,juce::MidiBuffer&) override{
   juce::ScopedNoDenormals noDenormals;
-  // Mapping and topology changes are serialized with JUCE's callback lock off the audio thread.
-  for(const auto id:order.slots())if(id){
-   const auto* d=host->descriptor(id);const auto lane=host->automationLane(id);
-   if(!d||lane>=10)continue;
-   for(uint32_t p=0;p<d->parameter_count;++p){
-    const auto& desc=d->parameters[p];const auto normalized=double(params[lane*64+p]->get());
-    double value=desc.minimum+normalized*(desc.maximum-desc.minimum);
-    if((desc.flags&MLP_PARAMETER_LOGARITHMIC)&&desc.minimum>0&&desc.maximum>0)
-      value=desc.minimum*std::pow(desc.maximum/desc.minimum,normalized);
-    if(desc.step>0)value=desc.minimum+std::round((value-desc.minimum)/desc.step)*desc.step;
-    value=std::clamp(value,desc.minimum,desc.maximum);
-    host->setParameter(id,desc.id,value);
-   }
-  }
   if(buffer.getNumChannels()>=2&&!host->process(buffer.getWritePointer(0),buffer.getWritePointer(1),size_t(buffer.getNumSamples())))buffer.clear();
  }
  bool hasEditor() const override{return true;}
  juce::AudioProcessorEditor* createEditor() override;
  static juce::File dataRoot(){return juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory).getChildFile("Jerzy").getChildFile("MasterLabPro");}
- RackOrder editorOrder(){const juce::ScopedLock lock(getCallbackLock());return order;}
- const MlpModuleDescriptor* editorDescriptor(uint64_t id){const juce::ScopedLock lock(getCallbackLock());return host->descriptor(id);}
+ RackOrder editorOrder(){const std::lock_guard<std::mutex> lock(controlMutex);return order;}
+ const MlpModuleDescriptor* editorDescriptor(uint64_t id){const std::lock_guard<std::mutex> lock(controlMutex);return host->descriptor(id);}
  juce::StringArray moduleNames(){juce::StringArray names;for(const auto& t:host->availableTypes())names.add(juce::String::fromUTF8(t.descriptor->name));return names;}
  static double normalize(const MlpParameterDescriptor& d,double value){
   if(d.maximum<=d.minimum)return 0;
@@ -72,10 +61,10 @@ public:
   return std::clamp((value-d.minimum)/(d.maximum-d.minimum),0.,1.);
  }
  juce::AudioParameterFloat* editorParameter(uint64_t id,uint32_t index){
-  const juce::ScopedLock lock(getCallbackLock());const auto lane=host->automationLane(id);return lane<10&&index<64?params[lane*64+index]:nullptr;
+  const std::lock_guard<std::mutex> lock(controlMutex);const auto lane=host->automationLane(id);return lane<10&&index<64?params[lane*64+index]:nullptr;
  }
  bool addModule(int slot,size_t type){
-  const juce::ScopedLock lock(getCallbackLock());
+  const std::lock_guard<std::mutex> lock(controlMutex);
   if(slot<0||slot>=10||order.slots()[size_t(slot)]||nextId==std::numeric_limits<uint64_t>::max())return false;
   for(const auto& missing:host->unavailable())if(missing.slot==uint32_t(slot))return false;
   const auto id=nextId++;if(!host->add(type,id))return false;
@@ -84,8 +73,8 @@ public:
   if(!order.insert(size_t(slot),id)){host->remove(id);return false;}
   dirty=true;return true;
  }
- bool moveModule(int from,int to){const juce::ScopedLock lock(getCallbackLock());if(from<0||to<0||!host->unavailable().empty()||!order.move(size_t(from),size_t(to)))return false;dirty=true;return true;}
- bool removeModule(uint64_t id){const juce::ScopedLock lock(getCallbackLock());for(size_t i=0;i<10;++i)if(order.slots()[i]==id&&host->remove(id)){order.remove(i);dirty=true;return true;}return false;}
+ bool moveModule(int from,int to){const std::lock_guard<std::mutex> lock(controlMutex);if(from<0||to<0||!host->unavailable().empty()||!order.move(size_t(from),size_t(to)))return false;dirty=true;return true;}
+ bool removeModule(uint64_t id){const std::lock_guard<std::mutex> lock(controlMutex);for(size_t i=0;i<10;++i)if(order.slots()[i]==id&&host->remove(id)){order.remove(i);dirty=true;return true;}return false;}
  void analysisSource(uint64_t id,bool module,bool delta){host->setAnalysis(id,module,delta);}
  bool readMeters(ModuleRackMeters& m){return host->pollMeters(m);}
  bool readAnalysis(AnalysisFrame& f){return host->pollAnalysis(f);}
@@ -93,11 +82,13 @@ public:
 
  void getStateInformation(juce::MemoryBlock& dest) override{
   const juce::ScopedLock lock(getCallbackLock());
+  const std::lock_guard<std::mutex> control(controlMutex);
   std::vector<uint8_t> bytes;if(RackStateCodec::encode(host->saveState(order),bytes))dest.replaceAll(bytes.data(),bytes.size());
  }
  void setStateInformation(const void* data,int size) override{
   RackState state;if(size<0||!RackStateCodec::decode(static_cast<const uint8_t*>(data),size_t(size),state))return;
   const juce::ScopedLock lock(getCallbackLock());
+  const std::lock_guard<std::mutex> control(controlMutex);
   host->restoreStateWhenStopped(state,order);
   for(const auto& m:state.modules)if(m.instance>=nextId)nextId=m.instance==std::numeric_limits<uint64_t>::max()?m.instance:m.instance+1;
   epoch.fetch_add(1);
@@ -115,10 +106,10 @@ public:
 private:
  void timerCallback() override{
   const auto latency=int(host->diagnostics().latency);if(latency!=getLatencySamples())setLatencySamples(latency);
-  const juce::ScopedLock lock(getCallbackLock());host->collectRetired();if(dirty&&host->submit(order))dirty=false;
+  const std::lock_guard<std::mutex> lock(controlMutex);host->collectRetired();if(dirty&&host->submit(order))dirty=false;
  }
  std::unique_ptr<ModuleRackHost> host=std::make_unique<ModuleRackHost>();
- RackOrder order;uint64_t nextId=1;bool dirty=false;std::atomic<uint64_t> epoch{0};std::array<juce::AudioParameterFloat*,640> params{};
+ std::mutex controlMutex;RackOrder order;uint64_t nextId=1;bool dirty=false;std::atomic<uint64_t> epoch{0};std::array<juce::AudioParameterFloat*,640> params{};
 };
 class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Timer {
  class Panel final:public juce::Component{

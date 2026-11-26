@@ -21,3 +21,6 @@ Native third-party code is trusted to honor the same rules. The host cannot enfo
 
 ## Package C: native instance retirement
 Control thread tracks the last successfully submitted revision referencing each instance. An instance marked removed is destroyed only when that revision or a later revision has been acknowledged as retired by the audio thread, or when processing is stopped and all graph references are cleared. Never reuse the instance ID while it is pending retirement. Drain retirement notifications on the control thread even when the order has not changed. Windows native loading no longer changes the process-wide default DLL search policy (important inside a DAW); explicit LoadLibraryExW flags remain in use.
+
+## Package C: automation publication
+Active graph nodes own immutable descriptor/lane/reader bindings. The audio callback reads normalized host values only through these bindings, applies parameters before latency detection and never traverses the GUI rack model. Removed instances reserve their automation lane until retirement, preventing a newly added module from changing an old active instance's automation. GUI topology operations and retirement use a separate control mutex, not the JUCE callback lock. State save/restore still uses the callback lock and remains an explicit acceptance blocker.

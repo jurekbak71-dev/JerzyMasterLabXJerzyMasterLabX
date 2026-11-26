@@ -17,7 +17,15 @@ public:
  bool pop(T& v)noexcept{auto r=read.load(std::memory_order_relaxed);if(r==write.load(std::memory_order_acquire))return false;v=values[r];read.store((r+1)%N,std::memory_order_release);return true;}
  bool canPush()const noexcept{const auto w=write.load(std::memory_order_relaxed);return (w+1)%N!=read.load(std::memory_order_acquire);}
 };
-struct GraphNode{uint64_t instanceId=0;const MlpModuleApi* api=nullptr;MlpInstance* instance=nullptr;bool bypass=false;};
+using ReadAutomation=float(*)(const void*,uint32_t) noexcept;
+inline double automationValue(const MlpParameterDescriptor& d,float input) noexcept {
+ const double n=std::clamp(std::isfinite(input)?double(input):0.,0.,1.);
+ double v=d.minimum+n*(d.maximum-d.minimum);
+ if((d.flags&MLP_PARAMETER_LOGARITHMIC)&&d.minimum>0&&d.maximum>0)v=d.minimum*std::pow(d.maximum/d.minimum,n);
+ if(d.step>0)v=d.minimum+std::round((v-d.minimum)/d.step)*d.step;
+ return std::clamp(v,d.minimum,d.maximum);
+}
+struct GraphNode{uint64_t instanceId=0;const MlpModuleApi* api=nullptr;MlpInstance* instance=nullptr;bool bypass=false;const MlpModuleDescriptor* descriptor=nullptr;uint32_t lane=10;const void* automationContext=nullptr;ReadAutomation readAutomation=nullptr;};
 struct GraphSnapshot{uint64_t revision=0;std::array<GraphNode,10> nodes{};uint32_t count=0;};
 struct GraphDiagnostics{uint64_t blocks=0,nanSamples=0,queueOverloads=0,latencyChanges=0;uint32_t latency=0;uint64_t maximumNanoseconds=0;};
 struct GraphTap{uint64_t instanceId=0;float* alignedBeforeLeft=nullptr;float* alignedBeforeRight=nullptr;float* afterLeft=nullptr;float* afterRight=nullptr;bool found=false;uint32_t latency=0;};
@@ -40,7 +48,7 @@ class ModularGraph{
 public:
  bool submit(const GraphSnapshot& graph)noexcept{
   if(graph.count>graph.nodes.size())return false;
-  for(uint32_t i=0;i<graph.count;++i){const auto& n=graph.nodes[i];if(!n.instanceId||!n.api||!n.instance||!n.api->process)return false;for(uint32_t j=0;j<i;++j)if(graph.nodes[j].instanceId==n.instanceId)return false;}
+  for(uint32_t i=0;i<graph.count;++i){const auto& n=graph.nodes[i];if(!n.instanceId||!n.api||!n.instance||!n.api->process)return false;if(n.readAutomation&&(!n.descriptor||n.descriptor->parameter_count>64||n.lane>=10||!n.api->set_parameter))return false;for(uint32_t j=0;j<i;++j)if(graph.nodes[j].instanceId==n.instanceId)return false;}
   if(!incoming.push(graph)){queueOverloads.fetch_add(1,std::memory_order_relaxed);return false;}return true;
  }
  bool pollRetired(GraphSnapshot& graph)noexcept{return retired.pop(graph);}
@@ -52,7 +60,8 @@ public:
   const auto started=std::chrono::steady_clock::now();
   GraphSnapshot next;
   if(phase==Phase::running&&retired.canPush()&&incoming.pop(next)){pending=next;phase=Phase::fadeOutGraph;transition=0;}
-  else if(phase==Phase::running){const auto reported=reportedLatency();if(reported!=latency.load(std::memory_order_relaxed)){pendingLatency=reported;phase=Phase::fadeOutLatency;transition=0;}}
+  for(uint32_t i=0;i<active.count;++i){const auto& n=active.nodes[i];if(n.readAutomation&&n.descriptor&&n.lane<10){for(uint32_t p=0;p<n.descriptor->parameter_count;++p){const auto& d=n.descriptor->parameters[p];n.api->set_parameter(n.instance,d.id,automationValue(d,n.readAutomation(n.automationContext,n.lane*64+p)));}}}
+  if(phase==Phase::running){const auto reported=reportedLatency();if(reported!=latency.load(std::memory_order_relaxed)){pendingLatency=reported;phase=Phase::fadeOutLatency;transition=0;}}
   for(uint32_t i=0;i<frames;++i){before[0][i]=std::isfinite(left[i])?left[i]:0.f;before[1][i]=right&&std::isfinite(right[i])?right[i]:before[0][i];left[i]=before[0][i];if(right)right[i]=before[1][i];}
   float* channels[]{left,right?right:left};MlpProcessContext context{sizeof(context),frames,right?2u:1u,0,channels};
   if(tap)tap->found=false;
