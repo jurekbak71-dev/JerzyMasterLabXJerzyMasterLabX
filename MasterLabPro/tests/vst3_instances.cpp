@@ -23,7 +23,10 @@ int main(int argc,char** argv){
  for(int i=0;i<count;++i){
   ml::RackState state;ml::SavedModule module;module.instance=1;module.typeHi=0x4d4c505445434800ull;module.typeLo=0x6761696e00000002ull;module.version=1;module.slot=0;module.lane=0;module.parameters.push_back({1,double(i)});
   state.modules.push_back(module);std::vector<uint8_t> bytes;if(!ml::RackStateCodec::encode(state,bytes))return 4;
-  plugins[size_t(i)]->setStateInformation(bytes.data(),int(bytes.size()));
+  juce::XmlElement envelope("VST3PluginState");
+  envelope.createNewChildElement("IComponent")->addTextElement(juce::MemoryBlock(bytes.data(),bytes.size()).toBase64Encoding());
+  juce::MemoryBlock wrapped;juce::AudioProcessor::copyXmlToBinary(envelope,wrapped);
+  plugins[size_t(i)]->setStateInformation(wrapped.getData(),int(wrapped.getSize()));
  }
  juce::AudioBuffer<float> audio(2,frames);juce::MidiBuffer midi;
  for(int block=0;block<12;++block)for(int i=0;i<count;++i){

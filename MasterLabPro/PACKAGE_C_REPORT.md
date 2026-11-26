@@ -15,3 +15,5 @@ Added two-tap delay transition and warm-up restart on reported latency changes; 
 Validation: fixed GCC misleading-indentation error in LiveHostExchange. Added eight independent exchange instances with 100 replacement cycles each; measured elapsed wall time and maximum sample jump. This tests the exchange algorithm, not eight loaded VST3 instances. Added unsigned development Inno Setup package and CI artifact; installer build and installation remain unverified. Pluginval not yet integrated.
 
 Added Windows runner silent install smoke, a native JUCE VST3 host loading eight real binary instances with independent Gain states, and pinned pluginval v1.0.4 strictness 5. All new checks pending CI. FL Studio acceptance remains manual. No production release.
+
+Run 45798314749: Windows build, 31 CTests, sanitizers, installer build and silent install passed; native instance test failed because raw RackState bytes were passed to JUCE's hosted VST3 XML state API. Corrected test envelope per JUCE 8.0.6 VST3PluginFormat.cpp. Pluginval now runs even if the instance test fails (provided installation succeeded). New CI pending.

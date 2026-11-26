@@ -112,6 +112,7 @@ jobs:
           }
           if (-not (Test-Path "$root/assets/manifest.json")) { throw 'Missing installed assets' }
       - name: Load eight real VST3 instances
+        id: vst3_instances
         shell: pwsh
         run: |
           $bundle = Join-Path $env:CommonProgramFiles 'VST3/Jerzy MasterLabPro.vst3'
@@ -119,6 +120,7 @@ jobs:
           & build-masterlabpro/Release/masterlabpro_vst3_instances.exe $bundle | Tee-Object -FilePath reports/vst3-instances.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate installed VST3 with pluginval
+        if: success() || (failure() && steps.vst3_instances.conclusion == 'failure')
         shell: pwsh
         run: |
           Invoke-WebRequest 'https://github.com/Tracktion/pluginval/releases/download/v1.0.4/pluginval_Windows.zip' -OutFile pluginval.zip
