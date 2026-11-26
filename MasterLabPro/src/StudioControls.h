@@ -25,7 +25,7 @@ public:
   const bool active=getToggleState(),enabled=isEnabled();
   const auto top=juce::Colour(pressed?0xff18232a:hover?0xff50636e:0xff394a55);
   const auto bottom=juce::Colour(pressed?0xff0d171d:0xff10181d);
-  const auto& skin=skins[pressed?3:active?1:hover?2:0];
+  const auto& skin=skins[0];
   if(skin.isValid()){
    const float edge=std::min(face.getWidth()*.24f,face.getHeight()*.12f);
    auto middle=face;auto left=middle.removeFromLeft(edge),right=middle.removeFromRight(edge);
@@ -38,6 +38,7 @@ public:
    g.fillRect(middle);
    g.setColour(juce::Colour(0xff6e7578));g.drawHorizontalLine(int(middle.getY()+1),middle.getX(),middle.getRight());
    g.setColour(juce::Colour(0xff050708));g.drawHorizontalLine(int(middle.getBottom()-2),middle.getX(),middle.getRight());
+   g.setColour(active?accent.withAlpha(.8f):juce::Colour(0xff657078).withAlpha(hover?.8f:.45f));g.drawRoundedRectangle(face.reduced(1),3,1);
    g.drawImage(skin.getClippedImage({sw-cut,0,cut,sh}),right);
   }else{
   g.setGradientFill({top,face.getTopLeft(),bottom,face.getBottomLeft(),false});

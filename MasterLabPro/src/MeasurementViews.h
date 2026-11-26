@@ -7,7 +7,37 @@ namespace ml {
 class StereoLevelMeter final:public juce::Component {
  StereoLevels levels;
 public:void setLevels(StereoLevels l){levels=l;repaint();}
- void paint(juce::Graphics& g)override{g.fillAll(juce::Colour(0xff10161b));for(int c=0;c<2;++c){float w=getWidth()/2.f;auto r=juce::Rectangle<float>(c*w+5,22,w-10,float(getHeight()-44));if(r.getHeight()<=0||r.getWidth()<=0)continue;for(int i=0;i<60;++i){float db=-60.f+i;bool lit=levels.peak[c]>=db;g.setColour(lit?(db>=-3?juce::Colours::red:db>=-12?juce::Colours::yellow:juce::Colours::limegreen):juce::Colour(0xff293036));float h=r.getHeight()/60;g.fillRect(r.getX(),r.getBottom()-(i+1)*h,r.getWidth(),std::max(0.f,h-1));}g.setColour(levels.clip[c]?juce::Colours::red:juce::Colours::grey);g.drawText("CLIP",int(c*w),0,int(w),20,juce::Justification::centred);g.setColour(juce::Colours::white);g.drawText(c?"R":"L",int(c*w),getHeight()-20,int(w),20,juce::Justification::centred);}}
+ void paint(juce::Graphics& g)override{
+  const auto bounds=getLocalBounds().toFloat();
+  g.fillAll(juce::Colour(0xff10161b));
+  auto well=bounds.reduced(3,2);g.setColour(juce::Colour(0xff070b0e));g.fillRoundedRectangle(well,5);
+  g.setColour(juce::Colour(0xff46545e));g.drawRoundedRectangle(well,5,1);
+  auto area=well.reduced(6,5);auto top=area.removeFromTop(15),bottom=area.removeFromBottom(14);
+  auto scale=area.removeFromLeft(std::min(24.f,area.getWidth()*.3f));
+  area=area.reduced(1,2);
+  if(area.getHeight()<=0||area.getWidth()<4)return;
+  g.setFont(juce::FontOptions(9.f));g.setColour(juce::Colour(0xffa8bac6));
+  for(int db:{0,-3,-6,-12,-18,-24,-36,-48,-60}){
+   const float y=area.getY()-float(db)*area.getHeight()/60;
+   g.drawFittedText(juce::String(db),juce::Rectangle<int>(int(scale.getX()),int(y)-5,int(scale.getWidth())-1,10),juce::Justification::centredRight,1,.7f);
+  }
+  for(int c=0;c<2;++c){
+   const float half=area.getWidth()*.5f;
+   auto bar=juce::Rectangle<float>(area.getX()+c*half,area.getY(),half,area.getHeight()).reduced(std::min(3.f,half*.18f),0);
+   g.setColour(juce::Colour(0xff020405));g.fillRoundedRectangle(bar.expanded(1),2);
+   for(int i=0;i<60;++i){
+    const float db=-60.f+i,step=bar.getHeight()/60;
+    const auto colour=db>=-3?juce::Colour(0xffed3832):db>=-12?juce::Colour(0xffedbd36):juce::Colour(0xff40e473);
+    const bool lit=levels.peak[c]>=db;
+    g.setColour(lit?colour:colour.withMultipliedBrightness(.12f));
+    g.fillRect(bar.getX(),bar.getBottom()-(i+1)*step,bar.getWidth(),std::max(0.f,step*.73f));
+   }
+   const float centre=bar.getCentreX();auto lamp=juce::Rectangle<float>(6,6).withCentre({centre,top.getCentreY()});
+   g.setColour(juce::Colour(0xff222a30));g.fillEllipse(lamp.expanded(1.5f));
+   g.setColour(levels.clip[c]?juce::Colour(0xffff3c33):juce::Colour(0xff4a1515));g.fillEllipse(lamp);
+   g.setColour(juce::Colour(0xffb9c7d0));g.drawFittedText(c?"R":"L",juce::Rectangle<int>(int(bar.getX()),int(bottom.getY()),int(bar.getWidth()),int(bottom.getHeight())),juce::Justification::centred,1);
+  }
+ }
 };
 struct SpectrumBin {float hz,db;};
 class SpectrumView final:public juce::Component {

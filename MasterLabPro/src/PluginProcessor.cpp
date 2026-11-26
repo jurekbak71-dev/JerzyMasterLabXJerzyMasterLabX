@@ -178,8 +178,12 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
   p.parameter->setValueNotifyingHost(float(PluginProcessor::normalize(d,value)));
  }
  static void displayFrame(juce::Graphics& g,juce::Rectangle<float> area){
-  g.setColour(juce::Colour(0xff0b1721));g.fillRoundedRectangle(area,4);
-  g.setColour(juce::Colour(0xff253746));g.drawRoundedRectangle(area,4,1);
+  g.setColour(juce::Colour(0xff06090c));g.fillRoundedRectangle(area,5);
+  g.setColour(juce::Colour(0xff69727a));g.drawRoundedRectangle(area,5,1);
+  const auto inner=area.reduced(3);
+  g.setGradientFill({juce::Colour(0xff14242d),inner.getTopLeft(),juce::Colour(0xff070e15),inner.getBottomLeft(),false});
+  g.fillRoundedRectangle(inner,3);
+  g.setColour(juce::Colour(0xff233a49));g.drawRoundedRectangle(inner,3,1);
  }
  static float peakDb(float peak){return 20.f*std::log10(std::max(peak,1e-6f));}
  class CompressorPanel final:public juce::Component,private juce::Timer {
@@ -237,8 +241,11 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
   }
   void paint(juce::Graphics& g) override {
    const auto meter=p.gainReduction(instance,uint32_t(std::min<size_t>(bank,3)));
-   auto strip=getLocalBounds().reduced(12,6).removeFromBottom(18);
-   g.setColour(juce::Colours::whitesmoke);
+   auto strip=getLocalBounds().reduced(12,9).removeFromBottom(18);
+   g.setColour(juce::Colour(0xff090e12));g.fillRoundedRectangle(strip.toFloat(),3);
+   g.setColour(juce::Colour(0xff46515a));g.drawRoundedRectangle(strip.toFloat(),3,1);
+   strip=strip.reduced(6,2);g.setFont(juce::FontOptions(10.f,juce::Font::bold));
+   g.setColour(juce::Colour(0xffbfcbd3));
    g.drawText("GAIN REDUCTION",strip.removeFromLeft(140),juce::Justification::centredLeft);
    g.drawText(juce::String(meter,1)+" dB",strip.removeFromRight(76),juce::Justification::centredRight);
    g.setColour(juce::Colour(0xff101820));g.fillRoundedRectangle(strip.toFloat(),4);
@@ -522,7 +529,7 @@ public:
   setResizable(true,false);setResizeLimits(800,500,3200,2000);if(auto* c=getConstrainer())c->setFixedAspectRatio(1.6);setSize(1200,750);seenEpoch=p.editorEpoch();startTimerHz(30);
  }
  ~PluginRackEditor()override{stopTimer();p.analysisSource(0,false,false);}
- void resized()override{rack.setBounds(getLocalBounds());const int y=getHeight()*10/1000+8,h=std::max(16,getHeight()*52/1000-16);scope.setBounds(getWidth()*44/100,y,100,h);delta.setBounds(getWidth()*44/100+105,y,120,h);}
+ void resized()override{rack.setBounds(getLocalBounds());const int y=getHeight()*10/1000+8,h=std::max(16,getHeight()*52/1000-16);scope.setBounds(getWidth()*46/100,y,100,h);delta.setBounds(getWidth()*46/100+105,y,120,h);}
 private:
  void refresh(){order=p.editorOrder();rack.refreshRack();}
  void sourceChanged(){history.clear();spectralDisplay.clear();rack.setSpectrum({},20000);rack.setHeatmaps({},{},{});p.analysisSource(selected,scope.getToggleState(),delta.getToggleState());}

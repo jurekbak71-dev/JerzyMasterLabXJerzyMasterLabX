@@ -9,7 +9,13 @@ class RackTiles final:public juce::Component,public juce::DragAndDropContainer {
  struct Tile final:juce::Component,juce::DragAndDropTarget {
  RackTiles& owner;int pos;bool target=false;bool hover=false;
  Tile(RackTiles& o,int p):owner(o),pos(p){}
- void paint(juce::Graphics& g) override {auto id=owner.order.slots()[pos];auto r=getLocalBounds().toFloat().reduced(2);owner.paintSkin(g,r);g.setColour(target?juce::Colours::lime:owner.selected==id&&id?juce::Colours::cyan:hover?juce::Colour(0xff83b9d0):juce::Colour(0xff68717b));g.drawRoundedRectangle(r,5,2);g.setColour(juce::Colours::white);g.drawText(juce::String(pos+1)+"  "+(id&&owner.label?owner.label(id):juce::String(id?"Module":"EMPTY")),getLocalBounds().reduced(8),juce::Justification::centred);}
+ void paint(juce::Graphics& g) override {auto id=owner.order.slots()[pos];auto r=getLocalBounds().toFloat().reduced(2);owner.paintSkin(g,r);g.setColour(target?juce::Colours::lime:owner.selected==id&&id?juce::Colours::cyan:hover?juce::Colour(0xff83b9d0):juce::Colour(0xff68717b));g.drawRoundedRectangle(r,5,2);auto inset=getLocalBounds().reduced(20,5);
+ auto index=inset.removeFromLeft(24);
+ g.setColour(juce::Colour(0xff0b1014));g.fillRoundedRectangle(index.toFloat(),3);
+ g.setColour(juce::Colour(0xff7e919f));g.setFont(juce::FontOptions(11.f,juce::Font::bold));
+ g.drawFittedText(juce::String(pos+1),index,juce::Justification::centred,1);
+ g.setColour(id?juce::Colour(0xffd0e1eb):juce::Colour(0xff76828b));
+ g.drawFittedText(id&&owner.label?owner.label(id):juce::String(id?"Module":"EMPTY"),inset.reduced(6,0),juce::Justification::centred,1,.75f);}
  void mouseEnter(const juce::MouseEvent&) override {hover=true;repaint();}
  void mouseExit(const juce::MouseEvent&) override {hover=false;repaint();}
  void mouseDown(const juce::MouseEvent& e) override {if(!e.mods.isLeftButtonDown())return;owner.selected=owner.order.slots()[pos];if(owner.onSelect)owner.onSelect(owner.selected,pos);owner.repaintTiles();}

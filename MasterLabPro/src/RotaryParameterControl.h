@@ -38,7 +38,15 @@ public:
  arc(a,z,juce::Colour(0xff4a5058),2.0f);if(isEnabled()){arc(a,a+(z-a)*shown,colour.withAlpha(0.10f),10.0f);arc(a,a+(z-a)*shown,colour.withAlpha(0.28f),6.0f);}arc(a,a+(z-a)*shown,isEnabled()?colour:juce::Colours::grey,3.0f);
  g.setOpacity(isEnabled()?1.0f:0.45f);if(cap.isValid())g.drawImage(cap,r);else{g.setColour(juce::Colour(0xff626970));g.fillEllipse(r);}
  if(pointer.isValid()) {auto t=juce::AffineTransform::scale(side/pointer.getWidth(),side/pointer.getHeight()).translated(r.getX(),r.getY()).rotated(-2.35619449f+4.71238898f*shown,r.getCentreX(),r.getCentreY());g.drawImageTransformed(pointer,t);}
- g.setOpacity(1.0f);g.setColour(juce::Colours::whitesmoke);g.setFont(12.0f);g.drawText(getName(),label,juce::Justification::centred,true);g.drawText(valueText(),value,juce::Justification::centred,true);
+ g.setOpacity(1.0f);
+ g.setColour(juce::Colour(0xffbfcbd3));g.setFont(juce::FontOptions(11.f,juce::Font::bold));
+ g.drawFittedText(getName(),label.toNearestInt().reduced(3,0),juce::Justification::centred,1,.7f);
+ const auto readout=value.withSizeKeepingCentre(std::min(value.getWidth()-8,110.f),18.f);
+ if(!readout.isEmpty()){
+  g.setColour(juce::Colour(0xff080e12));g.fillRoundedRectangle(readout,3);
+  g.setColour(juce::Colour(0xff45525a));g.drawRoundedRectangle(readout,3,1);
+  g.setColour(juce::Colour(0xffd7e6ee));g.drawFittedText(valueText(),readout.toNearestInt().reduced(3,1),juce::Justification::centred,1,.7f);
+ }
  }
 private:
  void finish(){if(dragging){dragging=false;attachment.endGesture();}}

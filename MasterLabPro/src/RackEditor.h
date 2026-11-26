@@ -51,7 +51,7 @@ public:
   resized();
  }
  void resized()override{
-  auto interior=[this](int i){auto a=box(i).reduced(22,10);a.removeFromTop(27);return a;};
+  auto interior=[this](int i){auto a=box(i).reduced(22,10);a.removeFromTop(27);a=a.reduced(2,1);return a;};
   spectrum.setBounds(interior(1));heatmap.setBounds(interior(2));
   input.setBounds(interior(3));output.setBounds(interior(4));
   tiles.setBounds(interior(5));bands.setBounds({});
@@ -69,14 +69,16 @@ public:
   g.setColour(juce::Colours::whitesmoke);g.setFont(14.f);
   for(int i=0;i<7;++i){
    auto header=box(i).reduced(24,9).removeFromTop(23);
+   if(i==0)header=header.withWidth(header.getWidth()*40/100);
    if(header.isEmpty())continue;
    g.setColour(juce::Colour(0xff11181e));g.fillRoundedRectangle(header.toFloat(),2);
    g.setColour(juce::Colour(0xff47515a));g.drawRoundedRectangle(header.toFloat(),2,1);
    g.setColour(juce::Colour(0xffc4cbd0));g.setFont(juce::FontOptions(12.f,juce::Font::bold));
    g.drawFittedText(names[i],header.reduced(8,2),juce::Justification::centredLeft,1,.75f);
   }
-  g.drawFittedText(footer,box(7).removeFromTop(30).reduced(30,5),juce::Justification::centredLeft,1,.62f);
-  if(analysisMode.isNotEmpty())g.drawText(analysisMode,box(0).removeFromTop(24).reduced(8,0),juce::Justification::centredRight,true);
+  g.setColour(juce::Colour(0xffaeb9c1));g.setFont(juce::FontOptions(10.f));
+  g.drawFittedText(footer,box(7).reduced(40,5),juce::Justification::centredLeft,1,.72f);
+  if(analysisMode.isNotEmpty())g.drawText(analysisMode,box(0).reduced(36,10),juce::Justification::centredRight,true);
   if(!module){auto r=box(6);r.removeFromTop(76*getHeight()/1000);g.drawText(selected?"MODULE EDITOR NOT CONNECTED":"SELECT A MODULE",r,juce::Justification::centred);}
  }
 private:
