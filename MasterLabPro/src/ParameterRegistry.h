@@ -9,8 +9,8 @@ public:
  static constexpr uint32_t lanes=10,parametersPerLane=64;
  struct Entry {uint64_t instance=0,typeHi=0,typeLo=0;uint32_t localId=0,hostId=0,flags=0;double value=0,neutral=0;};
  bool attach(uint32_t lane,uint64_t instance,const MlpModuleDescriptor& d)noexcept{
-  if(lane>=lanes||!instance||d.parameter_count>parametersPerLane)return false;
-  for(const auto& e:entries)if(e.instance==instance)return false;
+  if(lane>=lanes||!instance||instances[lane]||d.parameter_count>parametersPerLane)return false;
+  for(const auto id:instances)if(id==instance)return false;
   detachLane(lane);
   for(uint32_t i=0;i<d.parameter_count;++i){auto& e=entries[lane*parametersPerLane+i];const auto& p=d.parameters[i];e={instance,d.type_id_hi,d.type_id_lo,p.id,lane*parametersPerLane+i,p.flags,p.default_value,p.neutral_value};}
   instances[lane]=instance;return true;

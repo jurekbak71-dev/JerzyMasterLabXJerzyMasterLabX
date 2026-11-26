@@ -15,3 +15,7 @@ with magic, processor kind and an explicitly little-endian parameter bit pattern
 
 State restore and migration run only while processing is stopped. Format 1 has no older production format;
 future versions require an explicit migration path rather than memory reinterpretation.
+
+## Format 2 (Package C)
+
+The lane is the stable automation lane; the additional slot field specifies DSP order independently. Format 1 decodes into format 2 with slot equal to lane. Duplicate instance IDs, lanes, slots and local parameter IDs, and non-finite parameter values are rejected. Newly saved states use format 2. This is a prerequisite for VST3, not proof of DAW compatibility.
