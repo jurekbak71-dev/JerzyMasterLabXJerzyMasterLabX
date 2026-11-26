@@ -53,7 +53,7 @@ public:
  }
  bool pollRetired(GraphSnapshot& graph)noexcept{return retired.pop(graph);}
  void prepare(uint32_t maximumFrames)noexcept{maxFrames=std::min<uint32_t>(maximumFrames,2048);phase=Phase::running;aligner.reset();}
- void resetWhenStopped()noexcept{GraphSnapshot value;while(incoming.pop(value)){}while(retired.pop(value)){}active={};pending={};activeRevision.store(0,std::memory_order_release);phase=Phase::running;transition=0;pendingLatency=0;latency.store(0,std::memory_order_relaxed);aligner.reset();tapAligner.reset();tapSource=0;tapLatency=0;}
+ void resetWhenStopped()noexcept{GraphSnapshot value;while(incoming.pop(value)){}while(retired.pop(value)){}active={};pending={};activeRevision.store(0,std::memory_order_release);phase=Phase::running;transition=0;pendingLatency=0;latency.store(0,std::memory_order_relaxed);aligner.reset();tapAligner.reset();tapSource=0;tapLatency=0;bypassIds.fill(0);for(auto& line:bypassLines)line.reset();}
  bool process(float* left,float* right,uint32_t frames,float* deltaLeft=nullptr,float* deltaRight=nullptr,
               float* alignedLeft=nullptr,float* alignedRight=nullptr,GraphTap* tap=nullptr)noexcept{
   if(!left||frames>maxFrames)return false;
@@ -65,10 +65,17 @@ public:
   for(uint32_t i=0;i<frames;++i){before[0][i]=std::isfinite(left[i])?left[i]:0.f;before[1][i]=right&&std::isfinite(right[i])?right[i]:before[0][i];left[i]=before[0][i];if(right)right[i]=before[1][i];}
   float* channels[]{left,right?right:left};MlpProcessContext context{sizeof(context),frames,right?2u:1u,0,channels};
   if(tap)tap->found=false;
-  for(uint32_t node=0;node<active.count;++node)if(!active.nodes[node].bypass){
+  for(uint32_t node=0;node<active.count;++node){
    const auto& current=active.nodes[node];const bool selected=tap&&tap->instanceId==current.instanceId;
    if(selected)for(uint32_t i=0;i<frames;++i){tapRaw[0][i]=left[i];tapRaw[1][i]=right?right[i]:left[i];}
+   auto& dry=bypassLines[node];const auto delay=current.api->get_latency_samples(current.instance);
+   if(delay>65536)return false;
+   if(bypassIds[node]!=current.instanceId){dry.reset();bypassIds[node]=current.instanceId;}
+   dry.setDelay(delay);
+   for(uint32_t i=0;i<frames;++i){float dl=0,dr=0;dry.process(left[i],right?right[i]:left[i],dl,dr);if(current.bypass){dryBlock[0][i]=dl;dryBlock[1][i]=dr;}}
+   // Keep the native processor warm even during bypass, discarding its wet output.
    if(current.api->process(current.instance,&context)!=MLP_OK)return false;
+   if(current.bypass)for(uint32_t i=0;i<frames;++i){left[i]=dryBlock[0][i];if(right)right[i]=dryBlock[1][i];}
    if(selected){tap->found=true;tap->latency=current.api->get_latency_samples(current.instance);for(uint32_t i=0;i<frames;++i){if(tap->afterLeft)tap->afterLeft[i]=left[i];if(tap->afterRight)tap->afterRight[i]=right?right[i]:left[i];}}
   }
   if(phase!=Phase::running){for(uint32_t i=0;i<frames;++i){const float x=float(std::min<uint32_t>(transition++,transitionSamples))/float(transitionSamples);const bool fadingOut=phase==Phase::fadeOutGraph||phase==Phase::fadeOutLatency;const float gain=fadingOut?1.f-x:x;left[i]*=gain;if(right)right[i]*=gain;}}
@@ -88,10 +95,10 @@ public:
  uint64_t revision()const noexcept{return activeRevision.load(std::memory_order_acquire);}
 private:
  enum class Phase{running,fadeOutGraph,fadeOutLatency,fadeIn};
- uint32_t reportedLatency()const noexcept{uint32_t total=0;for(uint32_t i=0;i<active.count;++i)if(!active.nodes[i].bypass){const auto value=active.nodes[i].api->get_latency_samples(active.nodes[i].instance);total=value>65536-total?65536:total+value;}return total;}
+ uint32_t reportedLatency()const noexcept{uint32_t total=0;for(uint32_t i=0;i<active.count;++i){const auto value=active.nodes[i].api->get_latency_samples(active.nodes[i].instance);total=value>65536-total?65536:total+value;}return total;}
  void refreshLatency()noexcept{const auto total=reportedLatency();latency.store(total,std::memory_order_release);aligner.setDelay(total);aligner.reset();}
  GraphSpsc<GraphSnapshot,8> incoming,retired;GraphSnapshot active{},pending{};Phase phase=Phase::running;uint32_t transition=0,maxFrames=2048,pendingLatency=0;static constexpr uint32_t transitionSamples=128;
- std::array<std::array<float,2048>,2> before{},tapRaw{};StereoDelayAligner aligner,tapAligner;uint64_t tapSource=0;uint32_t tapLatency=0;
+ std::array<std::array<float,2048>,2> before{},tapRaw{},dryBlock{};std::array<StereoDelayAligner,10> bypassLines;std::array<uint64_t,10> bypassIds{};StereoDelayAligner aligner,tapAligner;uint64_t tapSource=0;uint32_t tapLatency=0;
  std::atomic<uint64_t> activeRevision{0},blocks{0},nanSamples{0},queueOverloads{0},latencyChanges{0},maximumNs{0};std::atomic<uint32_t> latency{0};
 };
 }

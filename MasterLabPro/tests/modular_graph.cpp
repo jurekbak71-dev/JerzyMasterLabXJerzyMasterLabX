@@ -23,4 +23,9 @@ int main(){ml::StereoDelayAligner aligner;assert(aligner.setDelay(3));float al=0
  assert(delay.api()->set_parameter(d,1,7)==MLP_OK);l.fill(0);r.fill(0);assert(graph.process(l.data(),r.data(),256,dl.data(),dr.data()));assert(graph.process(l.data(),r.data(),256,dl.data(),dr.data()));assert(graph.diagnostics().latency==7&&graph.diagnostics().latencyChanges>=1);
  // Once the transition is complete, a pure delay has an aligned audio delta near zero.
  delay.api()->reset(d);l.fill(0);r.fill(0);l[0]=r[0]=1;assert(graph.process(l.data(),r.data(),256,dl.data(),dr.data()));for(float x:dl)assert(std::abs(x)<1e-6f);
+ c.revision=4;c.nodes[0].bypass=true;assert(graph.submit(c));
+ for(int i=0;i<3;++i){l.fill(0);r.fill(0);assert(graph.process(l.data(),r.data(),256,dl.data(),dr.data()));}
+ assert(graph.diagnostics().latency==7);
+ l.fill(0);r.fill(0);l[0]=1;r[0]=-.5f;assert(graph.process(l.data(),r.data(),256,dl.data(),dr.data()));
+ for(size_t i=0;i<l.size();++i){assert(std::abs(l[i]-(i==7?1.f:0.f))<1e-6f);assert(std::abs(r[i]-(i==7?-.5f:0.f))<1e-6f);assert(std::abs(dl[i])<1e-6f);}
  ml::GraphSnapshot retired;assert(graph.pollRetired(retired));std::cout<<"{\"initial_latency_samples\":3,\"changed_latency_samples\":7,\"aligned_delta_tolerance\":1e-6,\"latency_changes\":"<<graph.diagnostics().latencyChanges<<"}\n";gain.destroy(g);sat.destroy(s);delay.destroy(d);}

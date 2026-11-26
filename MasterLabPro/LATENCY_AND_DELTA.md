@@ -1,6 +1,6 @@
 # Latency, PDC and DELTA
 
-Every active, non-bypassed module reports latency in samples. A serial graph latency is their bounded sum.
+Every active module reports latency in samples. A serial graph latency is their bounded sum.
 `StereoDelayAligner` uses preallocated stereo storage and supports up to 65,536 samples. Graph publication,
 bypass and latency changes refresh the sum. A runtime latency change increments a diagnostic counter and
 uses fade-out, alignment reset, then fade-in.
@@ -28,4 +28,6 @@ Package C scope.
 
 ## Package C alignment corrections
 
-Delay-line reset invalidates history in constant time without clearing the storage. The current block's alignment and tap calculations run before graph retirement and latency refresh, so a new graph cannot reset the alignment of an already processed block. Global and selected-module aligned input buffers are separate. The global aligner advances even when no analysis output was requested. Dynamic-latency transition behavior and DAW PDC still require validation; bypass currently removes the module's latency.
+Delay-line reset invalidates history in constant time without clearing the storage. The current block's alignment and tap calculations run before graph retirement and latency refresh, so a new graph cannot reset the alignment of an already processed block. Global and selected-module aligned input buffers are separate. The global aligner advances even when no analysis output was requested. Dynamic-latency transition behavior and DAW PDC still require validation; bypass now preserves the module's latency using a separate preallocated dry delay; native processing continues to keep history warm.
+
+Regression: bypass of a 7-sample technical delay must retain 7-sample PDC and produce a delayed dry impulse with zero steady-state DELTA. Ten stereo delay lines are allocated outside audio; bypass is not a CPU-saving switch. Transition artifacts and DAW notification still require testing.
