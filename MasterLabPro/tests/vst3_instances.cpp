@@ -32,10 +32,13 @@ int main(int argc,char** argv){
   plugins[size_t(i)]->setStateInformation(wrapped.getData(),int(wrapped.getSize()));
  }
  juce::AudioBuffer<float> audio(2,frames);juce::MidiBuffer midi;
- for(int block=0;block<12;++block)for(int i=0;i<count;++i){
+ // The compressor ramps restored Input Gain with a 10 ms time constant.
+ // Allow that ramp to settle before applying the existing 1e-4 sample tolerance.
+ const int warmupBlocks=compressor?48:10;
+ for(int block=0;block<warmupBlocks+2;++block)for(int i=0;i<count;++i){
   for(int ch=0;ch<2;++ch)for(int n=0;n<frames;++n)audio.setSample(ch,n,ch?-.1f:.1f);
   auto& plugin=*plugins[size_t(i)];plugin.processBlock(audio,midi);
-  if(block>=10){const float expected=.1f*float(std::pow(10.,double(i)/20.));for(int n=0;n<frames;++n)if(std::abs(audio.getSample(0,n)-expected)>1e-4f||std::abs(audio.getSample(1,n)+expected)>1e-4f){std::cerr<<"instance "<<i<<" expected "<<expected<<" got "<<audio.getSample(0,n);return 5;}}
+  if(block>=warmupBlocks){const float expected=.1f*float(std::pow(10.,double(i)/20.));for(int n=0;n<frames;++n)if(std::abs(audio.getSample(0,n)-expected)>1e-4f||std::abs(audio.getSample(1,n)+expected)>1e-4f){std::cerr<<"instance "<<i<<" expected "<<expected<<" got "<<audio.getSample(0,n)<<'\n';return 5;}}
  }
  for(auto& plugin:plugins){juce::MemoryBlock state;plugin->getStateInformation(state);if(state.getSize()==0)return 6;plugin->releaseResources();}
  plugins.clear();std::cout<<"{\"loaded_vst3_instances\":8,\"module\":\""<<(compressor?"Input Compressor":"Gain")<<"\",\"gain_isolation\":true,\"state_save\":true}\n";return 0;
