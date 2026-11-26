@@ -19,7 +19,7 @@ public:
             juce::Image panel = {}): callbacks(std::move(cb)),tiles(order),bands(std::move(skins)),panelSkin(std::move(panel)) {
   addAndMakeVisible(spectrum);addAndMakeVisible(heatmap);
   addAndMakeVisible(input);addAndMakeVisible(output);
-  addAndMakeVisible(tiles);addAndMakeVisible(bands);
+  addAndMakeVisible(tiles);addChildComponent(bands);
   bands.setEnabled(false);
   tiles.label=callbacks.label;
   tiles.onMove=[this](int a,int b){if(callbacks.move)callbacks.move(a,b);};
@@ -46,18 +46,16 @@ public:
   if(module)removeChildComponent(module.get());
   module=std::move(next);
   moduleOwnsBandArea=module&&ownsBandArea;
-  bands.setVisible(!moduleOwnsBandArea);
+  bands.setVisible(false);
   if(module)addAndMakeVisible(*module);
   resized();
  }
  void resized()override{
-  auto a=box(1);a.removeFromTop(24);spectrum.setBounds(a.reduced(4));
-  a=box(2);a.removeFromTop(24);heatmap.setBounds(a.reduced(4));
-  a=box(3);a.removeFromTop(24);input.setBounds(a.reduced(4));
-  a=box(4);a.removeFromTop(24);output.setBounds(a.reduced(4));
-  a=box(5);a.removeFromTop(24);tiles.setBounds(a.reduced(4));
-  bands.setBounds(box(8));
-  if(module){a=box(6);a.removeFromTop(moduleOwnsBandArea?24:76*getHeight()/1000);module->setBounds(a.reduced(8));}
+  auto interior=[this](int i){auto a=box(i).reduced(14,8);a.removeFromTop(22);return a;};
+  spectrum.setBounds(interior(1));heatmap.setBounds(interior(2));
+  input.setBounds(interior(3));output.setBounds(interior(4));
+  tiles.setBounds(interior(5));bands.setBounds({});
+  if(module)module->setBounds(interior(6));
  }
  void paint(juce::Graphics& g)override{
   g.fillAll(juce::Colour(0xff171b21));
@@ -69,21 +67,19 @@ public:
    }else{g.setColour(juce::Colour(0xff272d34));g.fillRoundedRectangle(r.toFloat(),5);g.setColour(juce::Colour(0xff65717c));g.drawRoundedRectangle(r.toFloat(),5,1);}}
   const char* names[]{"JERZY MASTERLAB PRO","SPECTRAL MONITOR","SPECTRAL HEAT MAP","INPUT","OUTPUT","SIGNAL ROUTING","MODULE EDITOR"};
   g.setColour(juce::Colours::whitesmoke);g.setFont(14.f);
-  for(int i=0;i<7;++i)g.drawFittedText(names[i],box(i).removeFromTop(24).reduced(24,1),juce::Justification::centredLeft,1,.62f);
-  g.drawFittedText(footer,box(7).removeFromTop(24).reduced(24,1),juce::Justification::centredLeft,1,.62f);
+  for(int i=0;i<7;++i)g.drawFittedText(names[i],box(i).removeFromTop(30).reduced(30,5),juce::Justification::centredLeft,1,.62f);
+  g.drawFittedText(footer,box(7).removeFromTop(30).reduced(30,5),juce::Justification::centredLeft,1,.62f);
   if(analysisMode.isNotEmpty())g.drawText(analysisMode,box(0).removeFromTop(24).reduced(8,0),juce::Justification::centredRight,true);
   if(!module){auto r=box(6);r.removeFromTop(76*getHeight()/1000);g.drawText(selected?"MODULE EDITOR NOT CONNECTED":"SELECT A MODULE",r,juce::Justification::centred);}
  }
 private:
  juce::Rectangle<int> box(int i)const{
   auto raw=rackLayout[static_cast<std::size_t>(i)];
-  if(moduleOwnsBandArea){
-   if(i==1||i==2)raw.h-=68;
-   if(i==2)raw.y-=68;
-   if(i==3||i==4)raw.h-=136;
-   if(i==5||i==6)raw.y-=136;
-   if(i==6)raw.h+=136;
-  }
+  if(i==1)raw={12,72,1248,168};
+  if(i==2)raw={12,250,1248,142};
+  if(i==3||i==4)raw.h=320;
+  if(i==5)raw={12,402,1576,100};
+  if(i==6)raw={12,512,1576,438};
   const auto r=scale(raw,getWidth(),getHeight());return {r.x,r.y,r.w,r.h};
  }
  Callbacks callbacks;RackTiles tiles;FrequencyBandSelector bands;SpectrumView spectrum;HeatMapView heatmap;StereoLevelMeter input,output;

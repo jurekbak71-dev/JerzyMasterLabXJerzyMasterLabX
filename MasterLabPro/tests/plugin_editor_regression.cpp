@@ -21,9 +21,9 @@ juce::Component* named(juce::Component& c,const juce::String& name){
  for(int i=0;i<c.getNumChildComponents();++i)if(auto* result=named(*c.getChildComponent(i),name))return result;
  return nullptr;
 }
-juce::MouseEvent mouse(juce::Component& c,juce::ModifierKeys mods){
+juce::MouseEvent mouse(juce::Component& c,juce::ModifierKeys mods,juce::Point<float> pos={10.f,10.f}){
  const auto now=juce::Time::getCurrentTime();
- return {juce::Desktop::getInstance().getMainMouseSource(),{10.f,10.f},mods,1.f,0.f,0.f,0.f,0.f,&c,&c,now,{10.f,10.f},now,1,false};
+ return {juce::Desktop::getInstance().getMainMouseSource(),pos,mods,1.f,0.f,0.f,0.f,0.f,&c,&c,now,pos,now,1,false};
 }
 }
 int main(int argc,char** argv){
@@ -102,7 +102,15 @@ int main(int argc,char** argv){
  tiles=find<ml::RackTiles>(*editor);
  if(!tiles)return 17;
  tile=tiles->getChildComponent(0);tile->mouseDown(mouse(*tile,juce::ModifierKeys::leftButtonModifier));
- if(!named(*editor,"Stereo Architect Panel"))return 18;
+ auto* stereoPanel=named(*editor,"Stereo Architect Panel");if(!stereoPanel)return 18;
+ // Exercise real editor gesture, not just screenshot creation.
+ const auto widthBefore=stereo->getParameters()[3]->getValue();
+ const auto point=juce::Point<float>(float(stereoPanel->getWidth())*.59f,float(stereoPanel->getHeight())*.27f);
+ const auto down=mouse(*stereoPanel,juce::ModifierKeys::leftButtonModifier,point);
+ stereoPanel->mouseDown(down);stereoPanel->mouseUp(down);
+ bool changed=false;for(int i=0;i<7;++i)if(stereo->getParameters()[i]->getValue()!=std::array<float,7>{0.f,.375f,.5f,.5f,.5f,.7f,.625f}[size_t(i)])changed=true;
+ if(!changed){std::cerr<<"Stereo band mouse gesture did not change a parameter\n";return 21;}
+ (void)widthBefore;
  for(int block=0;block<64;++block){
   for(int i=0;i<256;++i){
    const auto time=double(block*256+i)/48000.;

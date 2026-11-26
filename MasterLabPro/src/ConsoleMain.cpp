@@ -46,6 +46,8 @@ public:
    editor.setRackSkin(assets.loadSlot());
    addAndMakeVisible(editor);
    addAndMakeVisible(loadButton);addAndMakeVisible(stopButton);addAndMakeVisible(scopeButton);
+   // Reuse the same approved button assets as the plugin when available.
+   for(auto* button:std::array<StudioButton*,4>{&loadButton,&stopButton,&scopeButton,&deltaButton})button->setAccent(juce::Colour(0xff58bde8));
    scopeButton.onClick=[this]{moduleScope=scopeButton.getToggleState();scopeButton.setButtonText(moduleScope?"MODULE":"GLOBAL");clearAnalysis();submitConfiguration();};
    addAndMakeVisible(deltaButton);deltaButton.setClickingTogglesState(true);
    deltaButton.onClick=[this]{submitConfiguration();};
