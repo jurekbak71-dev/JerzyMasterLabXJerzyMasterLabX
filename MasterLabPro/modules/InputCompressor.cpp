@@ -10,7 +10,7 @@
 
 namespace {
 constexpr auto parameters = [] {
- std::array<MlpParameterDescriptor,34> result{};
+ std::array<MlpParameterDescriptor,46> result{};
  auto put = [&](size_t index, uint32_t id, const char* name, const char* unit,
                 double min, double max, double neutral, double step=0,
                 uint32_t flags=0) {
@@ -31,6 +31,11 @@ constexpr auto parameters = [] {
   put(index+4,140+band,"Knee","dB",0,24,6);
   put(index+5,150+band,"Mix","%",0,100,100);
   put(index+6,160+band,"Stereo Link","%",0,100,100);
+ }
+ for(uint32_t band=0;band<4;++band){
+  put(34+band,170+band,"Band Makeup","dB",-18,18,0);
+  put(38+band,180+band,"Band Active","",0,1,1,1,MLP_PARAMETER_INTEGER);
+  put(42+band,190+band,"Stereo Width","%",0,200,100);
  }
  return result;
 }();
@@ -103,7 +108,7 @@ Pair compress(MlpInstance& p,uint32_t band,Pair signal,float analog,Pair& applie
  const float* v=p.values.data()+6+band*7;
  const float threshold=v[0], ratio=v[1], knee=v[4];
  const float maximum=std::max(std::abs(signal[0]),std::abs(signal[1]));
- if(ratio==1.f&&p.envelopes[band][0]==0&&p.envelopes[band][1]==0){applied={};return signal;}
+ const auto dry=signal;
  const float attack=float(-std::expm1(-1000./(p.rate*v[2])));
  const float release=float(-std::expm1(-1000./(p.rate*v[3])));
  for (size_t ch=0;ch<2;++ch) {
@@ -126,6 +131,10 @@ Pair compress(MlpInstance& p,uint32_t band,Pair signal,float analog,Pair& applie
   signal[ch]*=gain;
   applied[ch]=-20*std::log10(gain);
  }
+ const float active=p.values[38+band],makeup=amplitude(p.values[34+band]),width=p.values[42+band]*.01f;
+ const float mid=(signal[0]+signal[1])*.5f,side=(signal[0]-signal[1])*.5f*width;
+ signal={std::lerp(dry[0],(mid+side)*makeup,active),std::lerp(dry[1],(mid-side)*makeup,active)};
+ for(auto& gr:applied)gr*=active;
  return signal;
 }
 MlpResult MLP_CALL process(MlpInstance* p,const MlpProcessContext* ctx) {
@@ -195,13 +204,13 @@ MlpResult MLP_CALL save(const MlpInstance* p,void* data,uint32_t capacity,uint32
  return MLP_OK;
 }
 MlpResult MLP_CALL load(MlpInstance* p,const void* data,uint32_t size) {
- if (!p||!data||size!=stateBytes) return MLP_ERROR_ARGUMENT;
+ if (!p||!data||(size!=stateBytes&&size!=4+4*34)) return MLP_ERROR_ARGUMENT;
  const auto* bytes=static_cast<const uint8_t*>(data);
  auto read=[&](size_t offset) {uint32_t value=0;for (unsigned i=0;i<4;++i) value|=uint32_t(bytes[offset+i])<<(8*i);return value;};
  if (read(0)!=0x31434c4d) return MLP_ERROR_STATE;
  std::array<float,parameters.size()> values{};
  for (size_t i=0;i<values.size();++i) {
-  values[i]=std::bit_cast<float>(read(4+4*i));
+  values[i]=i<(size-4)/4?std::bit_cast<float>(read(4+4*i)):float(parameters[i].default_value);
   if (!std::isfinite(values[i])||values[i]<float(parameters[i].minimum)||values[i]>float(parameters[i].maximum)) return MLP_ERROR_STATE;
  }
  for (size_t i=0;i<values.size();++i) set(p,parameters[i].id,values[i]);

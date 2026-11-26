@@ -27,11 +27,17 @@ public:
   const auto bottom=juce::Colour(pressed?0xff0d171d:0xff10181d);
   const auto& skin=skins[pressed?3:active?1:hover?2:0];
   if(skin.isValid()){
-   const float edge=std::min(face.getWidth()*.24f,face.getHeight()*.42f);
+   const float edge=std::min(face.getWidth()*.24f,face.getHeight()*.12f);
    auto middle=face;auto left=middle.removeFromLeft(edge),right=middle.removeFromRight(edge);
-   const int sw=skin.getWidth(),sh=skin.getHeight(),cut=sw/5;
+   const int sw=skin.getWidth(),sh=skin.getHeight(),cut=std::max(1,sw/18);
    g.drawImage(skin.getClippedImage({0,0,cut,sh}),left);
-   g.drawImage(skin.getClippedImage({cut,0,sw-2*cut,sh}),middle);
+   // The supplied state samples contain baked demo labels and a lamp.
+   // Only use the outer bevel from the approved artwork; render a clean face.
+   const auto faceTop=juce::Colour(pressed?0xff151b20:0xff353a3e);
+   g.setGradientFill({faceTop,middle.getTopLeft(),juce::Colour(0xff080b0e),middle.getBottomLeft(),false});
+   g.fillRect(middle);
+   g.setColour(juce::Colour(0xff6e7578));g.drawHorizontalLine(int(middle.getY()+1),middle.getX(),middle.getRight());
+   g.setColour(juce::Colour(0xff050708));g.drawHorizontalLine(int(middle.getBottom()-2),middle.getX(),middle.getRight());
    g.drawImage(skin.getClippedImage({sw-cut,0,cut,sh}),right);
   }else{
   g.setGradientFill({top,face.getTopLeft(),bottom,face.getBottomLeft(),false});
@@ -47,7 +53,7 @@ public:
   g.setColour(colour);g.fillEllipse(led);
   g.setColour(colour.brighter(.4f));g.fillEllipse(led.withSizeKeepingCentre(3,3));
   g.setColour(juce::Colours::whitesmoke.withAlpha(enabled?1.f:.40f));
-  g.setFont(juce::FontOptions(juce::jlimit(9.f,13.f,face.getHeight()*.58f),juce::Font::bold));
+  g.setFont(juce::FontOptions(juce::jlimit(9.f,12.f,face.getHeight()*.46f),juce::Font::bold));
   g.drawFittedText(getButtonText(),label,juce::Justification::centred,1,.66f);
  }
 private:

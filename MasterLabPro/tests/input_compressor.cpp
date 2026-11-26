@@ -128,6 +128,18 @@ int main(int argc, char** argv) {
   if(api.prepare(instance,48000,128,2)!=MLP_OK)return false;
   block.frames=128;
   const auto* descriptor=api.get_descriptor();
+  if(descriptor->parameter_count!=46)return false;
+  for(uint32_t i=0;i<descriptor->parameter_count;++i)api.set_parameter(instance,descriptor->parameters[i].id,descriptor->parameters[i].neutral_value);
+  api.set_parameter(instance,173,6);api.reset(instance);
+  if(std::abs(run(.2f,20)-.2f*std::pow(10.f,.3f))>1e-5f)return false;
+  api.set_parameter(instance,183,0);api.reset(instance);
+  if(std::abs(run(.2f,20)-.2f)>1e-6f)return false;
+  api.set_parameter(instance,183,1);api.set_parameter(instance,173,0);api.set_parameter(instance,193,0);api.reset(instance);
+  l.fill(.3f);r.fill(-.1f);if(api.process(instance,&block)!=MLP_OK||std::abs(l.back()-.1f)>1e-6f||std::abs(r.back()-.1f)>1e-6f)return false;
+  api.set_parameter(instance,193,200);api.reset(instance);
+  l.fill(.3f);r.fill(-.1f);if(api.process(instance,&block)!=MLP_OK||std::abs(l.back()-.5f)>1e-6f||std::abs(r.back()+.3f)>1e-6f)return false;
+  api.set_parameter(instance,193,100);api.reset(instance);
+  std::cout<<"PASS independent makeup, band enable and stereo width\n";
   std::atomic<bool> writtenAll{false},valid{true};
   std::thread automation([&] {
    for(int pass=0;pass<100;++pass)for(uint32_t i=0;i<descriptor->parameter_count;++i){
