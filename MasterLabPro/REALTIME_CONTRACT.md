@@ -18,3 +18,6 @@ detected at a block boundary and handled by a bounded fade/reset/fade transition
 realtime-safe and is restricted to the stopped state.
 
 Native third-party code is trusted to honor the same rules. The host cannot enforce them in-process.
+
+## Package C: native instance retirement
+Control thread tracks the last successfully submitted revision referencing each instance. An instance marked removed is destroyed only when that revision or a later revision has been acknowledged as retired by the audio thread, or when processing is stopped and all graph references are cleared. Never reuse the instance ID while it is pending retirement. Drain retirement notifications on the control thread even when the order has not changed. Windows native loading no longer changes the process-wide default DLL search policy (important inside a DAW); explicit LoadLibraryExW flags remain in use.

@@ -13,7 +13,6 @@ bool ModuleLibrary::open(const std::filesystem::path& file,const std::filesystem
   const auto path=std::filesystem::canonical(file);
   if(path.parent_path()!=root){error="module is outside the allowed directory";return false;}
 #if defined(_WIN32)
-  SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS);
   handle=LoadLibraryExW(path.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
   auto entry=handle?reinterpret_cast<MlpGetModuleApiFn>(GetProcAddress(static_cast<HMODULE>(handle),"masterlabpro_get_module_api")):nullptr;
 #else

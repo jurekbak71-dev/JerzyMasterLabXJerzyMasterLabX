@@ -84,7 +84,7 @@ public:
  }
 private:
  void stopPlayback(){
-   stopTimer();shutdownAudio();deltaButton.setToggleState(false,juce::dontSendNotification);source.setSize(0,0);
+   stopTimer();shutdownAudio();moduleHost.resetGraphWhenStopped();graphDirty=true;deltaButton.setToggleState(false,juce::dontSendNotification);source.setSize(0,0);
    editor.setGlobalLevels({},{});clearAnalysis();status.setText("STOPPED",juce::dontSendNotification);
  }
  void chooseWav(){
@@ -135,6 +135,7 @@ private:
    updateAnalysis();
  }
  void submitConfiguration(){
+   moduleHost.collectRetired();
    moduleHost.setAnalysis(controller.selection(),moduleScope,deltaButton.getToggleState()&&(!moduleScope||controller.selection()!=0));
    for(auto& [id,state]:ui)for(std::size_t i=0;i<state.parameters.size();++i)moduleHost.setParameter(id,state.descriptor->parameters[i].id,state.parameters[i]->get());
    const auto slots=controller.order().slots();if((graphDirty||slots!=submittedOrder)&&moduleHost.submit(controller.order())){submittedOrder=slots;graphDirty=false;}
