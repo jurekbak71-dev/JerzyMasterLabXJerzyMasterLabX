@@ -47,6 +47,12 @@ public:
  bool getParameter(uint64_t id,uint32_t parameter,double& value)const noexcept{const auto* item=find(id);return item&&!item->removed&&item->type->library->api()->get_parameter(item->handle,parameter,&value)==MLP_OK;}
  uint32_t automationLane(uint64_t id)const noexcept{const auto* item=find(id);return item&&!item->removed?item->lane:10;}
  const MlpModuleDescriptor* descriptor(uint64_t id)const noexcept{const auto* item=find(id);return item&&!item->removed?item->type->descriptor:nullptr;}
+ float gainReduction(uint64_t id,uint32_t band)const noexcept{
+  const auto* item=find(id);
+  if(!item||item->removed)return 0;
+  const auto read=item->type->library->gainReduction();
+  return read?read(item->handle,band):0.f;
+ }
  void prepare(double rate,uint32_t maximumBlock){sampleRate=std::clamp(std::isfinite(rate)?rate:44100.,8000.,768000.);maximumFrames=std::clamp<uint32_t>(maximumBlock,1,2048);graph.prepare(maximumFrames);capture.restart(sampleRate);for(auto& item:instances)if(item.id&&!item.removed)item.type->library->api()->prepare(item.handle,sampleRate,maximumFrames,2);}
  void bindAutomation(const void* context,ReadAutomation reader)noexcept{automationContext=context;readAutomation=reader;}
  bool submit(const RackOrder& order,bool initial=false){GraphSnapshot snapshot;snapshot.revision=++revision;for(auto id:order.slots())if(id)if(auto* item=find(id);item&&!item->removed){snapshot.nodes[snapshot.count++]={id,item->type->library->api(),item->handle,item->bypass,item->type->descriptor,item->lane,automationContext,readAutomation};}if(initial)graph.installWhenStopped(snapshot);else if(!graph.submit(snapshot))return false;for(uint32_t i=0;i<snapshot.count;++i)if(auto* item=find(snapshot.nodes[i].instanceId))item->lastPublished=snapshot.revision;collectRetired();return true;}

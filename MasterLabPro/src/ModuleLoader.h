@@ -1,5 +1,6 @@
 #pragma once
 #include "ModuleAbiValidation.h"
+#include "../sdk/masterlabpro_input_compressor.h"
 #include <filesystem>
 #include <string>
 
@@ -14,7 +15,9 @@ public:
  void destroy(MlpInstance* instance) noexcept;
  const MlpModuleApi* api()const noexcept{return handle?&functions:nullptr;}
  unsigned liveInstances()const noexcept{return instances;}
+ MlpReadGainReductionV1 gainReduction()const noexcept{return readReduction;}
 private:
+ MlpReadGainReductionV1 readReduction=nullptr;
  void* handle=nullptr;MlpModuleApi functions{};unsigned instances=0;
 };
 }

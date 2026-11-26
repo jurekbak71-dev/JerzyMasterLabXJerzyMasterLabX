@@ -2,6 +2,7 @@
 #include "RackTiles.h"
 #include "RackState.h"
 #include "RotaryParameterControl.h"
+#include "masterlabpro_input_compressor.h"
 #include <memory>
 #include <vector>
 #include <iostream>
@@ -32,12 +33,45 @@ int main(){
  for(int i=0;i<100;++i){
   auto* tile=tiles->getChildComponent(0);tile->mouseDown(mouse(*tile,juce::ModifierKeys::leftButtonModifier));
   auto* panel=named(*editor,"MasterLabPro Module Panel");if(!panel)return 4;
-  auto* knob=find<ml::RotaryParameterControl>(*panel);if(!knob)return 5;if(knob->getName()!="Gain"||!knob->valueText().endsWith(" dB")||knob->dialDiameter()<65.f)return 7;
-  knob->mouseDown(mouse(*knob,juce::ModifierKeys::rightButtonModifier));if(knob->valueText()!="0.00 dB")return 8;
+  auto* knob=find<ml::RotaryParameterControl>(*panel);if(!knob)return 5;
+  if(knob->getName()!="Gain"||!knob->valueText().endsWith(" dB")||knob->dialDiameter()<65.f){
+   std::cerr<<"Gain knob: "<<knob->getName()<<" / "<<knob->valueText()<<" / "<<knob->dialDiameter()<<'\n';return 7;
+  }
+  knob->mouseDown(mouse(*knob,juce::ModifierKeys::rightButtonModifier));
+  if(knob->valueText()!="0.00 dB"){std::cerr<<"Reset: "<<knob->valueText()<<'\n';return 8;}
  }
  // Empty tile must clear selection and open a menu without dereferencing ID zero.
  auto* empty=tiles->getChildComponent(1);empty->mouseDown(mouse(*empty,juce::ModifierKeys::leftButtonModifier));
  if(named(*editor,"MasterLabPro Module Panel"))return 6;
  juce::PopupMenu::dismissAllActiveMenus();editor.reset();p->releaseResources();
  std::cout<<"PASS actual plugin editor: 100 selections, knob resets, empty tile\n";
+ std::unique_ptr<juce::AudioProcessor> compressor(createPluginFilter());
+ compressor->prepareToPlay(48000,256);
+ state.modules[0].typeHi=MLP_INPUT_COMPRESSOR_HI;
+ state.modules[0].typeLo=MLP_INPUT_COMPRESSOR_LO;
+ state.modules[0].parameters={{103,-20},{113,3}};
+ if(!ml::RackStateCodec::encode(state,bytes))return 9;
+ compressor->setStateInformation(bytes.data(),int(bytes.size()));
+ editor.reset(compressor->createEditor());
+ tiles=find<ml::RackTiles>(*editor);
+ if(!tiles)return 10;
+ auto* tile=tiles->getChildComponent(0);tile->mouseDown(mouse(*tile,juce::ModifierKeys::leftButtonModifier));
+ auto* panel=named(*editor,"Input Compressor Panel");
+ if(!panel||!named(*panel,"Stereo Link"))return 11;
+ juce::AudioBuffer<float> audio(2,256);juce::MidiBuffer midi;
+ for(int block=0;block<120;++block){
+  for(int ch=0;ch<2;++ch)for(int i=0;i<256;++i)audio.setSample(ch,i,0.5f);
+  compressor->processBlock(audio,midi);
+ }
+ if(audio.getSample(0,255)>.2f)return 12;
+ juce::Timer::callPendingTimersSynchronously();
+ for(int scale:{100,150,200}){
+  auto snapshot=editor->createComponentSnapshot(editor->getLocalBounds(),true,float(scale)/100);
+  auto file=juce::File::getCurrentWorkingDirectory().getChildFile("input-compressor-"+juce::String(scale)+".png");
+  if(!file.deleteFile())return 13;
+  juce::FileOutputStream stream(file);
+  if(!snapshot.isValid()||!stream.openedOk()||!juce::PNGImageFormat().writeImageToStream(snapshot,stream))return 14;
+ }
+ editor.reset();compressor->releaseResources();
+ std::cout<<"PASS Input Compressor editor and three scaled renders\n";
 }

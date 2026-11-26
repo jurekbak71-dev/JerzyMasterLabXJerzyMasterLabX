@@ -107,15 +107,20 @@ jobs:
           $p = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait -PassThru
           if ($p.ExitCode -ne 0) { exit $p.ExitCode }
           $root = Join-Path $env:ProgramData 'Jerzy/MasterLabPro'
-          foreach ($name in @('mlp_unity.dll','mlp_gain.dll','mlp_saturation.dll','mlp_delay.dll')) {
+          foreach ($name in @('mlp_unity.dll','mlp_gain.dll','mlp_saturation.dll','mlp_delay.dll','mlp_z_input_compressor.dll')) {
             if (-not (Test-Path "$root/modules/$name")) { throw "Missing installed module $name" }
           }
           if (-not (Test-Path "$root/assets/manifest.json")) { throw 'Missing installed assets' }
       - name: Exercise actual plugin module editor
         shell: pwsh
         run: |
-          & build-masterlabpro/Release/masterlabpro_plugin_editor_regression.exe | Tee-Object -FilePath reports/plugin-editor-regression.log
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & build-masterlabpro/Release/masterlabpro_plugin_editor_regression.exe 2>&1 | Tee-Object -FilePath reports/plugin-editor-regression.log
+          if ($LASTEXITCODE -ne 0) {
+            $code = $LASTEXITCODE
+            $detail = ((Get-Content reports/plugin-editor-regression.log -Tail 8) -join ' ').Replace('%','%25')
+            Write-Output "::error title=Plugin editor regression::Exit $code. $detail"
+            exit $code
+          }
       - name: Load eight real VST3 instances
         id: vst3_instances
         shell: pwsh
@@ -123,6 +128,8 @@ jobs:
           $bundle = Join-Path $env:CommonProgramFiles 'VST3/Jerzy MasterLabPro.vst3'
           if (-not (Test-Path $bundle)) { throw 'Installed VST3 missing' }
           & build-masterlabpro/Release/masterlabpro_vst3_instances.exe $bundle | Tee-Object -FilePath reports/vst3-instances.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & build-masterlabpro/Release/masterlabpro_vst3_instances.exe $bundle compressor | Tee-Object -FilePath reports/vst3-compressor-instances.json
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate installed VST3 with pluginval
         if: success() || (failure() && steps.vst3_instances.conclusion == 'failure')
@@ -142,6 +149,8 @@ jobs:
           name: MasterLabPro-C-VST3-Validation
           path: |
             reports/vst3-instances.json
+            reports/vst3-compressor-instances.json
+            input-compressor-*.png
             reports/pluginval.log
             reports/plugin-editor-regression.log
             reports/live-exchange-windows.json

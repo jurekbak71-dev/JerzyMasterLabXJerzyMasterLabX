@@ -60,12 +60,13 @@ public:
  static juce::File dataRoot(){return juce::File::getSpecialLocation(juce::File::commonApplicationDataDirectory).getChildFile("Jerzy").getChildFile("MasterLabPro");}
  RackOrder editorOrder(){const std::lock_guard<std::mutex> lock(controlMutex);return order;}
  struct EditorParameterInfo{juce::AudioParameterFloat* parameter;float neutral;juce::String name,unit;double minimum,maximum,step;uint32_t flags;};
- struct EditorModuleInfo{juce::String name;std::vector<EditorParameterInfo> parameters;};
+ struct EditorModuleInfo{juce::String name;std::vector<EditorParameterInfo> parameters;bool compressor=false;};
  std::optional<EditorModuleInfo> editorModule(uint64_t id){
   if(!id)return std::nullopt;
   const std::lock_guard<std::mutex> lock(controlMutex);const auto* d=host->descriptor(id);const auto lane=host->automationLane(id);
   if(!d||lane>=10||d->parameter_count>64)return std::nullopt;
   EditorModuleInfo result;result.name=juce::String::fromUTF8(d->name);
+  result.compressor=d->type_id_hi==MLP_INPUT_COMPRESSOR_HI&&d->type_id_lo==MLP_INPUT_COMPRESSOR_LO&&d->parameter_count==34;
   for(uint32_t i=0;i<d->parameter_count;++i){const auto& v=d->parameters[i];result.parameters.push_back({params[lane*64+i],float(normalize(v,v.neutral_value)),juce::String::fromUTF8(v.name),juce::String::fromUTF8(v.unit?v.unit:""),v.minimum,v.maximum,v.step,v.flags});}
   return result;
  }
@@ -94,6 +95,7 @@ public:
  void analysisSource(uint64_t id,bool module,bool delta){const std::lock_guard<std::mutex> lock(controlMutex);host->setAnalysis(id,module,delta);}
  bool readMeters(ModuleRackMeters& m){const std::lock_guard<std::mutex> lock(controlMutex);return host->pollMeters(m);}
  bool readAnalysis(AnalysisFrame& f){const std::lock_guard<std::mutex> lock(controlMutex);return host->pollAnalysis(f);}
+ float gainReduction(uint64_t id,uint32_t band){const std::lock_guard<std::mutex> lock(controlMutex);return host->gainReduction(id,band);}
  uint64_t editorEpoch()const noexcept{return epoch.load();}
 
  void getStateInformation(juce::MemoryBlock& dest) override{
@@ -157,6 +159,78 @@ private:
  StateAccessGate stateGate;std::mutex controlMutex;RackOrder order;uint64_t nextId=1;bool dirty=false;std::atomic<uint64_t> epoch{0};std::array<juce::AudioParameterFloat*,640> params{};
 };
 class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Timer {
+ class CompressorPanel final:public juce::Component,private juce::Timer {
+ public:
+  CompressorPanel(PluginProcessor& processor,uint64_t id,PluginProcessor::EditorModuleInfo descriptor,
+                  juce::Image metal,juce::Image indicator,std::function<void()> remove)
+   :p(processor),instance(id),info(std::move(descriptor)),cap(std::move(metal)),pointer(std::move(indicator)),
+    mode(*info.parameters[4].parameter,[this](float v){analog.setButtonText(v>.5f?"ANALOG":"DIGITAL");}),
+    bypassAttachment(*info.parameters[5].parameter,[this](float v){bypass.setToggleState(v>.5f,juce::dontSendNotification);bypass.setButtonText(v>.5f?"BYPASSED":"ACTIVE");}) {
+   setName("Input Compressor Panel");
+   const char* names[]{"LOW","MID","HIGH","SUM","CROSSOVER"};
+   for(size_t i=0;i<banks.size();++i){
+    banks[i].setButtonText(names[i]);addAndMakeVisible(banks[i]);
+    banks[i].onClick=[this,i]{bank=i;rebuild();};
+   }
+   for(auto* button:{&analog,&bypass,&removeButton})addAndMakeVisible(*button);
+   analog.onClick=[this]{mode.setValueAsCompleteGesture(info.parameters[4].parameter->get()<.5f?1.f:0.f);};
+   bypass.onClick=[this]{bypassAttachment.setValueAsCompleteGesture(info.parameters[5].parameter->get()<.5f?1.f:0.f);};
+   removeButton.onClick=std::move(remove);
+   mode.sendInitialUpdate();bypassAttachment.sendInitialUpdate();rebuild();startTimerHz(30);
+  }
+  ~CompressorPanel() override{stopTimer();}
+  void resized() override {
+   auto area=getLocalBounds().reduced(3);
+   auto header=area.removeFromTop(24);
+   const int width=juce::jmin(110,header.getWidth()/9);
+   for(auto& button:banks)button.setBounds(header.removeFromLeft(width).reduced(2,0));
+   for(auto* button:{&removeButton,&bypass,&analog})button->setBounds(header.removeFromRight(width).reduced(2,0));
+   area.removeFromBottom(23);
+   for(size_t i=0;i<knobs.size();++i){
+    const auto left=area.getX()+area.getWidth()*int(i)/int(knobs.size());
+    const auto right=area.getX()+area.getWidth()*int(i+1)/int(knobs.size());
+    knobs[i]->setBounds(left,area.getY(),right-left,area.getHeight());
+   }
+  }
+  void paint(juce::Graphics& g) override {
+   auto strip=getLocalBounds().reduced(6,2).removeFromBottom(18);
+   g.setColour(juce::Colours::whitesmoke);
+   g.drawText("GAIN REDUCTION",strip.removeFromLeft(140),juce::Justification::centredLeft);
+   g.drawText(juce::String(meter,1)+" dB",strip.removeFromRight(76),juce::Justification::centredRight);
+   g.setColour(juce::Colour(0xff101820));g.fillRoundedRectangle(strip.toFloat(),4);
+   g.setColour(accent());g.fillRoundedRectangle(strip.toFloat().withWidth(float(strip.getWidth())*juce::jlimit(0.f,1.f,meter/24)),4);
+  }
+ private:
+  juce::Colour accent()const {
+   constexpr uint32_t colours[]{0xffe4ae62,0xff8bdca1,0xffc6a4eb,0xff58bde8,0xff58bde8};
+   return juce::Colour(colours[bank]);
+  }
+  void rebuild(){
+   knobs.clear();
+   for(size_t i=0;i<banks.size();++i)banks[i].setToggleState(i==bank,juce::dontSendNotification);
+   auto add=[&](size_t index){
+    const auto v=info.parameters[index];
+    auto knob=std::make_unique<RotaryParameterControl>(*v.parameter,v.neutral,cap,pointer,accent(),v.name,[v](float normal){
+     MlpParameterDescriptor d{};d.minimum=v.minimum;d.maximum=v.maximum;d.step=v.step;d.flags=v.flags;
+     const double value=automationValue(d,normal);
+     if(v.unit==":1")return juce::String(value,2)+":1";
+     return juce::String(value,v.unit=="Hz"||v.unit=="%"?0:1)+" "+v.unit;
+    });
+    addAndMakeVisible(*knob);knobs.push_back(std::move(knob));
+   };
+   add(0);add(1);
+   if(bank==4){add(2);add(3);}
+   else for(size_t i=0;i<7;++i)add(6+bank*7+i);
+   resized();repaint();
+  }
+  void timerCallback()override {meter=p.gainReduction(instance,uint32_t(std::min<size_t>(bank,3)));repaint();}
+  PluginProcessor& p;uint64_t instance;PluginProcessor::EditorModuleInfo info;
+  juce::Image cap,pointer;size_t bank=3;float meter=0;
+  std::array<juce::TextButton,5> banks;
+  juce::TextButton analog,bypass,removeButton{"REMOVE"};
+  juce::ParameterAttachment mode,bypassAttachment;
+  std::vector<std::unique_ptr<RotaryParameterControl>> knobs;
+ };
  class Panel final:public juce::Component{
  public:
   Panel(const PluginProcessor::EditorModuleInfo& info,juce::Image cap,juce::Image pointer,std::function<void()> remove){
@@ -189,7 +263,10 @@ private:
  void sourceChanged(){history.clear();rack.setSpectrum({},20000);rack.setHeatmaps({},{},{});p.analysisSource(selected,scope.getToggleState(),delta.getToggleState());}
  void select(uint64_t id){selected=id;rack.setSelection(id);rack.setBandFromController(7);rack.setBandSelectionEnabled(false);auto info=p.editorModule(id);if(!info){rack.setModuleEditor(nullptr);sourceChanged();return;}
   juce::Component::SafePointer<PluginRackEditor> safe(this);
-  rack.setModuleEditor(std::make_unique<Panel>(*info,cap,pointer,[safe,id]{juce::MessageManager::callAsync([safe,id]{if(safe!=nullptr&&safe->p.removeModule(id)){safe->select(0);safe->refresh();}});}));sourceChanged();
+  auto remove=[safe,id]{juce::MessageManager::callAsync([safe,id]{if(safe!=nullptr&&safe->p.removeModule(id)){safe->select(0);safe->refresh();}});};
+  if(info->compressor)rack.setModuleEditor(std::make_unique<CompressorPanel>(p,id,std::move(*info),cap,pointer,std::move(remove)));
+  else rack.setModuleEditor(std::make_unique<Panel>(*info,cap,pointer,std::move(remove)));
+  sourceChanged();
  }
  void menu(int slot){select(0);auto names=p.moduleNames();juce::PopupMenu m;for(int i=0;i<names.size();++i)m.addItem(i+1,"Add "+names[i]);if(names.isEmpty())m.addItem(999,"No compatible modules installed",false,false);juce::Component::SafePointer<PluginRackEditor> safe(this);m.showMenuAsync(juce::PopupMenu::Options(),[safe,slot](int choice){if(safe!=nullptr&&choice>0&&choice<999&&safe->p.addModule(slot,size_t(choice-1))){safe->refresh();safe->select(safe->order.slots()[size_t(slot)]);}});}
  void timerCallback()override{

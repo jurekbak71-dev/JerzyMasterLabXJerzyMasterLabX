@@ -30,7 +30,7 @@ int main(int argc,char** argv){
   if(cap.getWidth()!=68||cap.getHeight()!=69||pointer.getWidth()!=68||pointer.getHeight()!=68)return 6;
  }
  juce::AudioParameterFloat gain(juce::ParameterID{"gain_test",1},"Gain",juce::NormalisableRange<float>(-24.f,24.f,.01f),0.f);
- if(scenario=="modules"&&argc>5){moduleHost=std::make_unique<ml::ModuleRackHost>();if(moduleHost->scan(std::filesystem::path(argv[5]))!=4)return 11;moduleHost->prepare(48000,257);}
+ if(scenario=="modules"&&argc>5){moduleHost=std::make_unique<ml::ModuleRackHost>();if(moduleHost->scan(std::filesystem::path(argv[5]))<4)return 11;moduleHost->prepare(48000,257);}
  ml::RackEditor::Callbacks callbacks;callbacks.label=[&moduleHost](ml::RackOrder::Id id){if(moduleHost)if(const auto* d=moduleHost->descriptor(id))return juce::String::fromUTF8(d->name);return juce::String("GAIN [TEST]");};
  ml::RackEditor editor(order,std::move(skins),std::move(callbacks),panel);
  if(strict)editor.setRackSkin(slot);

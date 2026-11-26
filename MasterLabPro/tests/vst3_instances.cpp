@@ -1,12 +1,14 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "RackState.h"
+#include "../sdk/masterlabpro_input_compressor.h"
 #include <array>
 #include <cmath>
 #include <iostream>
 #include <vector>
 #include <memory>
 int main(int argc,char** argv){
- if(argc!=2)return 1;
+ if(argc<2||argc>3)return 1;
+ const bool compressor=argc==3;
  juce::ScopedJuceInitialiser_GUI gui;
  juce::AudioPluginFormatManager manager;
  auto* format=new juce::VST3PluginFormat();manager.addFormat(format);
@@ -22,6 +24,7 @@ int main(int argc,char** argv){
  // Restore a native Gain module in each binary instance; unique gain proves isolation.
  for(int i=0;i<count;++i){
   ml::RackState state;ml::SavedModule module;module.instance=1;module.typeHi=0x4d4c505445434800ull;module.typeLo=0x6761696e00000002ull;module.version=1;module.slot=0;module.lane=0;module.parameters.push_back({1,double(i)});
+  if(compressor){module.typeHi=MLP_INPUT_COMPRESSOR_HI;module.typeLo=MLP_INPUT_COMPRESSOR_LO;}
   state.modules.push_back(module);std::vector<uint8_t> bytes;if(!ml::RackStateCodec::encode(state,bytes))return 4;
   juce::XmlElement envelope("VST3PluginState");
   envelope.createNewChildElement("IComponent")->addTextElement(juce::MemoryBlock(bytes.data(),bytes.size()).toBase64Encoding());
@@ -35,5 +38,5 @@ int main(int argc,char** argv){
   if(block>=10){const float expected=.1f*float(std::pow(10.,double(i)/20.));for(int n=0;n<frames;++n)if(std::abs(audio.getSample(0,n)-expected)>1e-4f||std::abs(audio.getSample(1,n)+expected)>1e-4f){std::cerr<<"instance "<<i<<" expected "<<expected<<" got "<<audio.getSample(0,n);return 5;}}
  }
  for(auto& plugin:plugins){juce::MemoryBlock state;plugin->getStateInformation(state);if(state.getSize()==0)return 6;plugin->releaseResources();}
- plugins.clear();std::cout<<"{\"loaded_vst3_instances\":8,\"gain_isolation\":true,\"state_save\":true}\n";return 0;
+ plugins.clear();std::cout<<"{\"loaded_vst3_instances\":8,\"module\":\""<<(compressor?"Input Compressor":"Gain")<<"\",\"gain_isolation\":true,\"state_save\":true}\n";return 0;
 }
