@@ -42,6 +42,26 @@ int main(int argc,char** argv){
    if(api.process(instance,&context)!=MLP_OK||l[block-1]!=.45f||r[0]!=-.15f)return false;
    if(api.set_parameter(instance,14,0)!=MLP_OK)return false;
   }
+  if(api.set_parameter(instance,8,60)!=MLP_OK||api.set_parameter(instance,9,250)!=MLP_OK||
+     api.prepare(instance,48000,128,2)!=MLP_OK)return false;
+  for(uint32_t id=1;id<=7;++id)if(api.set_parameter(instance,id,id==1?0:100)!=MLP_OK)return false;
+  auto sideRatio=[&](double hz){
+   api.reset(instance);
+   double sum=0,input=0;
+   MlpProcessContext context{sizeof(context),128,2,0,channels};
+   for(int b=0;b<160;++b){
+    for(int i=0;i<128;++i){l[i]=float(.2*std::sin(2*std::numbers::pi*hz*double(i+b*128)/48000));r[i]=-l[i];if(b>=40)input+=l[i]*l[i];}
+    if(api.process(instance,&context)!=MLP_OK)return -1.;
+    if(b>=40)for(int i=0;i<128;++i)sum+=l[i]*l[i];
+   }
+   return std::sqrt(sum/input);
+  };
+  const double bass=sideRatio(30),treble=sideRatio(8000);
+  if(bass<.43||bass>.47||treble<.99||treble>1.01)return false;
+  const float correlation=std::bit_cast<float>(uint32_t(read(instance,0)));
+  if(std::abs(correlation+1)>1e-5f)return false;
+  std::cout<<"SUB width 0%: side gain at 30 Hz = "<<bass<<", at 8 kHz = "<<treble<<'\n';
+  if(api.set_parameter(instance,8,15000)!=MLP_OK)return false;
   std::array<uint8_t,128> state{};uint32_t written=0;
   if(api.save_state(instance,state.data(),uint32_t(state.size()),&written)!=MLP_OK)return false;
   if(api.set_parameter(instance,8,100)!=MLP_OK||api.load_state(instance,state.data(),written)!=MLP_OK)return false;

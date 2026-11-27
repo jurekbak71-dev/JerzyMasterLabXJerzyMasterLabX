@@ -11,6 +11,7 @@
 #include <thread>
 #include <atomic>
 #include <complex>
+#include <vector>
 
 int main(int argc, char** argv) {
  if (argc < 2 || argc > 3) return 1;
@@ -110,6 +111,46 @@ int main(int argc, char** argv) {
   };
   const auto digital=harmonic(0),analog=harmonic(1);
   if(digital<0||digital>1e-6||analog<.001||analog>.01)return false;
+  // Two tones and stepped bursts drive the envelopes into both attack and release.
+  // Match output RMS before comparing modes and measure a non-input difference product.
+  auto dynamicsProbe=[&](int mode,std::vector<float>& output){
+   api.set_parameter(instance,5,mode);api.set_parameter(instance,103,-30);
+   api.set_parameter(instance,113,8);api.set_parameter(instance,123,3);
+   api.set_parameter(instance,133,95);api.reset(instance);
+   output.reserve(48000);
+   for(int b=0;b<375;++b){
+    for(size_t i=0;i<l.size();++i){
+     const auto frame=size_t(b)*128+i;
+     const double t=double(frame)/48000.;
+     const double amplitude=(frame/4800)%2==0?.42:.09;
+     l[i]=r[i]=float(amplitude*(std::sin(2*std::numbers::pi*900*t)+std::sin(2*std::numbers::pi*1300*t)));
+    }
+    if(api.process(instance,&block)!=MLP_OK)return false;
+    output.insert(output.end(),l.begin(),l.end());
+   }
+   return true;
+  };
+  std::vector<float> cleanSignal,colouredSignal;
+  if(!dynamicsProbe(0,cleanSignal)||!dynamicsProbe(1,colouredSignal))return false;
+  double cleanEnergy=0,colourEnergy=0;
+  for(size_t i=0;i<cleanSignal.size();++i){
+   cleanEnergy+=double(cleanSignal[i])*cleanSignal[i];colourEnergy+=double(colouredSignal[i])*colouredSignal[i];
+  }
+  const double match=std::sqrt(cleanEnergy/colourEnergy);
+  double difference=0;
+  std::complex<double> cleanIM{},colouredIM{};
+  for(size_t i=0;i<cleanSignal.size();++i){
+   const double y=colouredSignal[i]*match, residual=y-cleanSignal[i];
+   const auto phasor=std::polar(1.,-2*std::numbers::pi*400.*double(i)/48000.);
+   cleanIM+=double(cleanSignal[i])*phasor;colouredIM+=y*phasor;
+   difference+=residual*residual;
+  }
+  const double matchedResidual=std::sqrt(difference/cleanEnergy);
+  const auto count=double(cleanSignal.size());
+  std::cout<<"Dynamics probe matched RMS residual: "<<matchedResidual
+           <<" IMD 400 Hz amplitudes (Digital, Analog): "<<2*std::abs(cleanIM)/count<<", "<<2*std::abs(colouredIM)/count<<'\n';
+  if(!std::isfinite(matchedResidual)||matchedResidual<.01||matchedResidual>1)return false;
+  api.set_parameter(instance,113,1);
   api.set_parameter(instance,5,0);api.reset(instance);
   l.fill(0);r.fill(0);l[0]=.5f;r[0]=-.25f;
   if(api.process(instance,&block)!=MLP_OK||l[0]!=.5f||r[0]!=-.25f){std::cerr<<"Neutral impulse mismatch "<<l[0]<<" "<<r[0]<<'\n';return false;}

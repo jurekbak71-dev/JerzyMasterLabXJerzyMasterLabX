@@ -44,7 +44,7 @@ constexpr MlpModuleDescriptor descriptor{sizeof(MlpModuleDescriptor),MLP_ABI_MAJ
  MLP_CAP_STATE|MLP_CAP_STEREO|MLP_CAP_NONLINEAR|MLP_CAP_CONCURRENT_STATE_READ,
  1,2,uint32_t(parameters.size()),0,"Input Compressor","Three-band and master-bus dynamics","Dynamics",parameters.data()};
 constexpr uint32_t stateBytes=4+4*uint32_t(parameters.size());
-static_assert(std::atomic<float>::is_always_lock_free && sizeof(float)==4);
+static_assert(std::atomic<float>::is_always_lock_free && std::atomic<uint64_t>::is_always_lock_free && sizeof(float)==4);
 
 float clean(float x) noexcept {return std::clamp(ml::flushCompressorSample(x),-64.f,64.f);}
 float amplitude(float db) noexcept {return std::exp(db*0.1151292546497023f);}
@@ -57,6 +57,7 @@ struct MlpInstance {
  std::array<std::array<float,2>,4> envelopes{};
  std::array<std::array<float,2>,4> rms{},memory{};
  std::array<std::atomic<uint64_t>,4> dynamics{};
+ std::atomic<uint64_t> processedSamples{0};
  std::array<ml::CompressorCrossover,2> crossovers{};
  float rate=48000, smoothing=0;
  uint32_t maximumFrames=0, channels=0;
@@ -78,6 +79,7 @@ void MLP_CALL reset(MlpInstance* p) {
  p->envelopes={}; p->crossovers={};p->rms={};p->memory={};
  for (auto& meter:p->meters) meter.store(0,std::memory_order_relaxed);
  for(auto& capture:p->dynamics)capture.store(0,std::memory_order_relaxed);
+ p->processedSamples.store(0,std::memory_order_relaxed);
  for (size_t i=0;i<parameters.size();++i) p->values[i]=p->targets[i].load(std::memory_order_relaxed);
 }
 MlpResult MLP_CALL prepare(MlpInstance* p,double rate,uint32_t frames,uint32_t channels) {
@@ -187,6 +189,7 @@ MlpResult MLP_CALL process(MlpInstance* p,const MlpProcessContext* ctx) {
   p->meters[i].store(std::max(reductions[i][0],reductions[i][1])*(1-p->values[5]),std::memory_order_relaxed);
   p->dynamics[i].store((uint64_t(std::bit_cast<uint32_t>(peaks[i][0]))<<32)|std::bit_cast<uint32_t>(peaks[i][1]),std::memory_order_relaxed);
  }
+ if(ctx->frames)p->processedSamples.fetch_add(ctx->frames,std::memory_order_release);
  return MLP_OK;
 }
 uint32_t MLP_CALL latency(const MlpInstance*) {return 0;}
@@ -223,7 +226,9 @@ extern "C" MLP_EXPORT float MLP_CALL masterlabpro_read_gain_reduction_v1(const M
  return p&&band<4?p->meters[band].load(std::memory_order_relaxed):0.f;
 }
 extern "C" MLP_EXPORT uint64_t MLP_CALL masterlabpro_read_dynamics_v1(const MlpInstance* p,uint32_t band) {
- return p&&band<4?p->dynamics[band].load(std::memory_order_relaxed):0;
+ if(!p)return 0;
+ if(band==4)return p->processedSamples.load(std::memory_order_acquire);
+ return band<4?p->dynamics[band].load(std::memory_order_relaxed):0;
 }
 extern "C" MLP_EXPORT MlpResult MLP_CALL masterlabpro_get_module_api(uint32_t major,uint32_t,MlpModuleApi* api) {
  if (!api||api->struct_size<sizeof(*api)) return MLP_ERROR_ARGUMENT;

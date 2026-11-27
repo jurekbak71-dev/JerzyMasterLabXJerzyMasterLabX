@@ -364,6 +364,12 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
   void updateBandActive(){for(size_t i=0;i<4;++i){const bool on=info.parameters[38+i].parameter->get()>.5f;banks[i].setIndicator(on?juce::Colours::limegreen:juce::Colours::red);bandSwitches[i].setButtonText(on?"ON":"OFF");bandSwitches[i].setToggleState(on,juce::dontSendNotification);bandSwitches[i].setIndicator(on?juce::Colours::limegreen:juce::Colours::red);}bandActive.setVisible(bank<4);if(bank<4){const bool on=info.parameters[38+bank].parameter->get()>.5f;bandActive.setButtonText(on?"BAND ON":"BAND OFF");bandActive.setToggleState(on,juce::dontSendNotification);bandActive.setIndicator(on?juce::Colours::limegreen:juce::Colours::red);}}
   void timerCallback()override {
    updateBandActive();
+   const auto stamp=p.moduleDynamics(instance,4);
+   if(stamp==lastStamp){
+    for(auto& trace:history)trace[position]={};
+    position=(position+1)%300;repaint();return;
+   }
+   lastStamp=stamp;
    for(uint32_t b=0;b<4;++b){
     const auto packed=p.moduleDynamics(instance,b);
     history[b][position]={peakDb(std::bit_cast<float>(uint32_t(packed>>32))),
@@ -376,7 +382,7 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
   juce::Rectangle<float> transfer,timeline;
   std::optional<size_t> dragIndex;
   std::array<std::array<Sample,300>,4> history{};
-  size_t position=0;
+  size_t position=0;uint64_t lastStamp=0;
   float windowSeconds=10,verticalRange=60;
   static constexpr std::array<int,5> bandIds{1,3,5,7,7};
   std::array<StudioButton,5> banks;
