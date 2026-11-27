@@ -108,6 +108,17 @@ int main(int argc,char** argv){
  if(!tiles)return 17;
  tile=tiles->getChildComponent(0);tile->mouseDown(mouse(*tile,juce::ModifierKeys::leftButtonModifier));
  auto* stereoPanel=named(*editor,"Stereo Architect Panel");if(!stereoPanel)return 18;
+ auto* modeButton=dynamic_cast<juce::Button*>(named(*stereoPanel,"Stereo Mode"));
+ auto* stereoizeButton=dynamic_cast<juce::Button*>(named(*stereoPanel,"Stereoize Enable"));
+ if(!modeButton||!stereoizeButton||stereo->getParameters().size()<27)return 25;
+ modeButton->triggerClick();
+ if(stereo->getParameters()[14]->getValue()<.49f||stereo->getParameters()[14]->getValue()>.51f)return 26;
+ stereoizeButton->triggerClick();if(stereo->getParameters()[22]->getValue()<.99f)return 27;
+ const auto bandStateBefore=stereo->getParameters()[15]->getValue();
+ const auto bandTogglePoint=juce::Point<float>(float(stereoPanel->getWidth())*.2f,float(stereoPanel->getHeight())*.44f);
+ const auto bandToggle=mouse(*stereoPanel,juce::ModifierKeys::leftButtonModifier,bandTogglePoint);
+ stereoPanel->mouseDown(bandToggle);stereoPanel->mouseUp(bandToggle);
+ if(stereo->getParameters()[15]->getValue()==bandStateBefore){std::cerr<<"Stereo per-band switch did not change its host parameter\n";return 28;}
  // Exercise real editor gesture, not just screenshot creation.
  std::array<float,7> widthsBefore{};for(int i=0;i<7;++i)widthsBefore[size_t(i)]=stereo->getParameters()[i]->getValue();
  const auto point=juce::Point<float>(float(stereoPanel->getWidth())*.39f,float(stereoPanel->getHeight())*.24f);

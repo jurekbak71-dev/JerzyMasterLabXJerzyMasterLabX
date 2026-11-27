@@ -73,7 +73,7 @@ public:
   if(!d||lane>=10||d->parameter_count>64)return std::nullopt;
   EditorModuleInfo result;result.name=juce::String::fromUTF8(d->name);
   result.compressor=d->type_id_hi==MLP_INPUT_COMPRESSOR_HI&&d->type_id_lo==MLP_INPUT_COMPRESSOR_LO&&d->parameter_count==46;
-  result.stereo=d->type_id_hi==stereoTypeHi&&d->type_id_lo==stereoTypeLo&&d->parameter_count==14;
+  result.stereo=d->type_id_hi==stereoTypeHi&&d->type_id_lo==stereoTypeLo&&d->parameter_count>=14;
   for(uint32_t i=0;i<d->parameter_count;++i){const auto& v=d->parameters[i];result.parameters.push_back({params[lane*64+i],float(normalize(v,v.neutral_value)),juce::String::fromUTF8(v.name),juce::String::fromUTF8(v.unit?v.unit:""),v.minimum,v.maximum,v.step,v.flags});}
   return result;
  }
@@ -404,13 +404,42 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
    setName("Stereo Architect Panel");
    scopeBand.setButtonText("FULL");scopeBand.setClickingTogglesState(true);scopeBand.onClick=[this]{scopeBand.setButtonText(scopeBand.getToggleState()?"BAND":"FULL");repaint();};addAndMakeVisible(scopeBand);
    p.setStereoScope(instance);
-   addAndMakeVisible(bypass);addAndMakeVisible(removeButton);
+   addAndMakeVisible(bypass);addAndMakeVisible(removeButton);addAndMakeVisible(modeButton);addAndMakeVisible(stereoizeButton);
+   modeButton.setName("Stereo Mode");stereoizeButton.setName("Stereoize Enable");
+   modeButton.loadSkins(p.dataRoot().getChildFile("assets"));
+   if(info.parameters.size()>14){
+    modeAttachment=std::make_unique<juce::ParameterAttachment>(*info.parameters[14].parameter,[this](float){
+     static constexpr const char* labels[]{"NATURAL","WIDE","ULTRA"};
+     const int mode=juce::jlimit(0,2,int(std::lround(physical(info.parameters[14]))));
+     modeButton.setButtonText(labels[mode]);repaint();
+    });
+    modeAttachment->sendInitialUpdate();
+   }else modeButton.setVisible(false);
+   modeButton.onClick=[this]{
+    if(modeAttachment){const int mode=int(std::lround(physical(info.parameters[14])));auto* parameter=info.parameters[14].parameter;parameter->beginChangeGesture();adjust(info.parameters[14],double((mode+1)%3));parameter->endChangeGesture();}
+   };
+   if(info.parameters.size()>=27){
+    stereoizeAttachment=std::make_unique<juce::ParameterAttachment>(*info.parameters[22].parameter,[this](float value){
+     stereoizeButton.setButtonText(value>.5f?"STEREOIZE ON":"STEREOIZE OFF");
+     stereoizeButton.setToggleState(value>.5f,juce::dontSendNotification);
+     stereoizeButton.setIndicator(value>.5f?juce::Colours::limegreen:juce::Colours::grey);
+    });
+    stereoizeAttachment->sendInitialUpdate();
+   }else stereoizeButton.setVisible(false);
+   stereoizeButton.onClick=[this]{
+    if(stereoizeAttachment){const auto value=physical(info.parameters[22]);auto* parameter=info.parameters[22].parameter;parameter->beginChangeGesture();adjust(info.parameters[22],value>.5f?0.:1.);parameter->endChangeGesture();}
+   };
    removeButton.onClick=std::move(remove);
    bypass.onClick=[this]{bypassAttachment.setValueAsCompleteGesture(info.parameters[13].parameter->get()<.5f?1.f:0.f);};
    bypass.loadSkins(p.dataRoot().getChildFile("assets"));removeButton.loadSkins(p.dataRoot().getChildFile("assets"));
    for(size_t i=0;i<7;++i){
     const auto v=info.parameters[i];
     auto control=std::make_unique<RotaryParameterControl>(*v.parameter,v.neutral,juce::ImageFileFormat::loadFrom(p.dataRoot().getChildFile("assets/knob_cap.png")),juce::ImageFileFormat::loadFrom(p.dataRoot().getChildFile("assets/knob_pointer.png")),bandAccent(int(i)),stereoBands[i],[](float n){return juce::String(n*200.f,0)+"%";});
+    addAndMakeVisible(*control);widthKnobs.push_back(std::move(control));
+   }
+   if(info.parameters.size()>=27)for(size_t i=23;i<=26;++i){
+    const auto v=info.parameters[i];
+    auto control=std::make_unique<RotaryParameterControl>(*v.parameter,v.neutral,juce::ImageFileFormat::loadFrom(p.dataRoot().getChildFile("assets/knob_cap.png")),juce::ImageFileFormat::loadFrom(p.dataRoot().getChildFile("assets/knob_pointer.png")),juce::Colour(0xff58bde8),v.name,[v](float n){MlpParameterDescriptor d{};d.minimum=v.minimum;d.maximum=v.maximum;d.step=v.step;d.flags=v.flags;return juce::String(automationValue(d,n),0)+" %";});
     addAndMakeVisible(*control);widthKnobs.push_back(std::move(control));
    }
    bypassAttachment.sendInitialUpdate();startTimerHz(30);
@@ -421,10 +450,12 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
    auto header=area.removeFromTop(30);
    removeButton.setBounds(header.removeFromRight(104));
    bypass.setBounds(header.removeFromRight(104).reduced(3,0));
+   if(modeButton.isVisible())modeButton.setBounds(header.removeFromRight(104).reduced(3,0));
+   if(stereoizeButton.isVisible())stereoizeButton.setBounds(header.removeFromRight(124).reduced(3,0));
    scopeBand.setBounds(header.removeFromRight(92).reduced(3,0));
    area.removeFromBottom(29);
    auto controls=area.removeFromBottom(std::min(115,area.getHeight()/2));
-   for(size_t i=0;i<widthKnobs.size();++i){const int left=controls.getX()+controls.getWidth()*int(i)/7,right=controls.getX()+controls.getWidth()*int(i+1)/7;widthKnobs[i]->setBounds(left,controls.getY(),right-left,controls.getHeight());}
+   for(size_t i=0;i<widthKnobs.size();++i){const int left=controls.getX()+controls.getWidth()*int(i)/int(widthKnobs.size()),right=controls.getX()+controls.getWidth()*int(i+1)/int(widthKnobs.size());widthKnobs[i]->setBounds(left,controls.getY(),right-left,controls.getHeight());}
    auto plots=area.reduced(7,4);scopeArea=plots.removeFromRight(plots.getWidth()/3).reduced(4,0).toFloat();plot=plots.reduced(0,0).toFloat();
   }
   void paint(juce::Graphics& g)override {
@@ -435,22 +466,27 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
    const auto cutoffs=splits();
    const auto graph=graphBounds();
    if(graph.isEmpty())return;
+   const auto mode=info.parameters.size()>14?int(std::lround(physical(info.parameters[14]))):0;
+   const float maximumWidth=mode==0?200.f:mode==1?300.f:400.f;
    for(size_t band=0;band<7;++band){
     const float start=band==0?20:cutoffs[band-1],end=band==6?20000:cutoffs[band];
     const auto x1=xAt(graph,start),x2=xAt(graph,end);
-    const auto y=graph.getBottom()-physical(info.parameters[band])*graph.getHeight()/200;
+    const auto width=effectiveWidth(physical(info.parameters[band]),mode);
+    const auto y=graph.getBottom()-width*graph.getHeight()/maximumWidth;
     const auto colour=bandAccent(int(band));
     g.setColour(colour.withAlpha(.13f));g.fillRect(x1,graph.getY(),x2-x1,graph.getHeight());
     g.setColour(colour);g.drawHorizontalLine(int(y),x1,x2);
     g.fillEllipse(juce::Rectangle<float>(8,8).withCentre({(x1+x2)*.5f,y}));
     auto label=juce::Rectangle<int>(int(x1),int(graph.getBottom()+3),int(x2-x1),16);
-    g.drawFittedText(stereoBands[band],label.reduced(2,0),juce::Justification::centred,1,.65f);
+    const bool enabled=info.parameters.size()<22||physical(info.parameters[15+band])>.5f;
+    g.setColour(enabled?colour:juce::Colour(0xff77838a));
+    g.drawFittedText(juce::String(stereoBands[band])+(info.parameters.size()>=22?(enabled?"  ON":"  OFF"):""),label.reduced(2,0),juce::Justification::centred,1,.65f);
     if(band==6)continue;
     g.setColour(juce::Colours::white.withAlpha(.5f));g.drawVerticalLine(int(x2),graph.getY(),graph.getBottom());
     g.drawFittedText(juce::String(cutoffs[band],0)+" Hz",juce::Rectangle<int>(int(x2)-33,int(graph.getY())-17,66,16),juce::Justification::centred,1,.75f);
    }
-   for(int level:{0,50,100,150,200}){
-    const float y=graph.getBottom()-graph.getHeight()*float(level)/200.f;
+   for(int level=0;level<=int(maximumWidth);level+=100){
+    const float y=graph.getBottom()-graph.getHeight()*float(level)/maximumWidth;
     g.setColour(juce::Colours::white.withAlpha(level==100?.6f:.16f));g.drawHorizontalLine(int(y),graph.getX(),graph.getRight());
     g.setColour(juce::Colours::whitesmoke);g.drawFittedText(juce::String(level)+"%",juce::Rectangle<int>(int(plot.getX()+4),int(y)-7,40,14),juce::Justification::centredRight,1);
    }
@@ -465,7 +501,14 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
    g.setColour(bandAccent(int(selectedBand)));g.drawFittedText(limits,line,juce::Justification::centredLeft,1,.7f);
   }
   void mouseDown(const juce::MouseEvent& event)override{
-   if(!graphBounds().contains(event.position))return;
+   const auto graph=graphBounds();
+   if(info.parameters.size()>=22&&event.position.y>=graph.getBottom()+2&&event.position.y<=graph.getBottom()+21){
+    const auto cuts=splits();size_t band=6;
+    for(size_t i=0;i<cuts.size();++i)if(event.position.x<xAt(graph,cuts[i])){band=i;break;}
+    const auto value=physical(info.parameters[15+band]);
+    auto* parameter=info.parameters[15+band].parameter;parameter->beginChangeGesture();adjust(info.parameters[15+band],value>.5f?0.:1.);parameter->endChangeGesture();repaint();return;
+   }
+   if(!graph.contains(event.position))return;
    finishGesture();
    const auto area=graphBounds();const auto cutoffs=splits();
    size_t index=6;
@@ -492,8 +535,10 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
   }
   juce::String rangeLabel(const std::array<float,6>& cuts)const{
    const auto low=selectedBand==0?20.f:cuts[selectedBand-1],high=selectedBand==6?20000.f:cuts[selectedBand];
-   return juce::String(stereoBands[selectedBand])+"   "+juce::String(low,0)+"-"+juce::String(high,0)+" Hz   "+juce::String(physical(info.parameters[selectedBand]),0)+"%";
+   const auto mode=info.parameters.size()>14?int(std::lround(physical(info.parameters[14]))):0;
+   return juce::String(stereoBands[selectedBand])+"   "+juce::String(low,0)+"-"+juce::String(high,0)+" Hz   "+juce::String(physical(info.parameters[selectedBand]),0)+"%  /  SIDE "+juce::String(effectiveWidth(physical(info.parameters[selectedBand]),mode),0)+"%";
   }
+  static float effectiveWidth(float width,int mode){const auto value=width*.01f;return 100.f*(value<=1.f?value:1.f+(value-1.f)*float(mode+1));}
   static float xAt(juce::Rectangle<float> area,float hz){return area.getX()+area.getWidth()*std::log(hz/20)/std::log(1000.f);}
   void update(juce::Point<float> point){
    const auto area=graphBounds();
@@ -563,7 +608,8 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
    repaint();
   }
   PluginProcessor& p;uint64_t instance;PluginProcessor::EditorModuleInfo info;
-  StudioButton bypass,removeButton{"REMOVE"};juce::ParameterAttachment bypassAttachment;
+  StudioButton bypass,removeButton{"REMOVE"},modeButton{"NATURAL"},stereoizeButton{"STEREOIZE OFF"};juce::ParameterAttachment bypassAttachment;
+  std::unique_ptr<juce::ParameterAttachment> modeAttachment,stereoizeAttachment;
   std::vector<std::unique_ptr<RotaryParameterControl>> widthKnobs;
   StudioButton scopeBand;AnalysisFrame scopeIncoming{};std::array<AnalysisFrame,20> scopeTrail{};std::array<double,20> scopeTimes{};size_t scopeWrite=0,scopeCount=0;
   juce::Rectangle<float> plot,scopeArea;std::optional<size_t> dragIndex;size_t selectedBand=0;
