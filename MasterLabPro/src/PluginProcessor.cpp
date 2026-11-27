@@ -517,10 +517,16 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
    g.setColour(juce::Colour(0xff334b58));g.drawEllipse(square.reduced(d*.04f),1);
    g.drawHorizontalLine(int(centre.y),centre.x-radius,centre.x+radius);
    g.drawVerticalLine(int(centre.x),centre.y-radius,centre.y+radius);
-   if(!scopeValid){g.setColour(juce::Colour(0xff81939e));g.drawFittedText("NO SIGNAL",square.toNearestInt(),juce::Justification::centred,1);return;}
+   if(scopeCount==0){g.setColour(juce::Colour(0xff81939e));g.drawFittedText("NO SIGNAL",square.toNearestInt(),juce::Justification::centred,1);return;}
    const auto cuts=splits();const bool filtered=scopeBand.getToggleState();
+   const double now=juce::Time::getMillisecondCounterHiRes();
+   for(size_t age=scopeCount;age>0;--age){
+   const auto index=(scopeWrite+scopeTrail.size()-age)%scopeTrail.size();
+   const auto& scopeFrame=scopeTrail[index];
+   const float opacity=float(.65*std::exp(-(now-scopeTimes[index])/145.0));
+   if(opacity<.015f)continue;
    const float rate=float(scopeFrame.sampleRate);
-   if(rate<=0)return;
+   if(rate<=0)continue;
    // Same first-order complementary band definition as the actual module.
    const auto coeff=[rate](float hz){const float x=std::tan(3.14159265358979323846f*std::min(hz,rate*.45f)/rate);return x/(1+x);};
    for(size_t trace=0;trace<2;++trace){
@@ -538,14 +544,22 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
      const auto point=centre+juce::Point<float>(std::clamp(side,-1.f,1.f)*radius,-std::clamp(mid,-1.f,1.f)*radius);
      if(first){path.startNewSubPath(point);first=false;}else path.lineTo(point);
     }
-    g.setColour((trace==0?juce::Colour(0xff58bde8):filtered?bandAccent(int(selectedBand)):juce::Colour(0xffe3ad60)).withAlpha(.65f));g.strokePath(path,juce::PathStrokeType(.8f));
+    g.setColour((trace==0?juce::Colour(0xff58bde8):filtered?bandAccent(int(selectedBand)):juce::Colour(0xffe3ad60)).withAlpha(opacity));g.strokePath(path,juce::PathStrokeType(.8f));
+   }
    }
   }
-  void timerCallback()override{bool fresh=false;for(int i=0;i<5&&p.readStereoScope(scopeIncoming);++i)if(scopeIncoming.sourceId==instance){scopeFrame=scopeIncoming;fresh=true;}if(fresh){scopeValid=true;scopeAge=0;}else if(++scopeAge>15)scopeValid=false;repaint();}
+  void timerCallback()override{
+   const double now=juce::Time::getMillisecondCounterHiRes();
+   bool fresh=false;
+   for(int i=0;i<5&&p.readStereoScope(scopeIncoming);++i)if(scopeIncoming.sourceId==instance){scopeTrail[scopeWrite]=scopeIncoming;fresh=true;}
+   if(fresh){scopeTimes[scopeWrite]=now;scopeWrite=(scopeWrite+1)%scopeTrail.size();scopeCount=std::min(scopeCount+1,scopeTrail.size());}
+   while(scopeCount&&now-scopeTimes[(scopeWrite+scopeTrail.size()-scopeCount)%scopeTrail.size()]>650.)--scopeCount;
+   repaint();
+  }
   PluginProcessor& p;uint64_t instance;PluginProcessor::EditorModuleInfo info;
   StudioButton bypass,removeButton{"REMOVE"};juce::ParameterAttachment bypassAttachment;
   std::vector<std::unique_ptr<RotaryParameterControl>> widthKnobs;
-  StudioButton scopeBand;AnalysisFrame scopeFrame{},scopeIncoming{};bool scopeValid=false;int scopeAge=0;
+  StudioButton scopeBand;AnalysisFrame scopeIncoming{};std::array<AnalysisFrame,20> scopeTrail{};std::array<double,20> scopeTimes{};size_t scopeWrite=0,scopeCount=0;
   juce::Rectangle<float> plot,scopeArea;std::optional<size_t> dragIndex;size_t selectedBand=0;
  };
  class Panel final:public juce::Component{
