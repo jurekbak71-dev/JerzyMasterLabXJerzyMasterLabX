@@ -59,7 +59,7 @@ public:
   const auto read=item->type->library->dynamics();
   return read?read(item->handle,band):0;
  }
- void prepare(double rate,uint32_t maximumBlock){sampleRate=std::clamp(std::isfinite(rate)?rate:44100.,8000.,768000.);maximumFrames=std::clamp<uint32_t>(maximumBlock,1,2048);graph.prepare(maximumFrames);capture.restart(sampleRate);for(auto& item:instances)if(item.id&&!item.removed)item.type->library->api()->prepare(item.handle,sampleRate,maximumFrames,2);}
+ void prepare(double rate,uint32_t maximumBlock){sampleRate=std::clamp(std::isfinite(rate)?rate:44100.,8000.,768000.);maximumFrames=std::clamp<uint32_t>(maximumBlock,1,2048);graph.prepare(maximumFrames);capture.restart(sampleRate);scopeCapture.restart(sampleRate);for(auto& item:instances)if(item.id&&!item.removed)item.type->library->api()->prepare(item.handle,sampleRate,maximumFrames,2);}
  void bindAutomation(const void* context,ReadAutomation reader)noexcept{automationContext=context;readAutomation=reader;}
  bool submit(const RackOrder& order,bool initial=false){GraphSnapshot snapshot;snapshot.revision=++revision;for(auto id:order.slots())if(id)if(auto* item=find(id);item&&!item->removed){snapshot.nodes[snapshot.count++]={id,item->type->library->api(),item->handle,item->bypass,item->type->descriptor,item->lane,automationContext,readAutomation};}if(initial)graph.installWhenStopped(snapshot);else if(!graph.submit(snapshot))return false;for(uint32_t i=0;i<snapshot.count;++i)if(auto* item=find(snapshot.nodes[i].instanceId))item->lastPublished=snapshot.revision;collectRetired();return true;}
  void setAnalysis(uint64_t id,bool module,bool listen)noexcept{analysisId.store(id,std::memory_order_release);moduleAnalysis.store(module,std::memory_order_release);listenDelta.store(listen,std::memory_order_release);}
@@ -69,6 +69,8 @@ public:
  }
  bool pollMeters(ModuleRackMeters& value)noexcept{return meters.pop(value);}
  bool pollAnalysis(AnalysisFrame& value)noexcept{return analysisFrames.pop(value);}
+ bool pollStereoScope(AnalysisFrame& value)noexcept{return scopeFrames.pop(value);}
+ void setStereoScope(uint64_t id)noexcept{scopeId.store(id,std::memory_order_release);}
  bool pollRetired(GraphSnapshot& value)noexcept{if(!graph.pollRetired(value))return false;retiredThrough=std::max(retiredThrough,value.revision);reclaimRemoved();return true;}
  void collectRetired()noexcept{GraphSnapshot value;while(pollRetired(value)){}reclaimRemoved();}
  void resetGraphWhenStopped()noexcept{graph.resetWhenStopped();for(auto& item:instances)if(item.id){item.lastPublished=0;if(item.removed){item.type->library->destroy(item.handle);item={};}}retiredThrough=0;}
@@ -89,15 +91,16 @@ private:
  void reclaimRemoved()noexcept{for(auto& item:instances)if(item.id&&item.removed&&item.lastPublished<=retiredThrough){item.type->library->destroy(item.handle);item={};}}
  bool processChunk(float* left,float* right,uint32_t frames)noexcept{
   for(uint32_t i=0;i<frames;++i){raw[0][i]=std::isfinite(left[i])?left[i]:0.f;raw[1][i]=right&&std::isfinite(right[i])?right[i]:raw[0][i];}
-  const bool module=moduleAnalysis.load(std::memory_order_acquire);const uint64_t selected=analysisId.load(std::memory_order_acquire);GraphTap tap;tap.instanceId=selected;tap.alignedBeforeLeft=moduleAligned[0].data();tap.alignedBeforeRight=moduleAligned[1].data();tap.afterLeft=tapped[0].data();tap.afterRight=tapped[1].data();
-  if(!graph.process(left,right,frames,delta[0].data(),delta[1].data(),aligned[0].data(),aligned[1].data(),module&&selected?&tap:nullptr))return false;
+  const bool module=moduleAnalysis.load(std::memory_order_acquire);const uint64_t selected=analysisId.load(std::memory_order_acquire);const auto scope=scopeId.load(std::memory_order_acquire);GraphTap tap;tap.instanceId=module&&selected?selected:scope;tap.alignedBeforeLeft=moduleAligned[0].data();tap.alignedBeforeRight=moduleAligned[1].data();tap.afterLeft=tapped[0].data();tap.afterRight=tapped[1].data();
+  if(!graph.process(left,right,frames,delta[0].data(),delta[1].data(),aligned[0].data(),aligned[1].data(),tap.instanceId?&tap:nullptr))return false;
   ModuleRackMeters value;value.input=measure(raw[0].data(),raw[1].data(),frames);value.output=measure(left,right?right:left,frames);value.delta=measure(delta[0].data(),delta[1].data(),frames);meters.push(value);
-  const bool useModule=module&&selected&&tap.found;capture.setSource(useModule?selected:0);for(uint32_t i=0;i<frames;++i){const float bl=useModule?moduleAligned[0][i]:aligned[0][i],br=useModule?moduleAligned[1][i]:aligned[1][i];const float al=useModule?tapped[0][i]:left[i],ar=useModule?tapped[1][i]:(right?right[i]:left[i]);capture.push(bl,br,al,ar,[this](const AnalysisFrame& frame){analysisFrames.push(frame);});}
+  const bool useModule=module&&selected&&tap.found&&tap.instanceId==selected;
+  if(scope&&tap.found&&tap.instanceId==scope){scopeCapture.setSource(scope);for(uint32_t i=0;i<frames;++i)scopeCapture.push(moduleAligned[0][i],moduleAligned[1][i],tapped[0][i],tapped[1][i],[this](const AnalysisFrame& frame){scopeFrames.push(frame);});}else scopeCapture.setSource(0);capture.setSource(useModule?selected:0);for(uint32_t i=0;i<frames;++i){const float bl=useModule?moduleAligned[0][i]:aligned[0][i],br=useModule?moduleAligned[1][i]:aligned[1][i];const float al=useModule?tapped[0][i]:left[i],ar=useModule?tapped[1][i]:(right?right[i]:left[i]);capture.push(bl,br,al,ar,[this](const AnalysisFrame& frame){analysisFrames.push(frame);});}
   const bool listen=listenDelta.load(std::memory_order_acquire)&&(!module||useModule);const float target=listen?1.f:0.f,step=1.f/float(std::max(1u,uint32_t(sampleRate*.02)));for(uint32_t i=0;i<frames;++i){monitorMix+=std::clamp(target-monitorMix,-step,step);const float dl=(useModule?tapped[0][i]-moduleAligned[0][i]:delta[0][i]);const float dr=(useModule?tapped[1][i]-moduleAligned[1][i]:delta[1][i]);left[i]+=monitorMix*(dl-left[i]);if(right)right[i]+=monitorMix*(dr-right[i]);}
   return true;
  }
  Instance* find(uint64_t id)noexcept{if(!id)return nullptr;for(auto& item:instances)if(item.id==id)return &item;return nullptr;}const Instance* find(uint64_t id)const noexcept{if(!id)return nullptr;for(const auto& item:instances)if(item.id==id)return &item;return nullptr;}
  std::filesystem::path moduleDirectory;std::vector<Type> types;std::vector<std::string> errors;std::vector<SavedModule> unavailableStates;std::array<Instance,32> instances{};ModularGraph graph;double sampleRate=44100;uint32_t maximumFrames=512;uint64_t revision=0,retiredThrough=0;const void* automationContext=nullptr;ReadAutomation readAutomation=nullptr;
- std::array<std::array<float,2048>,2> raw{},aligned{},moduleAligned{},tapped{},delta{};AnalysisCapture capture;GraphSpsc<ModuleRackMeters,8> meters;GraphSpsc<AnalysisFrame,5> analysisFrames;std::atomic<uint64_t> analysisId{0};std::atomic<bool> moduleAnalysis{false},listenDelta{false};float monitorMix=0;
+ std::array<std::array<float,2048>,2> raw{},aligned{},moduleAligned{},tapped{},delta{};AnalysisCapture capture,scopeCapture;GraphSpsc<AnalysisFrame,5> scopeFrames;std::atomic<uint64_t> scopeId{0};GraphSpsc<ModuleRackMeters,8> meters;GraphSpsc<AnalysisFrame,5> analysisFrames;std::atomic<uint64_t> analysisId{0};std::atomic<bool> moduleAnalysis{false},listenDelta{false};float monitorMix=0;
 };
 }

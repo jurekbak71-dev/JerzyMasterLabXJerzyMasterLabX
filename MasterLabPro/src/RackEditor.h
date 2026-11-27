@@ -54,7 +54,7 @@ public:
   auto interior=[this](int i){auto a=box(i).reduced(22,10);a.removeFromTop(27);a=a.reduced(2,1);return a;};
   spectrum.setBounds(interior(1));heatmap.setBounds(interior(2));
   input.setBounds(interior(3));output.setBounds(interior(4));
-  tiles.setBounds(interior(5));bands.setBounds({});
+  auto slots=box(5).reduced(22,8);slots.removeFromTop(27);tiles.setBounds(slots);bands.setBounds({});
   if(module)module->setBounds(interior(6));
  }
  void paint(juce::Graphics& g)override{
@@ -84,11 +84,11 @@ public:
 private:
  juce::Rectangle<int> box(int i)const{
   auto raw=rackLayout[static_cast<std::size_t>(i)];
-  if(i==1)raw={12,72,1248,168};
-  if(i==2)raw={12,250,1248,142};
-  if(i==3||i==4)raw.h=320;
-  if(i==5)raw={12,402,1576,100};
-  if(i==6)raw={12,512,1576,438};
+  if(i==1)raw={12,72,1248,172};
+  if(i==2)raw={12,254,1248,128};
+  if(i==3||i==4)raw.h=310;
+  if(i==5)raw={12,392,1576,106};
+  if(i==6)raw={12,508,1576,442};
   const auto r=scale(raw,getWidth(),getHeight());return {r.x,r.y,r.w,r.h};
  }
  Callbacks callbacks;RackTiles tiles;FrequencyBandSelector bands;SpectrumView spectrum;HeatMapView heatmap;StereoLevelMeter input,output;

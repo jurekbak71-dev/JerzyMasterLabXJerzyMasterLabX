@@ -139,6 +139,15 @@ int main(int argc, char** argv) {
   api.set_parameter(instance,193,200);api.reset(instance);
   l.fill(.3f);r.fill(-.1f);if(api.process(instance,&block)!=MLP_OK||std::abs(l.back()-.5f)>1e-6f||std::abs(r.back()+.3f)>1e-6f)return false;
   api.set_parameter(instance,193,100);api.reset(instance);
+  for(uint32_t band=0;band<4;++band){
+   for(uint32_t i=0;i<descriptor->parameter_count;++i)api.set_parameter(instance,descriptor->parameters[i].id,descriptor->parameters[i].neutral_value);
+   api.set_parameter(instance,100+band,-40);api.set_parameter(instance,110+band,4);
+   auto tone=[&](double hz){double power=0;for(int b=0;b<400;++b){for(size_t i=0;i<l.size();++i)l[i]=r[i]=float(.4*std::sin(2*std::numbers::pi*hz*(b*128+int(i))/48000.));if(api.process(instance,&block)!=MLP_OK)return -1.;if(b>=380)for(auto x:l)power+=x*x;}return power;};
+   constexpr double hz[]{60,900,10000,1000};
+   api.reset(instance);const auto wet=tone(hz[band]);
+   api.set_parameter(instance,180+band,0);api.reset(instance);const auto dry=tone(hz[band]);
+   if(!(wet>=0&&dry>0&&wet<dry*.9)){std::cerr<<"Band enable failure "<<band<<" "<<wet<<" "<<dry<<'\n';return false;}
+  }
   std::cout<<"PASS independent makeup, band enable and stereo width\n";
   std::atomic<bool> writtenAll{false},valid{true};
   std::thread automation([&] {

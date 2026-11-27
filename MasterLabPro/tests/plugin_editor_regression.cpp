@@ -109,7 +109,7 @@ int main(int argc,char** argv){
  auto* stereoPanel=named(*editor,"Stereo Architect Panel");if(!stereoPanel)return 18;
  // Exercise real editor gesture, not just screenshot creation.
  std::array<float,7> widthsBefore{};for(int i=0;i<7;++i)widthsBefore[size_t(i)]=stereo->getParameters()[i]->getValue();
- const auto point=juce::Point<float>(float(stereoPanel->getWidth())*.59f,float(stereoPanel->getHeight())*.24f);
+ const auto point=juce::Point<float>(float(stereoPanel->getWidth())*.39f,float(stereoPanel->getHeight())*.24f);
  const auto down=mouse(*stereoPanel,juce::ModifierKeys::leftButtonModifier,point);
  stereoPanel->mouseDown(down);stereoPanel->mouseUp(down);
  bool changed=false;for(int i=0;i<7;++i)if(stereo->getParameters()[i]->getValue()!=widthsBefore[size_t(i)])changed=true;
