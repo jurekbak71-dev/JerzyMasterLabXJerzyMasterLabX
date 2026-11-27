@@ -89,7 +89,10 @@ int main(int argc,char** argv){
  const auto compressorParameters=compressor->getParameters();
  auto* lowEnable=compressorParameters.getUnchecked(38);
  if(!lowButton||!lowEnable)return 33;
- lowButton->triggerClick();
+ const auto lowButtonPoint=lowButton->getLocalBounds().toFloat().getCentre();
+ const auto lowMouseDown=mouse(*lowButton,juce::ModifierKeys::leftButtonModifier,lowButtonPoint);
+ const auto lowMouseUp=mouse(*lowButton,juce::ModifierKeys{},lowButtonPoint);
+ lowButton->mouseDown(lowMouseDown);lowButton->mouseUp(lowMouseUp);
  if(!lowButton->getToggleState()){std::cerr<<"Single click failed to select compressor band\n";return 34;}
  const auto enabledBeforeDoubleClick=lowEnable->getValue();
  const auto doubleClick=mouse(*lowButton,juce::ModifierKeys::leftButtonModifier,lowButton->getLocalBounds().toFloat().getCentre());
