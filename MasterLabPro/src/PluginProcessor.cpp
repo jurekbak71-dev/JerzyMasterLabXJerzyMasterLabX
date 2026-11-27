@@ -204,9 +204,11 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
     mode(*info.parameters[4].parameter,[this](float v){analog.setToggleState(v>.5f,juce::dontSendNotification);analog.setButtonText(v>.5f?"ANALOG":"DIGITAL");analog.setIndicator(v>.5f?juce::Colour(0xffe3ad60):juce::Colour(0xff58bde8));}),
     bypassAttachment(*info.parameters[5].parameter,[this](float v){bypass.setToggleState(v>.5f,juce::dontSendNotification);bypass.setButtonText(v>.5f?"BYPASSED":"ACTIVE");bypass.setIndicator(v>.5f?juce::Colours::red:juce::Colours::limegreen);}) {
    setName("Input Compressor Panel");
+   analog.setName("Compressor Mode");bypass.setName("Compressor Bypass");
+   bandActive.setName("Compressor Active Band");removeButton.setName("Compressor Remove");
    const char* names[]{"LOW","MID","HIGH","SUM","CROSSOVER"};
    for(size_t i=0;i<banks.size();++i){
-    banks[i].setButtonText(names[i]);banks[i].setAccent(bandAccent(bandIds[i]));addAndMakeVisible(banks[i]);
+    banks[i].setButtonText(names[i]);banks[i].setName(juce::String("Compressor ")+names[i]);banks[i].setAccent(bandAccent(bandIds[i]));addAndMakeVisible(banks[i]);
     banks[i].onClick=[this,i]{bank=i;rebuild();};
    }
    addAndMakeVisible(analog);addAndMakeVisible(bypass);addAndMakeVisible(removeButton);addAndMakeVisible(bandActive);
@@ -225,13 +227,23 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
   ~CompressorPanel() override{stopTimer();finishGesture();}
   void resized() override {
    auto area=getLocalBounds().reduced(6);
-   auto header=area.removeFromTop(40);
-   const int width=juce::jmin(140,header.getWidth()/9);
-   for(size_t i=0;i<banks.size();++i){auto cell=header.removeFromLeft(width).reduced(2,1);if(i<4){bandSwitches[i].setBounds(cell.removeFromRight(std::min(40,cell.getWidth()/3)));}banks[i].setBounds(cell);}
-   removeButton.setBounds(header.removeFromRight(width).reduced(2,0));
-   bypass.setBounds(header.removeFromRight(width).reduced(2,0));
-   analog.setBounds(header.removeFromRight(width).reduced(2,0));
-   bandActive.setBounds(header.removeFromRight(width).reduced(2,0));
+  auto header=area.removeFromTop(68);
+  auto bandRow=header.removeFromTop(32);
+  header.removeFromTop(2);
+  auto actionRow=header;
+  const int bandWidth=bandRow.getWidth()/4;
+  for(size_t i=0;i<4;++i){
+   auto cell=bandRow.removeFromLeft(bandWidth).reduced(2,1);
+   const int switchWidth=juce::jmin(48,cell.getWidth()/3);
+   bandSwitches[i].setBounds(cell.removeFromRight(switchWidth));
+   banks[i].setBounds(cell);
+  }
+  const int actionWidth=actionRow.getWidth()/5;
+  banks[4].setBounds(actionRow.removeFromLeft(actionWidth).reduced(2,1));
+  bandActive.setBounds(actionRow.removeFromLeft(actionWidth).reduced(2,1));
+  analog.setBounds(actionRow.removeFromLeft(actionWidth).reduced(2,1));
+  bypass.setBounds(actionRow.removeFromLeft(actionWidth).reduced(2,1));
+  removeButton.setBounds(actionRow.reduced(2,1));
    area.removeFromBottom(23);
    auto plots=area.removeFromTop(juce::jmax(38,juce::jmin(area.getHeight()*55/100,juce::jmax(38,area.getHeight()-140)))).reduced(1,2);
    transfer=plots.removeFromLeft(plots.getWidth()*38/100).reduced(2).toFloat();
@@ -418,9 +430,9 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
    modeButton.onClick=[this]{
     if(modeAttachment){
      const int mode=int(std::lround(physical(info.parameters[14])));
-     // ParameterAttachment owns the complete host gesture; its value is in
-     // the parameter's denormalized 0..2 mode range.
-     modeAttachment->setValueAsCompleteGesture(float((mode+1)%3));
+     // The host automation lane itself is normalized to 0..1, while the
+     // module's physical enum is 0..2.
+     modeAttachment->setValueAsCompleteGesture(float((mode+1)%3)*.5f);
     }
    };
    if(info.parameters.size()>=27){

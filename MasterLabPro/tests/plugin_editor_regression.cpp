@@ -71,6 +71,20 @@ int main(int argc,char** argv){
  auto* tile=tiles->getChildComponent(0);tile->mouseDown(mouse(*tile,juce::ModifierKeys::leftButtonModifier));
  auto* panel=named(*editor,"Input Compressor Panel");
  if(!panel||!named(*panel,"Stereo Link"))return 11;
+ for(const auto* name:{"Compressor LOW","Compressor MID","Compressor HIGH","Compressor SUM","Compressor CROSSOVER","LOW compression enable","MID compression enable","HIGH compression enable","SUM compression enable"}){
+  auto* button=named(*panel,name);
+  if(!button){std::cerr<<"Missing compressor header button: "<<name<<'\n';return 29;}
+  const auto bounds=button->getBounds();
+  if(bounds.isEmpty()||!panel->getLocalBounds().contains(bounds)||bounds.getWidth()<32){
+   std::cerr<<"Compressor header button clipped or too small: "<<name<<" bounds="<<bounds.toString()<<'\n';return 30;
+  }
+ }
+ for(const auto* name:{"Compressor Active Band","Compressor Mode","Compressor Bypass","Compressor Remove"}){
+  auto* button=named(*panel,name);
+  if(!button){std::cerr<<"Missing compressor action button: "<<name<<'\n';return 31;}
+  const auto bounds=button->getBounds();
+  if(bounds.isEmpty()||!panel->getLocalBounds().contains(bounds)||bounds.getWidth()<90){std::cerr<<"Compressor action button clipped or too small: "<<name<<'\n';return 32;}
+ }
  if(auto* dial=find<ml::RotaryParameterControl>(*panel);!dial||dial->dialDiameter()<75.f){std::cerr<<"Compressor dial diameter: "<<(dial?dial->dialDiameter():0.f)<<'\n';return 15;}
  juce::AudioBuffer<float> audio(2,256);juce::MidiBuffer midi;
  for(int block=0;block<120;++block){
@@ -120,7 +134,14 @@ int main(int argc,char** argv){
  if(!modeButton||!stereoizeButton||stereo->getParameters().size()<27)return 25;
  modeButton->triggerClick();
  std::cout<<"Stereo Architect mode button clicked\n";
- if(stereo->getParameters()[14]->getValue()<.49f||stereo->getParameters()[14]->getValue()>.51f)return 26;
+ auto stereoParameters=stereo->getParameters();
+ std::cout<<"Stereo host parameter count: "<<stereoParameters.size()<<"\n";
+ if(stereoParameters.size()<27)return 33;
+ auto* modeParameter=stereoParameters.getUnchecked(14);
+ if(!modeParameter)return 34;
+ const auto modeHostValue=modeParameter->getValue();
+ std::cout<<"Stereo host mode value: "<<modeHostValue<<"\n";
+ if(modeHostValue<.49f||modeHostValue>.51f)return 26;
  stereoizeButton->triggerClick();if(stereo->getParameters()[22]->getValue()<.99f)return 27;
  std::cout<<"Stereoize button clicked\n";
  const auto bandStateBefore=stereo->getParameters()[15]->getValue();
