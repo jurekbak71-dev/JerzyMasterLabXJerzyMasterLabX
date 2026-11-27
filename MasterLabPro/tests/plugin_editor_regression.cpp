@@ -146,7 +146,11 @@ int main(int argc,char** argv){
  auto* modeButton=dynamic_cast<juce::Button*>(named(*stereoPanel,"Stereo Mode"));
  auto* stereoizeButton=dynamic_cast<juce::Button*>(named(*stereoPanel,"Stereoize Enable"));
  if(!modeButton||!stereoizeButton||stereo->getParameters().size()<27)return 25;
- modeButton->triggerClick(juce::sendNotificationSync);
+ juce::Component* modeComponent=modeButton;
+ const auto modePoint=modeButton->getLocalBounds().toFloat().getCentre();
+ const auto modeDown=mouse(*modeButton,juce::ModifierKeys::leftButtonModifier,modePoint);
+ const auto modeUp=mouse(*modeButton,juce::ModifierKeys{},modePoint);
+ modeComponent->mouseDown(modeDown);modeComponent->mouseUp(modeUp);
  std::cout<<"Stereo Architect mode button clicked\n";
  auto stereoParameters=stereo->getParameters();
  std::cout<<"Stereo host parameter count: "<<stereoParameters.size()<<"\n";
