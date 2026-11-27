@@ -230,14 +230,14 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
   }
   ~CompressorPanel() override{stopTimer();finishGesture();}
   void resized() override {
-   auto area=getLocalBounds().reduced(6);
-   auto header=area.removeFromTop(36);
+   auto area=getLocalBounds().reduced(4);
+   auto header=area.removeFromTop(30);
    const int cellWidth=header.getWidth()/8;
    for(size_t i=0;i<banks.size();++i)banks[i].setBounds(header.removeFromLeft(cellWidth).reduced(2,1));
    analog.setBounds(header.removeFromLeft(cellWidth).reduced(2,1));
    bypass.setBounds(header.removeFromLeft(cellWidth).reduced(2,1));
    removeButton.setBounds(header.reduced(2,1));
-   area.removeFromBottom(23);
+   area.removeFromBottom(18);
    auto plots=area.removeFromTop(juce::jmax(64,juce::jmin(area.getHeight()*60/100,juce::jmax(64,area.getHeight()-138)))).reduced(1,2);
    transfer=plots.removeFromLeft(plots.getWidth()/2).reduced(2).toFloat();
    timeline=plots.reduced(4,2).toFloat();
