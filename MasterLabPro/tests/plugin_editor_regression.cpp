@@ -160,19 +160,24 @@ int main(int argc,char** argv){
  const auto modeHostValue=modeParameter->getValue();
  std::cout<<"Stereo host mode value: "<<modeHostValue<<"\n";
  if(modeHostValue<.49f||modeHostValue>.51f)return 26;
- stereoizeButton->triggerClick();if(stereo->getParameters()[22]->getValue()<.99f)return 27;
+ juce::Component* stereoizeComponent=stereoizeButton;
+ const auto stereoizePoint=stereoizeButton->getLocalBounds().toFloat().getCentre();
+ const auto stereoizeDown=mouse(*stereoizeButton,juce::ModifierKeys::leftButtonModifier,stereoizePoint);
+ const auto stereoizeUp=mouse(*stereoizeButton,juce::ModifierKeys{},stereoizePoint);
+ stereoizeComponent->mouseDown(stereoizeDown);stereoizeComponent->mouseUp(stereoizeUp);
+ if(stereoParameters.getUnchecked(22)->getValue()<.99f)return 27;
  std::cout<<"Stereoize button clicked\n";
- const auto bandStateBefore=stereo->getParameters()[15]->getValue();
+ const auto bandStateBefore=stereoParameters.getUnchecked(15)->getValue();
  const auto bandTogglePoint=juce::Point<float>(float(stereoPanel->getWidth())*.2f,float(stereoPanel->getHeight())*.44f);
  const auto bandToggle=mouse(*stereoPanel,juce::ModifierKeys::leftButtonModifier,bandTogglePoint);
  stereoPanel->mouseDown(bandToggle);stereoPanel->mouseUp(bandToggle);
- if(stereo->getParameters()[15]->getValue()==bandStateBefore){std::cerr<<"Stereo per-band switch did not change its host parameter\n";return 28;}
+ if(stereoParameters.getUnchecked(15)->getValue()==bandStateBefore){std::cerr<<"Stereo per-band switch did not change its host parameter\n";return 28;}
  // Exercise real editor gesture, not just screenshot creation.
- std::array<float,7> widthsBefore{};for(int i=0;i<7;++i)widthsBefore[size_t(i)]=stereo->getParameters()[i]->getValue();
+ std::array<float,7> widthsBefore{};for(int i=0;i<7;++i)widthsBefore[size_t(i)]=stereoParameters.getUnchecked(i)->getValue();
  const auto point=juce::Point<float>(float(stereoPanel->getWidth())*.39f,float(stereoPanel->getHeight())*.24f);
  const auto down=mouse(*stereoPanel,juce::ModifierKeys::leftButtonModifier,point);
  stereoPanel->mouseDown(down);stereoPanel->mouseUp(down);
- bool changed=false;for(int i=0;i<7;++i)if(stereo->getParameters()[i]->getValue()!=widthsBefore[size_t(i)])changed=true;
+ bool changed=false;for(int i=0;i<7;++i)if(stereoParameters.getUnchecked(i)->getValue()!=widthsBefore[size_t(i)])changed=true;
  if(!changed){std::cerr<<"Stereo band mouse gesture did not change a parameter\n";return 21;}
  std::cout<<"PASS Stereo band gesture\n";
  for(int block=0;block<64;++block){
