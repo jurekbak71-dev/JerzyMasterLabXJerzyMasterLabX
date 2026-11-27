@@ -74,7 +74,7 @@ public:
    g.setColour(juce::Colour(0xff11181e));g.fillRoundedRectangle(header.toFloat(),2);
    g.setColour(juce::Colour(0xff47515a));g.drawRoundedRectangle(header.toFloat(),2,1);
    g.setColour(juce::Colour(0xffc4cbd0));g.setFont(juce::FontOptions(12.f,juce::Font::bold));
-   g.drawFittedText(names[i],header.reduced(8,2),juce::Justification::centredLeft,1,.75f);
+   if(i==0){auto brand=header.reduced(8,1);auto pro=brand.removeFromRight(45);g.setFont(juce::FontOptions(17.f,juce::Font::bold|juce::Font::italic));g.drawFittedText("JERZY MASTERLAB",brand,juce::Justification::centredLeft,1,.65f);g.setColour(juce::Colour(0xffff5344));g.drawFittedText("PRO",pro,juce::Justification::centred,1,.75f);}else g.drawFittedText(names[i],header.reduced(8,2),juce::Justification::centredLeft,1,.75f);
   }
   g.setColour(juce::Colour(0xffaeb9c1));g.setFont(juce::FontOptions(10.f));
   g.drawFittedText(footer,box(7).reduced(40,5),juce::Justification::centredLeft,1,.72f);
@@ -84,10 +84,10 @@ public:
 private:
  juce::Rectangle<int> box(int i)const{
   auto raw=rackLayout[static_cast<std::size_t>(i)];
-  if(i==1)raw={12,72,1248,172};
-  if(i==2)raw={12,254,1248,128};
-  if(i==3||i==4)raw.h=310;
-  if(i==5)raw={12,392,1576,106};
+  if(i==1)raw={12,72,619,270};
+  if(i==2)raw={641,72,619,270};
+  if(i==3||i==4)raw.h=270;
+  if(i==5)raw={12,352,1576,146};
   if(i==6)raw={12,508,1576,442};
   const auto r=scale(raw,getWidth(),getHeight());return {r.x,r.y,r.w,r.h};
  }

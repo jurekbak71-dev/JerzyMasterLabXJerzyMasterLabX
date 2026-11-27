@@ -9,13 +9,24 @@ class RackTiles final:public juce::Component,public juce::DragAndDropContainer {
  struct Tile final:juce::Component,juce::DragAndDropTarget {
  RackTiles& owner;int pos;bool target=false;bool hover=false;
  Tile(RackTiles& o,int p):owner(o),pos(p){}
- void paint(juce::Graphics& g) override {auto id=owner.order.slots()[pos];auto r=getLocalBounds().toFloat().reduced(2);owner.paintSkin(g,r);g.setColour(target?juce::Colours::lime:owner.selected==id&&id?juce::Colours::cyan:hover?juce::Colour(0xff83b9d0):juce::Colour(0xff68717b));g.drawRoundedRectangle(r,5,2);auto inset=getLocalBounds().reduced(20,5);
- auto index=inset.removeFromLeft(24);
- g.setColour(juce::Colour(0xff0b1014));g.fillRoundedRectangle(index.toFloat(),3);
- g.setColour(juce::Colour(0xff7e919f));g.setFont(juce::FontOptions(11.f,juce::Font::bold));
- g.drawFittedText(juce::String(pos+1),index,juce::Justification::centred,1);
- g.setColour(id?juce::Colour(0xffd0e1eb):juce::Colour(0xff76828b));
- g.drawFittedText(id&&owner.label?owner.label(id):juce::String(id?"Module":"EMPTY"),inset.reduced(6,0),juce::Justification::centred,1,.75f);}
+ void paint(juce::Graphics& g) override {
+  const auto id=owner.order.slots()[pos];auto r=getLocalBounds().toFloat().reduced(3,2);
+  if(r.getWidth()<12||r.getHeight()<12)return;
+  const bool chosen=id&&owner.selected==id;
+  const auto accent=target?juce::Colour(0xff71ee78):chosen?juce::Colour(0xff35ddff):juce::Colour(0xff52616c);
+  g.setColour(juce::Colour(0xff05090d));g.fillRoundedRectangle(r,5);
+  auto inner=r.reduced(2);
+  g.setGradientFill({juce::Colour(id?0xff273640:0xff1d242a),inner.getTopLeft(),juce::Colour(0xff080e13),inner.getBottomLeft(),false});g.fillRoundedRectangle(inner,4);
+  g.setColour(accent.withAlpha(chosen||target?1.f:.7f));g.drawRoundedRectangle(r,5,chosen||target?2.f:1.f);
+  if(chosen){g.setColour(accent.withAlpha(.22f));g.drawRoundedRectangle(inner,4,3);}
+  auto content=getLocalBounds().reduced(8,5);auto head=content.removeFromTop(std::min(20,content.getHeight()/3));
+  auto number=head.removeFromLeft(std::min(23,head.getWidth()));g.setColour(juce::Colour(0xff080d11));g.fillRoundedRectangle(number.toFloat(),3);g.setColour(juce::Colour(0xffa4b5c0));g.setFont(juce::FontOptions(11.f,juce::Font::bold));g.drawFittedText(juce::String(pos+1),number,juce::Justification::centred,1);
+  const auto name=id&&owner.label?owner.label(id):juce::String(id?"Module":"EMPTY");
+  auto nameArea=content.removeFromBottom(std::min(30,content.getHeight()/2));
+  g.setColour(id?juce::Colour(0xffd5e6ed):juce::Colour(0xff77838c));g.setFont(juce::FontOptions(12.f,juce::Font::bold));g.drawFittedText(name,nameArea,juce::Justification::centred,2,.7f);
+  if(id){g.setColour(chosen?accent:juce::Colour(0xff8ea5b4));g.setFont(juce::FontOptions(18.f,juce::Font::bold));g.drawFittedText(name.substring(0,2).toUpperCase(),content,juce::Justification::centred,1,.7f);}
+  else{g.setColour(juce::Colour(0xff35434c));const auto c=content.getCentre();g.drawLine(float(c.x-6),float(c.y),float(c.x+6),float(c.y),1.4f);g.drawLine(float(c.x),float(c.y-6),float(c.x),float(c.y+6),1.4f);}
+ }
  void mouseEnter(const juce::MouseEvent&) override {hover=true;repaint();}
  void mouseExit(const juce::MouseEvent&) override {hover=false;repaint();}
  void mouseDown(const juce::MouseEvent& e) override {if(!e.mods.isLeftButtonDown())return;owner.selected=owner.order.slots()[pos];if(owner.onSelect)owner.onSelect(owner.selected,pos);owner.repaintTiles();}
@@ -40,6 +51,6 @@ public:
   }else{g.setColour(juce::Colour(0xff20252b));g.fillRoundedRectangle(r,5);}
  }
  void repaintTiles(){for(auto& t:tiles)t->repaint();}
- void resized()override{for(int i=0;i<10;++i){int x=i%5,y=i/5;tiles[i]->setBounds(x*getWidth()/5,y*getHeight()/2,(x+1)*getWidth()/5-x*getWidth()/5,(y+1)*getHeight()/2-y*getHeight()/2);}}
+ void resized()override{for(int i=0;i<10;++i){const int x=i*getWidth()/10,next=(i+1)*getWidth()/10;tiles[i]->setBounds(x,0,next-x,getHeight());}}
 private:juce::Image slotSkin;const RackOrder& order;RackOrder::Id selected=0;std::array<std::unique_ptr<Tile>,10> tiles;
 };}

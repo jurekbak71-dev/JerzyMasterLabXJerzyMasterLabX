@@ -85,11 +85,11 @@ public:void setImages(juce::Image b,juce::Image a,juce::Image d){before=std::mov
   const juce::Image images[]{before,after,delta};
   const char* labels[]{"BEFORE","AFTER","DELTA AUDIO"};
   auto area=getLocalBounds().reduced(5,2);
-  auto axis=area.removeFromBottom(13).withTrimmedLeft(101);
+  auto axis=area.removeFromBottom(13);
   g.setFont(juce::FontOptions(10.f));
   for(int i=0;i<3;++i){
    auto row=area.removeFromTop(area.getHeight()/(3-i)).reduced(0,1);
-   auto name=row.removeFromLeft(101);
+   auto name=row.removeFromTop(12);
    g.setColour(juce::Colours::whitesmoke);g.drawFittedText(labels[i],name.reduced(4,0),juce::Justification::centredLeft,1);
    if(images[i].isValid())g.drawImage(images[i],row.toFloat());
    else{g.setColour(juce::Colour(0xff15242b));g.fillRect(row);g.setColour(juce::Colours::grey);g.drawText("NO SIGNAL",row,juce::Justification::centred);}

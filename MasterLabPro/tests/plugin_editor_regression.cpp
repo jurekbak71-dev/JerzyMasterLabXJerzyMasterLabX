@@ -37,6 +37,7 @@ int main(int argc,char** argv){
  std::vector<uint8_t> bytes;if(!ml::RackStateCodec::encode(state,bytes))return 1;p->setStateInformation(bytes.data(),int(bytes.size()));
  std::unique_ptr<juce::AudioProcessorEditor> editor(p->createEditor());if(!editor)return 2;
  auto* tiles=find<ml::RackTiles>(*editor);if(!tiles||tiles->getNumChildComponents()!=10)return 3;
+ for(int i=0;i<10;++i){auto* card=tiles->getChildComponent(i);if(card->getHeight()<55||card->getY()!=0||(i&&card->getX()<=tiles->getChildComponent(i-1)->getX())){std::cerr<<"Rack card layout invalid\n";return 24;}}
  for(int i=0;i<100;++i){
   auto* tile=tiles->getChildComponent(0);tile->mouseDown(mouse(*tile,juce::ModifierKeys::leftButtonModifier));
   auto* panel=named(*editor,"MasterLabPro Module Panel");if(!panel)return 4;
