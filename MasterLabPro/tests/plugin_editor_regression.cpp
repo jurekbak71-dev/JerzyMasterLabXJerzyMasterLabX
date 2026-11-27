@@ -89,14 +89,15 @@ int main(int argc,char** argv){
  const auto compressorParameters=compressor->getParameters();
  auto* lowEnable=compressorParameters.getUnchecked(38);
  if(!lowButton||!lowEnable)return 33;
+ juce::Component* lowComponent=lowButton;
  const auto lowButtonPoint=lowButton->getLocalBounds().toFloat().getCentre();
  const auto lowMouseDown=mouse(*lowButton,juce::ModifierKeys::leftButtonModifier,lowButtonPoint);
  const auto lowMouseUp=mouse(*lowButton,juce::ModifierKeys{},lowButtonPoint);
- lowButton->mouseDown(lowMouseDown);lowButton->mouseUp(lowMouseUp);
+ lowComponent->mouseDown(lowMouseDown);lowComponent->mouseUp(lowMouseUp);
  if(!lowButton->getToggleState()){std::cerr<<"Single click failed to select compressor band\n";return 34;}
  const auto enabledBeforeDoubleClick=lowEnable->getValue();
  const auto doubleClick=mouse(*lowButton,juce::ModifierKeys::leftButtonModifier,lowButton->getLocalBounds().toFloat().getCentre());
- lowButton->mouseDoubleClick(doubleClick);
+ lowComponent->mouseDoubleClick(doubleClick);
  if(lowEnable->getValue()==enabledBeforeDoubleClick){std::cerr<<"Double click failed to toggle compressor band DSP\n";return 35;}
  if(auto* dial=find<ml::RotaryParameterControl>(*panel);!dial||dial->dialDiameter()<75.f){std::cerr<<"Compressor dial diameter: "<<(dial?dial->dialDiameter():0.f)<<'\n';return 15;}
  juce::AudioBuffer<float> audio(2,256);juce::MidiBuffer midi;
@@ -145,7 +146,7 @@ int main(int argc,char** argv){
  auto* modeButton=dynamic_cast<juce::Button*>(named(*stereoPanel,"Stereo Mode"));
  auto* stereoizeButton=dynamic_cast<juce::Button*>(named(*stereoPanel,"Stereoize Enable"));
  if(!modeButton||!stereoizeButton||stereo->getParameters().size()<27)return 25;
- modeButton->triggerClick();
+ modeButton->triggerClick(juce::sendNotificationSync);
  std::cout<<"Stereo Architect mode button clicked\n";
  auto stereoParameters=stereo->getParameters();
  std::cout<<"Stereo host parameter count: "<<stereoParameters.size()<<"\n";
