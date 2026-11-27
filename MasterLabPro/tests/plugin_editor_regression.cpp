@@ -71,20 +71,30 @@ int main(int argc,char** argv){
  auto* tile=tiles->getChildComponent(0);tile->mouseDown(mouse(*tile,juce::ModifierKeys::leftButtonModifier));
  auto* panel=named(*editor,"Input Compressor Panel");
  if(!panel||!named(*panel,"Stereo Link"))return 11;
- for(const auto* name:{"Compressor LOW","Compressor MID","Compressor HIGH","Compressor SUM","Compressor CROSSOVER","LOW compression enable","MID compression enable","HIGH compression enable","SUM compression enable"}){
+ const juce::Component* firstHeaderButton=nullptr;
+ for(const auto* name:{"Compressor LOW","Compressor MID","Compressor HIGH","Compressor SUM","Compressor CROSSOVER","Compressor Mode","Compressor Bypass","Compressor Remove"}){
   auto* button=named(*panel,name);
   if(!button){std::cerr<<"Missing compressor header button: "<<name<<'\n';return 29;}
   const auto bounds=button->getBounds();
-  if(bounds.isEmpty()||!panel->getLocalBounds().contains(bounds)||bounds.getWidth()<32){
+  if(bounds.isEmpty()||!panel->getLocalBounds().contains(bounds)||bounds.getWidth()<70){
    std::cerr<<"Compressor header button clipped or too small: "<<name<<" bounds="<<bounds.toString()<<'\n';return 30;
   }
+  if(!firstHeaderButton)firstHeaderButton=button;
+  else if(bounds.getY()!=firstHeaderButton->getY()||bounds.getHeight()!=firstHeaderButton->getHeight()){
+   std::cerr<<"Compressor header is not a single aligned row\n";return 31;
+  }
  }
- for(const auto* name:{"Compressor Active Band","Compressor Mode","Compressor Bypass","Compressor Remove"}){
-  auto* button=named(*panel,name);
-  if(!button){std::cerr<<"Missing compressor action button: "<<name<<'\n';return 31;}
-  const auto bounds=button->getBounds();
-  if(bounds.isEmpty()||!panel->getLocalBounds().contains(bounds)||bounds.getWidth()<90){std::cerr<<"Compressor action button clipped or too small: "<<name<<'\n';return 32;}
- }
+ for(const auto* name:{"LOW compression enable","MID compression enable","HIGH compression enable","SUM compression enable"})if(named(*panel,name)){std::cerr<<"Separate ON/OFF button remains: "<<name<<'\n';return 32;}
+ auto* lowButton=dynamic_cast<juce::Button*>(named(*panel,"Compressor LOW"));
+ const auto compressorParameters=compressor->getParameters();
+ auto* lowEnable=compressorParameters.getUnchecked(38);
+ if(!lowButton||!lowEnable)return 33;
+ lowButton->triggerClick();
+ if(!lowButton->getToggleState()){std::cerr<<"Single click failed to select compressor band\n";return 34;}
+ const auto enabledBeforeDoubleClick=lowEnable->getValue();
+ const auto doubleClick=mouse(*lowButton,juce::ModifierKeys::leftButtonModifier,lowButton->getLocalBounds().toFloat().getCentre());
+ lowButton->mouseDoubleClick(doubleClick);
+ if(lowEnable->getValue()==enabledBeforeDoubleClick){std::cerr<<"Double click failed to toggle compressor band DSP\n";return 35;}
  if(auto* dial=find<ml::RotaryParameterControl>(*panel);!dial||dial->dialDiameter()<75.f){std::cerr<<"Compressor dial diameter: "<<(dial?dial->dialDiameter():0.f)<<'\n';return 15;}
  juce::AudioBuffer<float> audio(2,256);juce::MidiBuffer midi;
  for(int block=0;block<120;++block){
