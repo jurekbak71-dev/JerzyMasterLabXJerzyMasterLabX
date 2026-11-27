@@ -416,7 +416,12 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
     modeAttachment->sendInitialUpdate();
    }else modeButton.setVisible(false);
    modeButton.onClick=[this]{
-    if(modeAttachment){const int mode=int(std::lround(physical(info.parameters[14])));auto* parameter=info.parameters[14].parameter;parameter->beginChangeGesture();adjust(info.parameters[14],double((mode+1)%3));parameter->endChangeGesture();}
+    if(modeAttachment){
+     const int mode=int(std::lround(physical(info.parameters[14])));
+     // ParameterAttachment owns the complete host gesture; its value is in
+     // the parameter's denormalized 0..2 mode range.
+     modeAttachment->setValueAsCompleteGesture(float((mode+1)%3));
+    }
    };
    if(info.parameters.size()>=27){
     stereoizeAttachment=std::make_unique<juce::ParameterAttachment>(*info.parameters[22].parameter,[this](float value){
@@ -427,7 +432,7 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
     stereoizeAttachment->sendInitialUpdate();
    }else stereoizeButton.setVisible(false);
    stereoizeButton.onClick=[this]{
-    if(stereoizeAttachment){const auto value=physical(info.parameters[22]);auto* parameter=info.parameters[22].parameter;parameter->beginChangeGesture();adjust(info.parameters[22],value>.5f?0.:1.);parameter->endChangeGesture();}
+    if(stereoizeAttachment){const auto value=physical(info.parameters[22]);stereoizeAttachment->setValueAsCompleteGesture(value>.5f?0.f:1.f);}
    };
    removeButton.onClick=std::move(remove);
    bypass.onClick=[this]{bypassAttachment.setValueAsCompleteGesture(info.parameters[13].parameter->get()<.5f?1.f:0.f);};
