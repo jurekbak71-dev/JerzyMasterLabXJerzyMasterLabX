@@ -15,35 +15,37 @@ int main(int argc,char** argv){
  const auto& api=*library.api();
  const auto read=library.dynamics();
  auto verify=[&]{
-  if(!read||api.get_latency_samples(instance)!=0)return false;
+  if(!read||api.get_latency_samples(instance)!=0){std::cerr<<"initial telemetry/latency check failed\n";return false;}
   std::array<float,511> l{},r{};
   float* channels[]{l.data(),r.data()};
   for(double rate:{44100.,48000.,96000.,192000.})for(uint32_t block:{17u,128u,511u}){
-   if(api.prepare(instance,rate,block,2)!=MLP_OK)return false;
+   if(api.prepare(instance,rate,block,2)!=MLP_OK){std::cerr<<"prepare failed\n";return false;}
    MlpProcessContext context{sizeof(context),block,2,0,channels};
    for(int width:{0,100,200}){
-    for(uint32_t id=1;id<=7;++id)if(api.set_parameter(instance,id,width)!=MLP_OK)return false;
+    for(uint32_t id=1;id<=7;++id)if(api.set_parameter(instance,id,width)!=MLP_OK){std::cerr<<"width parameter set failed id="<<id<<'\n';return false;}
     api.reset(instance);
     l.fill(.2f);r.fill(.2f);
-    if(api.process(instance,&context)!=MLP_OK)return false;
-    if(l[0]!=.2f||r[0]!=.2f)return false;
+    if(api.process(instance,&context)!=MLP_OK){std::cerr<<"neutral process failed\n";return false;}
+    if(l[0]!=.2f||r[0]!=.2f){std::cerr<<"neutral mismatch "<<l[0]<<","<<r[0]<<" rate="<<rate<<" block="<<block<<" width="<<width<<'\n';return false;}
     for(uint32_t i=0;i<block;++i){
      l[i]=float(.2*std::cos(2*std::numbers::pi*1200*i/rate));r[i]=-l[i];
     }
     const auto original=l;
-    if(api.process(instance,&context)!=MLP_OK)return false;
-    for(uint32_t i=0;i<block;++i)if(std::abs(l[i]-original[i]*float(width)*.01f)>1e-6f||std::abs(l[i]+r[i])>1e-6f)return false;
+    if(api.process(instance,&context)!=MLP_OK){std::cerr<<"width process failed\n";return false;}
+    for(uint32_t i=0;i<block;++i)if(std::abs(l[i]-original[i]*float(width)*.01f)>1e-6f||std::abs(l[i]+r[i])>1e-6f){
+     std::cerr<<"Width regression rate="<<rate<<" block="<<block<<" width="<<width<<" sample="<<i<<" got="<<l[i]<<","<<r[i]<<" expected="<<original[i]*float(width)*.01f<<'\n';return false;
+    }
    }
-   if(api.set_parameter(instance,8,15000)!=MLP_OK||api.set_parameter(instance,9,40)!=MLP_OK)return false;
+   if(api.set_parameter(instance,8,15000)!=MLP_OK||api.set_parameter(instance,9,40)!=MLP_OK){std::cerr<<"crossover change failed\n";return false;}
    l.fill(.4f);r.fill(-.2f);
-   if(api.process(instance,&context)!=MLP_OK||!std::isfinite(l[block-1]))return false;
-   if(api.set_parameter(instance,14,1)!=MLP_OK)return false;
+   if(api.process(instance,&context)!=MLP_OK||!std::isfinite(l[block-1])){std::cerr<<"post-crossover process failed\n";return false;}
+   if(api.set_parameter(instance,14,1)!=MLP_OK){std::cerr<<"bypass set failed\n";return false;}
    api.reset(instance);l.fill(.45f);r.fill(-.15f);
-   if(api.process(instance,&context)!=MLP_OK||l[block-1]!=.45f||r[0]!=-.15f)return false;
-   if(api.set_parameter(instance,14,0)!=MLP_OK)return false;
+   if(api.process(instance,&context)!=MLP_OK||l[block-1]!=.45f||r[0]!=-.15f){std::cerr<<"bypass process mismatch\n";return false;}
+   if(api.set_parameter(instance,14,0)!=MLP_OK){std::cerr<<"bypass reset parameter failed\n";return false;}
   }
   if(api.set_parameter(instance,8,60)!=MLP_OK||api.set_parameter(instance,9,250)!=MLP_OK||
-     api.prepare(instance,48000,128,2)!=MLP_OK)return false;
+     api.prepare(instance,48000,128,2)!=MLP_OK){std::cerr<<"crossover setup failed\n";return false;}
   for(uint32_t id=1;id<=7;++id)if(api.set_parameter(instance,id,id==1?0:100)!=MLP_OK)return false;
   auto sideRatio=[&](double hz){
    api.reset(instance);
@@ -57,13 +59,13 @@ int main(int argc,char** argv){
    return std::sqrt(sum/input);
   };
   const double bass=sideRatio(30),treble=sideRatio(8000);
-  if(bass<.43||bass>.47||treble<.99||treble>1.01)return false;
+  if(bass<.43||bass>.47||treble<.99||treble>1.01){std::cerr<<"width-0 probe failed "<<bass<<" "<<treble<<'\n';return false;}
   const float correlation=std::bit_cast<float>(uint32_t(read(instance,0)));
-  if(std::abs(correlation+1)>1e-5f)return false;
+  if(std::abs(correlation+1)>1e-5f){std::cerr<<"correlation mismatch "<<correlation<<'\n';return false;}
   std::cout<<"SUB width 0%: side gain at 30 Hz = "<<bass<<", at 8 kHz = "<<treble<<'\n';
-  auto modeRatio=[&](int mode,bool enabled){
+  auto modeRatio=[&](int mode,bool enabled,double width=200.){
    if(api.prepare(instance,48000,128,2)!=MLP_OK)return -1.;
-   for(uint32_t id=1;id<=7;++id)if(api.set_parameter(instance,id,200)!=MLP_OK)return -1.;
+   for(uint32_t id=1;id<=7;++id)if(api.set_parameter(instance,id,width)!=MLP_OK)return -1.;
    if(api.set_parameter(instance,15,mode)!=MLP_OK)return -1.;
    for(uint32_t band=0;band<7;++band)if(api.set_parameter(instance,16+band,enabled?1:0)!=MLP_OK)return -1.;
    api.reset(instance);double in=0,out=0;
@@ -77,9 +79,28 @@ int main(int argc,char** argv){
    return std::sqrt(out/in);
   };
   const double natural=modeRatio(0,true),wide=modeRatio(1,true),ultra=modeRatio(2,true),disabled=modeRatio(2,false);
+  const double neutralNatural=modeRatio(0,true,100),neutralWide=modeRatio(1,true,100),neutralUltra=modeRatio(2,true,100);
   std::cout<<"1200 Hz side gain at 200%: NATURAL="<<natural<<", WIDE="<<wide<<", ULTRA="<<ultra<<"; all bands disabled="<<disabled<<'\n';
+  std::cout<<"Side ratio at neutral 100%: NATURAL="<<neutralNatural<<", WIDE="<<neutralWide<<", ULTRA="<<neutralUltra<<'\n';
   if(!std::isfinite(natural)||!std::isfinite(wide)||!std::isfinite(ultra)||!std::isfinite(disabled)||
-     std::abs(natural-2.)>.03||std::abs(wide-3.)>.04||std::abs(ultra-4.)>.05||std::abs(disabled-1.)>.02)return false;
+     !std::isfinite(neutralNatural)||!std::isfinite(neutralWide)||!std::isfinite(neutralUltra)||
+     std::abs(natural-2.)>.03||std::abs(wide-3.)>.04||ultra<=wide+.5||ultra>4.05||
+     std::abs(disabled-1.)>.02||std::abs(neutralNatural-1.)>.02||std::abs(neutralWide-1.)>.02||std::abs(neutralUltra-1.)>.02)return false;
+  auto sidePhase=[&](int mode){
+   if(api.prepare(instance,48000,128,2)!=MLP_OK)return std::numeric_limits<double>::quiet_NaN();
+   for(uint32_t id=1;id<=7;++id)if(api.set_parameter(instance,id,200)!=MLP_OK)return std::numeric_limits<double>::quiet_NaN();
+   if(api.set_parameter(instance,15,mode)!=MLP_OK)return std::numeric_limits<double>::quiet_NaN();
+   api.reset(instance);double sine=0,cosine=0;MlpProcessContext context{sizeof(context),128,2,0,channels};
+   for(int block=0;block<100;++block){
+    for(int i=0;i<128;++i){const double phase=2*std::numbers::pi*1200.*double(block*128+i)/48000.;l[i]=float(.1*std::sin(phase));r[i]=-l[i];}
+    if(api.process(instance,&context)!=MLP_OK)return std::numeric_limits<double>::quiet_NaN();
+    if(block>=60)for(int i=0;i<128;++i){const double phase=2*std::numbers::pi*1200.*double(block*128+i)/48000.;sine+=l[i]*std::sin(phase);cosine+=l[i]*std::cos(phase);}
+   }
+   return std::atan2(cosine,sine)*180/std::numbers::pi;
+  };
+  const double widePhase=sidePhase(1),ultraPhase=sidePhase(2);
+  std::cout<<"1200 Hz Side phase relative to input: WIDE="<<widePhase<<" deg, ULTRA="<<ultraPhase<<" deg\n";
+  if(!std::isfinite(widePhase)||!std::isfinite(ultraPhase)||std::abs(ultraPhase-widePhase)<1.)return false;
   constexpr std::array<double,7> bandProbeHz{40.,150.,375.,1000.,3000.,6000.,12000.};
   std::cout<<"ULTRA 200% individual band enable ratios (SUB..AIR):";
   for(uint32_t band=0;band<7;++band){
@@ -127,6 +148,16 @@ int main(int argc,char** argv){
   std::cout<<"Stereoize mono Side/Mid ratio: off="<<off<<", enabled="<<stereoized<<", compatibility=100% "<<protectedStereo<<'\n';
   if(!std::isfinite(stereoized)||!std::isfinite(protectedStereo)||!std::isfinite(off)||stereoized<.1||
      std::abs(protectedStereo-stereoized*.5)>.01||off>1e-6)return false;
+  if(api.prepare(instance,48000,128,2)!=MLP_OK)return false;
+  for(uint32_t id=1;id<=7;++id)if(api.set_parameter(instance,id,200)!=MLP_OK)return false;
+  if(api.set_parameter(instance,15,2)!=MLP_OK||api.set_parameter(instance,23,0)!=MLP_OK)return false;
+  api.reset(instance);double monoSide=0,monoMid=0;MlpProcessContext monoContext{sizeof(monoContext),128,2,0,channels};
+  for(int block=0;block<100;++block){
+   for(int i=0;i<128;++i)l[i]=r[i]=float(.2*std::sin(2*std::numbers::pi*997.*double(block*128+i)/48000.));
+   if(api.process(instance,&monoContext)!=MLP_OK)return false;
+   if(block>=60)for(int i=0;i<128;++i){const double mid=.5*(l[i]+r[i]),side=.5*(l[i]-r[i]);monoMid+=mid*mid;monoSide+=side*side;}
+  }
+  if(std::sqrt(monoSide/monoMid)>1e-7)return false;
   if(api.set_parameter(instance,8,15000)!=MLP_OK)return false;
   std::array<uint8_t,128> state{};uint32_t written=0;
   if(api.save_state(instance,state.data(),uint32_t(state.size()),&written)!=MLP_OK)return false;

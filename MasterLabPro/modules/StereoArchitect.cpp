@@ -42,7 +42,7 @@ struct MlpInstance {
  std::array<float,7> widths{};
  std::array<float,6> splits{},filterState{};
  std::array<float,5> stereoizeControls{};
- float rate=48000,bypass=0,leftPower=0,rightPower=0,crossPower=0,allpassInput=0,allpassOutput=0;
+ float rate=48000,bypass=0,leftPower=0,rightPower=0,crossPower=0,allpassInput=0,allpassOutput=0,ultraInput=0,ultraOutput=0,decorrelationMix=0;
  std::atomic<uint64_t> display{0},energyDisplay{0};
  uint32_t frames=0;
  MlpInstance(){
@@ -66,7 +66,7 @@ void MLP_CALL reset(MlpInstance* p){
   const float gain=width<=1.f?width:1.f+(width-1.f)*float(mode+1);
   p->widths[i]=p->extended[i+1].load(std::memory_order_relaxed)>.5f?gain:1.f;
  }
- p->allpassInput=p->allpassOutput=0;
+ p->allpassInput=p->allpassOutput=p->ultraInput=p->ultraOutput=p->decorrelationMix=0;
  for(size_t i=0;i<p->stereoizeControls.size();++i)p->stereoizeControls[i]=p->extended[8+i].load(std::memory_order_relaxed);
  for(size_t i=0;i<6;++i)p->splits[i]=p->target[7+i].load(std::memory_order_relaxed);
  p->splits=ml::orderedStereoSplits(p->splits,std::min(20000.f,p->rate*.45f));
@@ -145,9 +145,18 @@ MlpResult MLP_CALL process(MlpInstance* p,const MlpProcessContext* context){
    correction+=(upper-lower)*(p->widths[i]-1);lower=upper;
   }
   p->bypass=smooth(p->bypass,bypass,widthStep);
-  correction+=stereoizeSide;
-  correction*=1-p->bypass;
-  const float outL=left+correction,outR=right-correction;
+  constexpr float ultraAllpassCoefficient=.55f;
+  const float ultraAllpass=-ultraAllpassCoefficient*correction+p->ultraInput+
+                           ultraAllpassCoefficient*p->ultraOutput;
+  p->ultraInput=correction;p->ultraOutput=ml::flushCompressorSample(ultraAllpass);
+  float maximumWidth=1.f;
+  for(const auto width:p->widths)maximumWidth=std::max(maximumWidth,width);
+  const float decorrelationTarget=mode==2?std::clamp((maximumWidth-1.f)/3.f,0.f,1.f):0.f;
+  p->decorrelationMix=smooth(p->decorrelationMix,decorrelationTarget,widthStep);
+  const float widthSide=side+std::lerp(correction,ultraAllpass,p->decorrelationMix);
+  const float outputSide=widthSide+stereoizeSide;
+  const float wetL=inputMid+outputSide,wetR=inputMid-outputSide;
+  const float outL=std::lerp(wetL,left,p->bypass),outR=std::lerp(wetR,right,p->bypass);
   p->leftPower=std::lerp(p->leftPower,outL*outL,meterStep);
   p->rightPower=std::lerp(p->rightPower,outR*outR,meterStep);
   p->crossPower=std::lerp(p->crossPower,outL*outR,meterStep);
