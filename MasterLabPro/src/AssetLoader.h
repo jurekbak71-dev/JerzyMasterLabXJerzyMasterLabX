@@ -29,9 +29,9 @@ struct AssetLoader {
 private:
  static juce::Image removeBlackMatte(const juce::Image& source){
   if(!source.isValid())return {};
-  auto image=source.convertedFormat(juce::Image::ARGB);
-  for(int y=0;y<image.getHeight();++y)for(int x=0;x<image.getWidth();++x){
-   auto pixel=image.getPixelAt(x,y);const auto brightness=std::max({pixel.getRed(),pixel.getGreen(),pixel.getBlue()});
+  juce::Image image(juce::Image::ARGB,source.getWidth(),source.getHeight(),true);
+  for(int y=0;y<source.getHeight();++y)for(int x=0;x<source.getWidth();++x){
+   auto pixel=source.getPixelAt(x,y);const auto brightness=std::max(pixel.getRed(),std::max(pixel.getGreen(),pixel.getBlue()));
    const auto alpha=juce::jlimit(0,255,(brightness-12)*255/34);
    image.setPixelAt(x,y,pixel.withAlpha(float(alpha)/255.f));
   }

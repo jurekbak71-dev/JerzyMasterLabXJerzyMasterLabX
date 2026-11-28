@@ -261,7 +261,7 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
    layoutControlGroups(controls);
   }
   void paint(juce::Graphics& g) override {
-   for(size_t i=0;i<controlGroups.size();++i){auto r=groupBounds[i].toFloat();g.setColour(juce::Colour(0xff17232c));g.fillRoundedRectangle(r,4);g.setColour(juce::Colour(0xff465663));g.drawRoundedRectangle(r,4,1);g.setColour(accent());g.fillRect(r.getX()+1,r.getY()+1,3,juce::jmin(18.f,r.getHeight()-2));g.setColour(juce::Colour(0xffb9c9d3));g.setFont(juce::FontOptions(9.f,juce::Font::bold));g.drawFittedText(groupTitles[i],groupBounds[i].reduced(7,1).removeFromTop(15).toNearestInt(),juce::Justification::centredLeft,1,.65f);}
+   for(size_t i=0;i<controlGroups.size();++i){auto r=groupBounds[i].toFloat();g.setColour(juce::Colour(0xff17232c));g.fillRoundedRectangle(r,4);g.setColour(juce::Colour(0xff465663));g.drawRoundedRectangle(r,4,1);g.setColour(accent());g.fillRect(r.getX()+1,r.getY()+1,3.f,juce::jmin(18.f,r.getHeight()-2));g.setColour(juce::Colour(0xffb9c9d3));g.setFont(juce::FontOptions(9.f,juce::Font::bold));g.drawFittedText(groupTitles[i],groupBounds[i].reduced(7,1).removeFromTop(15).toNearestInt(),juce::Justification::centredLeft,1,.65f);}
    const auto meter=p.gainReduction(instance,uint32_t(std::min<size_t>(bank,3)));
    auto strip=getLocalBounds().reduced(12,9).removeFromBottom(18);
    g.setColour(juce::Colour(0xff090e12));g.fillRoundedRectangle(strip.toFloat(),3);
@@ -299,7 +299,7 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
   void acceptAnalysis(const AnalysisFrame& frame){
    if(frame.sourceId!=instance||!moduleHistory.accept(frame))return;
    const auto& before=frame.samples[0][0];const auto& after=frame.samples[1][0];
-   constexpr size_t count=waveBefore.size(),stride=fftSize/count;
+   constexpr size_t count=2048,stride=fftSize/count;
    for(size_t i=0;i<count;++i){waveBefore[i]=before[fftSize-count*stride+i*stride];waveAfter[i]=after[fftSize-count*stride+i*stride];}
    analyzerRate=frame.sampleRate;haveSpectrum=haveWave=true;repaint();
   }
@@ -441,7 +441,7 @@ class PluginRackEditor final:public juce::AudioProcessorEditor,private juce::Tim
   PluginProcessor& p;uint64_t instance;PluginProcessor::EditorModuleInfo info;
   juce::Image cap,pointer;size_t bank=3;
   std::function<void(bool)> onFocus,onDeltaListen;bool focused=false,deltaEnabled=false;
-  juce::Rectangle<float> plots[3]{};std::array<juce::Rectangle<int>,4> groupBounds{};
+  juce::Rectangle<float> plots[3]{};std::array<juce::Rectangle<int>,4> groupBounds{};int expandedPlot=0;
   std::optional<size_t> dragIndex;
   std::array<std::array<Sample,300>,4> history{};
   size_t position=0;uint64_t lastStamp=0;
