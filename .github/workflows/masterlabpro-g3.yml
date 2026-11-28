@@ -94,14 +94,6 @@ jobs:
           $setup = 'reports/MasterLabPro-C-development-Setup.exe'
           if (-not (Test-Path $setup)) { throw 'Installer missing' }
           Get-FileHash $setup -Algorithm SHA256 | Format-List | Out-File reports/installer-sha256.txt
-      - name: Upload development installer
-        uses: actions/upload-artifact@v4
-        with:
-          name: MasterLabPro-C-Installer-Windows
-          path: |
-            reports/MasterLabPro-C-development-Setup.exe
-            reports/installer-sha256.txt
-          if-no-files-found: error
       - name: Install development package on disposable runner
         shell: pwsh
         run: |
@@ -241,6 +233,15 @@ jobs:
             MasterLabPro/PARAMETER_MAPPING.md
             MasterLabPro/LATENCY_AND_DELTA.md
             MasterLabPro/STATE_FORMAT.md
+          if-no-files-found: error
+      - name: Upload development installer after all acceptance checks
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MasterLabPro-C-Installer-Windows
+          path: |
+            reports/MasterLabPro-C-development-Setup.exe
+            reports/installer-sha256.txt
           if-no-files-found: error
 
   sanitizers:

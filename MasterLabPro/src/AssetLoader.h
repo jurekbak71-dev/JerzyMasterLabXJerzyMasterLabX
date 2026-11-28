@@ -1,5 +1,7 @@
 #pragma once
 #include "FrequencyBandSelector.h"
+#include <algorithm>
+#include <cstdint>
 namespace ml {
 // Asset root points to the assets directory from the G3.04 ZIP.
 // Missing files are reported, not treated as successful loads.
@@ -21,9 +23,20 @@ struct AssetLoader {
  }
  juce::Image loadSlot(){return load("approved/04_rack/slot_empty.png");}
  juce::Image loadPanel(){return load("approved/07_panels/large_frame.png");}
- juce::Image loadKnobCap(){return load("knob_cap.png");}
- juce::Image loadKnobPointer(){return load("knob_pointer.png");}
+ juce::Image loadKnobCap(){return removeBlackMatte(load("approved/01_controls/cap_silver.png"));}
+ juce::Image loadKnobPointer(){return removeBlackMatte(load("approved/01_controls/pointer_silver.png"));}
  const juce::StringArray& missingFiles() const noexcept{return missing;}
-private:juce::File root;juce::StringArray missing;
+private:
+ static juce::Image removeBlackMatte(const juce::Image& source){
+  if(!source.isValid())return {};
+  auto image=source.convertedFormat(juce::Image::ARGB);
+  for(int y=0;y<image.getHeight();++y)for(int x=0;x<image.getWidth();++x){
+   auto pixel=image.getPixelAt(x,y);const auto brightness=std::max({pixel.getRed(),pixel.getGreen(),pixel.getBlue()});
+   const auto alpha=juce::jlimit(0,255,(brightness-12)*255/34);
+   image.setPixelAt(x,y,pixel.withAlpha(float(alpha)/255.f));
+  }
+  return image;
+ }
+ juce::File root;juce::StringArray missing;
 };
 }

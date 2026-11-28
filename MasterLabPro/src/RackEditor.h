@@ -32,6 +32,14 @@ public:
   setSize(1600,1000);
  }
  void setSelection(RackOrder::Id id){selected=id;tiles.setSelection(id);bands.setEnabled(id!=0);repaint();}
+ void setModuleFocus(bool enabled){
+  moduleFocus=enabled&&bool(module);
+  for(auto* c:std::array<juce::Component*,6>{&spectrum,&heatmap,&input,&output,&tiles,&bands})c->setVisible(!moduleFocus);
+  bands.setVisible(!moduleFocus&&!moduleOwnsBandArea);
+  if(module)module->setVisible(true);
+  resized();repaint();
+ }
+ bool isModuleFocus()const noexcept{return moduleFocus;}
  void setRackSkin(juce::Image skin){tiles.setSkin(std::move(skin));}
  void refreshRack(){tiles.repaintTiles();}
  void setBandSelectionEnabled(bool enabled){bands.setEnabled(enabled && selected!=0);}
@@ -43,6 +51,7 @@ public:
  void setFooter(juce::String text){footer=std::move(text);repaint();}
  // Editor ownership is transferred; host binds real parameters before calling.
  void setModuleEditor(std::unique_ptr<juce::Component> next,bool ownsBandArea=false){
+  setModuleFocus(false);
   if(module)removeChildComponent(module.get());
   module=std::move(next);
   moduleOwnsBandArea=module&&ownsBandArea;
@@ -51,6 +60,7 @@ public:
   resized();
  }
  void resized()override{
+  if(moduleFocus){if(module)module->setBounds(getLocalBounds().reduced(10));return;}
   auto interior=[this](int i){auto a=box(i).reduced(22,10);a.removeFromTop(27);a=a.reduced(2,1);return a;};
   spectrum.setBounds(interior(1));heatmap.setBounds(interior(2));
   input.setBounds(interior(3));output.setBounds(interior(4));
@@ -59,6 +69,7 @@ public:
  }
  void paint(juce::Graphics& g)override{
   g.fillAll(juce::Colour(0xff171b21));
+  if(moduleFocus){auto r=getLocalBounds().reduced(4).toFloat();g.setColour(juce::Colour(0xff6a7b85));g.drawRoundedRectangle(r,8,2);return;}
   for(int i=0;i<8;++i){auto r=box(i);if(panelSkin.isValid()&&panelSkin.getWidth()==406&&panelSkin.getHeight()==178){
     for(const auto& slice:nineSlice({0,0,406,178},{r.getX(),r.getY(),r.getWidth(),r.getHeight()},36,30,36,30))
      if(slice.source.w>0&&slice.source.h>0&&slice.target.w>0&&slice.target.h>0)
@@ -92,6 +103,6 @@ private:
   const auto r=scale(raw,getWidth(),getHeight());return {r.x,r.y,r.w,r.h};
  }
  Callbacks callbacks;RackTiles tiles;FrequencyBandSelector bands;SpectrumView spectrum;HeatMapView heatmap;StereoLevelMeter input,output;
- juce::Image panelSkin;juce::String analysisMode,footer{"DEVELOPMENT / GAIN TEST RACK"};RackOrder::Id selected=0;std::unique_ptr<juce::Component> module;bool moduleOwnsBandArea=false;
+ juce::Image panelSkin;juce::String analysisMode,footer{"DEVELOPMENT / GAIN TEST RACK"};RackOrder::Id selected=0;std::unique_ptr<juce::Component> module;bool moduleOwnsBandArea=false,moduleFocus=false;
 };
 }

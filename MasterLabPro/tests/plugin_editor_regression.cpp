@@ -8,6 +8,7 @@
 #include <vector>
 #include <iostream>
 #include <numbers>
+#include <tuple>
 extern juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter();
 extern juce::AudioProcessor* createMasterLabProEditorFixture(const juce::File&);
 namespace {
@@ -24,6 +25,14 @@ juce::Component* named(juce::Component& c,const juce::String& name){
 juce::MouseEvent mouse(juce::Component& c,juce::ModifierKeys mods,juce::Point<float> pos={10.f,10.f}){
  const auto now=juce::Time::getCurrentTime();
  return {juce::Desktop::getInstance().getMainMouseSource(),pos,mods,1.f,0.f,0.f,0.f,0.f,&c,&c,now,pos,now,1,false};
+}
+void click(juce::Component& c){juce::Component* component=&c;const auto point=c.getLocalBounds().toFloat().getCentre();component->mouseDown(mouse(c,juce::ModifierKeys::leftButtonModifier,point));component->mouseUp(mouse(c,juce::ModifierKeys{},point));}
+bool saveSnapshot(juce::AudioProcessorEditor& editor,const juce::String& name,float scale=1.f){
+ const auto snapshot=editor.createComponentSnapshot(editor.getLocalBounds(),true,scale);
+ auto file=juce::File::getCurrentWorkingDirectory().getChildFile(name);
+ if(!file.deleteFile())return false;
+ juce::FileOutputStream stream(file);
+ return snapshot.isValid()&&stream.openedOk()&&juce::PNGImageFormat().writeImageToStream(snapshot,stream);
 }
 }
 int main(int argc,char** argv){
@@ -72,7 +81,7 @@ int main(int argc,char** argv){
  auto* panel=named(*editor,"Input Compressor Panel");
  if(!panel||!named(*panel,"Stereo Link"))return 11;
  const juce::Component* firstHeaderButton=nullptr;
- for(const auto* name:{"Compressor LOW","Compressor MID","Compressor HIGH","Compressor SUM","Compressor CROSSOVER","Compressor Mode","Compressor Bypass","Compressor Remove"}){
+ for(const auto* name:{"Compressor LOW","Compressor MID","Compressor HIGH","Compressor SUM","Compressor CROSSOVER","Compressor Mode","Compressor Bypass","Compressor Delta Listen","Compressor Module Focus","Compressor Remove"}){
   auto* button=named(*panel,name);
   if(!button){std::cerr<<"Missing compressor header button: "<<name<<'\n';return 29;}
   const auto bounds=button->getBounds();
@@ -95,11 +104,47 @@ int main(int argc,char** argv){
  const auto lowMouseUp=mouse(*lowButton,juce::ModifierKeys{},lowButtonPoint);
  lowComponent->mouseDown(lowMouseDown);lowComponent->mouseUp(lowMouseUp);
  if(!lowButton->getToggleState()){std::cerr<<"Single click failed to select compressor band\n";return 34;}
+ auto* threshold=dynamic_cast<juce::RangedAudioParameter*>(compressorParameters.getUnchecked(6));auto* thresholdControl=named(*panel,"THRESHOLD");
+ auto* thresholdKnob=dynamic_cast<ml::RotaryParameterControl*>(thresholdControl);
+ if(!threshold||!thresholdKnob)return 56;
+ const auto thresholdNeutral=threshold->convertTo0to1(0.f);threshold->setValue(.65f);
+ const auto knobPoint=thresholdKnob->getLocalBounds().toFloat().getCentre();
+ thresholdKnob->mouseDown(mouse(*thresholdKnob,juce::ModifierKeys::rightButtonModifier,knobPoint));
+ if(std::abs(threshold->getValue()-thresholdNeutral)>.001f)return 57;
+ const auto beforeAutomation=threshold->getValue();
+ thresholdKnob->mouseDown(mouse(*thresholdKnob,juce::ModifierKeys::leftButtonModifier,knobPoint));
+ thresholdKnob->mouseDrag(mouse(*thresholdKnob,juce::ModifierKeys::leftButtonModifier,{knobPoint.x,knobPoint.y-24.f}));
+ thresholdKnob->mouseUp(mouse(*thresholdKnob,juce::ModifierKeys{},knobPoint));
+ if(std::abs(threshold->getValue()-beforeAutomation)<.001f){std::cerr<<"Compressor knob gesture did not update its host parameter\n";return 58;}
  const auto enabledBeforeDoubleClick=lowEnable->getValue();
  const auto doubleClick=mouse(*lowButton,juce::ModifierKeys::leftButtonModifier,lowButton->getLocalBounds().toFloat().getCentre());
  lowComponent->mouseDoubleClick(doubleClick);
  if(lowEnable->getValue()==enabledBeforeDoubleClick){std::cerr<<"Double click failed to toggle compressor band DSP\n";return 35;}
- if(auto* dial=find<ml::RotaryParameterControl>(*panel);!dial||dial->dialDiameter()<75.f){std::cerr<<"Compressor dial diameter: "<<(dial?dial->dialDiameter():0.f)<<'\n';return 15;}
+ for(const auto* name:{"Transfer Analyzer Expand","Spectrum Analyzer Expand","Oscilloscope Analyzer Expand"})if(!named(*panel,name))return 36;
+ // Exercise mode, delta, and focus controls before rendering from the live signal.
+ auto* analogButton=named(*panel,"Compressor Mode");auto* deltaButton=named(*panel,"Compressor Delta Listen");auto* focusButton=named(*panel,"Compressor Module Focus");
+ if(!analogButton||!deltaButton||!focusButton)return 43;
+ click(*analogButton);if(compressorParameters.getUnchecked(4)->getValue()<.99f)return 44;
+ if(!saveSnapshot(*editor,"input-compressor-ANALOG-control.png"))return 45;
+ click(*analogButton);if(compressorParameters.getUnchecked(4)->getValue()>.01f)return 46;
+ click(*deltaButton);if(dynamic_cast<juce::Button*>(deltaButton)->getButtonText()!="DELTA ON")return 47;
+ click(*deltaButton); // keep the signal path out of delta monitoring during the DSP check
+ // Selecting the compressor opens its editor in focus so the controls are immediately usable.
+ if(panel->getHeight()<500||panel->getY()>12){std::cerr<<"Compressor editor did not open in Module Focus: "<<panel->getBounds().toString()<<'\n';return 49;}
+ if(auto* dial=find<ml::RotaryParameterControl>(*panel);!dial||dial->dialDiameter()<75.f){std::cerr<<"Focused compressor dial diameter: "<<(dial?dial->dialDiameter():0.f)<<'\n';return 15;}
+ click(*focusButton);
+ if(panel->getHeight()>=500){std::cerr<<"Module Focus exit did not return to rack view\n";return 53;}
+ click(*focusButton);
+ if(panel->getHeight()<500)return 49;
+ for(const auto [w,h,label]:{std::tuple<int,int,const char*>{1200,750,"100"},{960,600,"150"},{800,500,"200"}}){
+  editor->setSize(w,h);juce::Timer::callPendingTimersSynchronously();
+  if(panel->getHeight()<h-25)return 59;
+  if(auto* control=find<ml::RotaryParameterControl>(*panel);!control||control->dialDiameter()<50.f)return 60;
+  if(!saveSnapshot(*editor,juce::String("input-compressor-resize-")+label+".png"))return 61;
+ }
+ editor->setSize(1200,750);
+ click(*focusButton);
+ if(panel->getHeight()>=500){std::cerr<<"Module Focus did not return to rack view\n";return 53;}
  juce::AudioBuffer<float> audio(2,256);juce::MidiBuffer midi;
  for(int block=0;block<120;++block){
   for(int ch=0;ch<2;++ch)for(int i=0;i<256;++i)audio.setSample(ch,i,0.5f);
@@ -116,6 +161,33 @@ int main(int argc,char** argv){
   if(block%8==7){juce::Thread::sleep(35);juce::Timer::callPendingTimersSynchronously();}
  }
  juce::Timer::callPendingTimersSynchronously();
+ for(const auto* name:{"Compressor LOW","Compressor MID","Compressor HIGH","Compressor SUM","Compressor CROSSOVER"}){
+  auto* button=named(*panel,name);if(!button)return 41;click(*button);
+  auto* bandButton=dynamic_cast<juce::Button*>(button);if(!bandButton||!bandButton->getToggleState())return 62;
+  const auto bandName=juce::String(name).fromLastOccurrenceOf(" ",false,false);
+  if(bandName!="CROSSOVER"){
+   const size_t index=bandName=="LOW"?38:bandName=="MID"?39:bandName=="HIGH"?40:41;
+   auto* enable=compressorParameters.getUnchecked(int(index));const auto before=enable->getValue();juce::Component* c=button;
+   c->mouseDoubleClick(mouse(*button,juce::ModifierKeys::leftButtonModifier,button->getLocalBounds().toFloat().getCentre()));
+   if(enable->getValue()==before)return 63;
+   if(bandName=="LOW"&&enable->getValue()>.5f&&!saveSnapshot(*editor,"input-compressor-LOW-ON.png"))return 64;
+   if(bandName!="LOW"&&!saveSnapshot(*editor,"input-compressor-"+bandName+"-OFF.png"))return 66;
+   c->mouseDoubleClick(mouse(*button,juce::ModifierKeys::leftButtonModifier,button->getLocalBounds().toFloat().getCentre()));
+   if(enable->getValue()!=before)return 65;
+  }
+  if(!saveSnapshot(*editor,"input-compressor-"+bandName+".png"))return 42;
+ }
+ click(*analogButton);if(!saveSnapshot(*editor,"input-compressor-ANALOG.png"))return 45;click(*analogButton);
+ if(!saveSnapshot(*editor,"input-compressor-DIGITAL.png"))return 48;
+ click(*deltaButton);
+ for(int block=0;block<20;++block){for(int i=0;i<256;++i){const auto value=float(.4*std::sin(2*std::numbers::pi*997.*double(block*256+i)/48000.));audio.setSample(0,i,value);audio.setSample(1,i,value*.9f);}compressor->processBlock(audio,midi);if(block%4==3){juce::Thread::sleep(35);juce::Timer::callPendingTimersSynchronously();}}
+ if(!saveSnapshot(*editor,"input-compressor-DELTA.png"))return 55;click(*deltaButton);
+ click(*focusButton);
+ if(!saveSnapshot(*editor,"input-compressor-MODULE-FOCUS-100.png")||!saveSnapshot(*editor,"input-compressor-MODULE-FOCUS-150.png",1.5f)||!saveSnapshot(*editor,"input-compressor-MODULE-FOCUS-200.png",2.f))return 50;
+ click(*named(*panel,"Spectrum Analyzer Expand"));if(!saveSnapshot(*editor,"input-compressor-SPECTRUM-ZOOM.png"))return 51;click(*named(*panel,"Spectrum Analyzer Expand"));
+ click(*named(*panel,"Oscilloscope Analyzer Expand"));if(!saveSnapshot(*editor,"input-compressor-OSCILLOSCOPE-ZOOM.png"))return 52;click(*named(*panel,"Oscilloscope Analyzer Expand"));
+ click(*focusButton);
+ if(panel->getHeight()>=500)return 53;
  for(int scale:{100,150,200}){
   auto snapshot=editor->createComponentSnapshot(editor->getLocalBounds(),true,float(scale)/100);
   auto file=juce::File::getCurrentWorkingDirectory().getChildFile("input-compressor-"+juce::String(scale)+".png");
