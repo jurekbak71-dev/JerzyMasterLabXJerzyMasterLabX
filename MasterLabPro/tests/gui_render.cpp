@@ -28,7 +28,8 @@ int main(int argc,char** argv){
    std::cerr<<assets.missingFiles().joinIntoString(", ").toStdString()<<"\n";return 4;
   }
   if(slot.getWidth()!=356||slot.getHeight()!=58)return 5;
-  if(cap.getWidth()!=68||cap.getHeight()!=69||pointer.getWidth()!=68||pointer.getHeight()!=68)return 6;
+  // Approved A+C cap and pointer are separate crops with their native dimensions.
+  if(cap.getWidth()!=70||cap.getHeight()!=71||pointer.getWidth()!=44||pointer.getHeight()!=71)return 6;
  }
  juce::AudioParameterFloat gain(juce::ParameterID{"gain_test",1},"Gain",juce::NormalisableRange<float>(-24.f,24.f,.01f),0.f);
  if(scenario=="modules"&&argc>5){moduleHost=std::make_unique<ml::ModuleRackHost>();if(moduleHost->scan(std::filesystem::path(argv[5]))<4)return 11;moduleHost->prepare(48000,257);}
