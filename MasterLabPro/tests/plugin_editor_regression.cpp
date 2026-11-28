@@ -64,10 +64,12 @@ int main(int argc,char** argv){
   juce::PopupMenu::dismissAllActiveMenus();
   std::cout<<"PASS native empty-slot popup\n";
  }
- editor.reset();p->releaseResources();
+ editor.reset();p->releaseResources();p.reset();
+ std::cout<<"Gain processor destroyed before compressor fixture\n";
  std::cout<<"PASS actual plugin editor: 100 selections and knob resets\n";
  std::cout<<"Creating compressor fixture\n";
  auto compressor=create();
+ std::cout<<"Compressor processor created\n";
  compressor->prepareToPlay(48000,256);
  state.modules[0].typeHi=MLP_INPUT_COMPRESSOR_HI;
  state.modules[0].typeLo=MLP_INPUT_COMPRESSOR_LO;
